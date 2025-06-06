@@ -12,8 +12,8 @@ import { jwtDecode } from "jwt-decode";
 
 import AdminOrderHistory from "./Profile/AdminOrderHistory";
 import AdminTransactions from "./Profile/AdminTransactions";
-import TransactionsPage from "./route_mgr/Transactions";
 import ProductsComponent from "./HomePage/ProductList";
+import Catalogue from "./HomePage/Catalogue";
 
 const Tab = createBottomTabNavigator();
 
@@ -110,15 +110,17 @@ const TabNavigator = () => {
                 }}
             />
             
-            <Tab.Screen
-                name="Products"
-                component={ProductsComponent}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="cart-outline" size={size} color={color} />
-                    ),
-                }}
-            />
+            {!isSuperAdmin && !isAdmin && (
+                <Tab.Screen
+                    name="Catalogue"
+                    component={Catalogue}
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                        ),
+                    }}
+                />
+            )}
 
             {!isSuperAdmin && (
                 <Tab.Screen
@@ -152,6 +154,9 @@ const TabNavigator = () => {
                 />
             )}
 
+
+            
+
             {isSuperAdmin && (
                 <Tab.Screen
                     name="Transactions"
@@ -166,6 +171,27 @@ const TabNavigator = () => {
                         ),
                     }}
                 />
+
+
+                
+            )}
+
+
+            {isSuperAdmin && (
+                <Tab.Screen
+                    name="Products"
+                    component={ProductsComponent}
+                    options={{
+                        headerShown: true,
+                        headerTitle: "Products",
+                        headerStyle: styles.header,
+                        headerTitleStyle: styles.headerTitle,
+                        tabBarIcon: ({ color, size }) => (
+                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                        ),
+                    }}
+                />
+                
             )}
 
             <Tab.Screen

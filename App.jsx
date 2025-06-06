@@ -14,6 +14,7 @@ import TabNavigator from './components/TabNavigator';
 const Stack = createNativeStackNavigator();
 
 function App() {
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>

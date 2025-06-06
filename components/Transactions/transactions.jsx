@@ -40,11 +40,9 @@ const TransactionsPage = () => {
     const [error, setError] = useState(null);
     const [selectedMonth, setSelectedMonth] = useState(moment().format('YYYY-MM'));
     const [totalOrderAmount, setTotalOrderAmount] = useState(0);
-    const [totalPaidAmount, setTotalPaidAmount] = useState(0);
     const [expandedOrder, setExpandedOrder] = useState(null);
     const [expandedOrderProducts, setExpandedOrderProducts] = useState([]);
     const [showInvoice, setShowInvoice] = useState(null);
-    const [dailyPaidAmounts, setDailyPaidAmounts] = useState({}); // Store daily paid amounts
 
     // Fetch all orders
     const fetchOrders = async () => {
@@ -68,8 +66,6 @@ const TransactionsPage = () => {
             const data = await response.json();
             setAllOrders(data.orders || []);
             calculateMonthlyOrderData(data.orders || [], selectedMonth);
-            fetchTotalPaid(customerId, selectedMonth);
-            fetchAllDailyPaidAmounts(customerId, selectedMonth); // Fetch daily paid amounts
             setError(null);
         } catch (err) {
             console.error("Error fetching orders:", err);
@@ -78,55 +74,6 @@ const TransactionsPage = () => {
             Alert.alert("Error", `Failed to load orders: ${err.message}`);
         } finally {
             setLoading(false);
-        }
-    };
-
-    // Fetch total paid amount for the month
-    const fetchTotalPaid = async (customerId, month) => {
-        try {
-            const token = await AsyncStorage.getItem("userAuthToken");
-            const response = await axios.get(
-                `http://${ipAddress}:8091/fetch-total-paid`,
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                    params: { customer_id: customerId, month }
-                }
-            );
-            setTotalPaidAmount(response.data.total_paid || 0);
-        } catch (err) {
-            console.error("Error fetching total paid:", err);
-            setTotalPaidAmount(0);
-            Alert.alert("Error", `Failed to load total paid: ${err.message}`);
-        }
-    };
-
-    // Fetch total paid amount for all days in the month
-    const fetchAllDailyPaidAmounts = async (customerId, month) => {
-        try {
-            const token = await AsyncStorage.getItem("userAuthToken");
-            const daysInMonth = moment(month).daysInMonth();
-            const dailyAmounts = {};
-
-            for (let day = 1; day <= daysInMonth; day++) {
-                const date = moment(month).date(day).format('YYYY-MM-DD');
-                const response = await axios.get(
-                    `http://${ipAddress}:8091/fetch-total-paid-by-day`,
-                    {
-                        headers: { Authorization: `Bearer ${token}` },
-                        params: { customer_id: customerId, date }
-                    }
-                );
-                const totalPaid = response.data.total_paid || 0;
-                if (totalPaid > 0) {
-                    dailyAmounts[date] = totalPaid;
-                }
-            }
-
-            setDailyPaidAmounts(dailyAmounts);
-        } catch (err) {
-            console.error("Error fetching daily paid amounts:", err);
-            setDailyPaidAmounts({});
-            Alert.alert("Error", `Failed to load daily paid amounts: ${err.message}`);
         }
     };
 
@@ -163,11 +110,6 @@ const TransactionsPage = () => {
         const newMonth = moment(selectedMonth).add(increment, 'months').format('YYYY-MM');
         setSelectedMonth(newMonth);
         calculateMonthlyOrderData(allOrders, newMonth);
-        
-        const token = await AsyncStorage.getItem("userAuthToken");
-        const decoded = jwtDecode(token);
-        fetchTotalPaid(decoded.id, newMonth);
-        fetchAllDailyPaidAmounts(decoded.id, newMonth);
     };
 
     // Format currency
@@ -271,7 +213,7 @@ const TransactionsPage = () => {
     );
 
     // Enhanced OrderItem component
-    const OrderItem = ({ item, isFirstOrderOfDay, dateTotalOrderAmount, dateTotalPaid }) => (
+    const OrderItem = ({ item, isFirstOrderOfDay, dateTotalOrderAmount }) => (
         <Card style={styles.orderCard}>
             <Card.Content>
                 {isFirstOrderOfDay && (
@@ -281,14 +223,6 @@ const TransactionsPage = () => {
                             <Text style={styles.dailySummaryLabel}>Total Invoice:</Text>
                             <Text style={styles.dailySummaryValue}>{formatCurrency(dateTotalOrderAmount)}</Text>
                         </View>
-                        {dateTotalPaid > 0 && (
-                            <View style={styles.dailySummaryRow}>
-                                <Text style={styles.dailySummaryLabel}>Total Paid:</Text>
-                                <Text style={[styles.dailySummaryValue, { color: COLORS.success }]}>
-                                    {formatCurrency(dateTotalPaid)}
-                                </Text>
-                            </View>
-                        )}
                     </View>
                 )}
                 <TouchableOpacity onPress={() => handleOrderPress(item.id)}>
@@ -378,12 +312,6 @@ const TransactionsPage = () => {
                     icon="file-document-outline"
                     color={COLORS.primary}
                 />
-                <SummaryCard 
-                    title="Total Paid" 
-                    amount={totalPaidAmount} 
-                    icon="cash-multiple"
-                    color={COLORS.success}
-                />
             </View>
 
             {loading ? (
@@ -415,8 +343,6 @@ const TransactionsPage = () => {
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={({ item, index, section }) => {
                         const isFirstOrderOfDay = index === 0;
-                        const date = moment.unix(item.placed_on).format('YYYY-MM-DD');
-                        const dateTotalPaid = dailyPaidAmounts[date] || 0;
                         const dateOrders = section.data;
                         const dateTotalOrderAmount = dateOrders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
 
@@ -425,7 +351,6 @@ const TransactionsPage = () => {
                                 item={item}
                                 isFirstOrderOfDay={isFirstOrderOfDay}
                                 dateTotalOrderAmount={dateTotalOrderAmount}
-                                dateTotalPaid={dateTotalPaid}
                             />
                         );
                     }}

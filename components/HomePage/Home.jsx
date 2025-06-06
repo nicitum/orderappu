@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
   BackHandler,
   View,
@@ -18,6 +18,7 @@ import {
   RefreshControl,
   Platform,
   Animated,
+  FlatList,
 } from "react-native"
 import MaterialIcons from "react-native-vector-icons/MaterialIcons"
 import { ipAddress } from "../../services/urls"
@@ -79,19 +80,65 @@ const HomePage = () => {
   const [userDetails, setUserDetails] = useState(null)
   const [lastOrderDetails, setLastOrderDetails] = useState(null)
   const [lastOrderItems, setLastOrderItems] = useState([])
-  const [creditLimit, setCreditLimit] = useState(null)
-  const [pendingAmount, setPendingAmount] = useState("0")
-  const [isPendingAmountLoading, setIsPendingAmountLoading] = useState(false)
-  const [modalVisible, setModalVisible] = useState(false)
-  const [partialAmount, setPartialAmount] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [scrollY] = useState(new Animated.Value(0))
-  const navigation = useNavigation()
+  const [allProductsData, setAllProductsData] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [scrollY] = useState(new Animated.Value(0));
+  const navigation = useNavigation();
+  const [repeatOrderModalVisible, setRepeatOrderModalVisible] = useState(false);
+  const [isPlacingRepeatOrder, setIsPlacingRepeatOrder] = useState(false);
+  const [randomProducts, setRandomProducts] = useState([]);
+  const [isProductModalVisible, setIsProductModalVisible] = useState(false);
+  const [selectedProductForModal, setSelectedProductForModal] = useState(null);
+
+  useEffect(() => {
+    if (allProductsData && allProductsData.length > 0) {
+      const shuffled = [...allProductsData].sort(() => 0.5 - Math.random());
+      const selectedProducts = shuffled.slice(0, 4);
+      const mappedRandomProducts = selectedProducts.map(product => ({
+        ...product,
+        image: product.image || '' // Ensure image is set from product.image
+      }));
+      setRandomProducts(mappedRandomProducts);
+    } else {
+      setRandomProducts([]);
+    }
+  }, [allProductsData]);
+
+  const renderFeaturedProductItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.productCard}
+      onPress={() => {
+        if (item && item.id) {
+          setSelectedProductForModal(item);
+          setIsProductModalVisible(true);
+        } else {
+          console.warn("Attempted to open modal with invalid product item:", item);
+          Alert.alert("Product Error", "Could not display product details.");
+        }
+      }}
+    >
+      {item.image ? (
+        <Image
+          source={{ uri: `http://${ipAddress}:8091/images/products/${item.image}` }}
+          style={styles.productImage}
+          resizeMode="contain"
+          onError={(e) => console.warn('Image load error for product ID:', item.id, item.image, e.nativeEvent.error)}
+        />
+      ) : (
+        <View style={[styles.productImage, styles.productImagePlaceholder]} >
+          <MaterialIcons name="image-not-supported" size={40} color={COLORS.text.tertiary} />
+        </View>
+      )}
+      <View style={styles.productInfo}>
+        <Text style={styles.productName} numberOfLines={2}>{item.name || "Product Name Unavailable"}</Text>
+        <Text style={styles.productPrice}>{formatCurrency(item.price !== undefined ? item.price : 0)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   const checkUserRole = async () => {
     setIsLoading(true)
     const userAuthToken = await AsyncStorage.getItem("userAuthToken")
-
     if (userAuthToken) {
       try {
         const decodedToken = jwtDecode(userAuthToken)
@@ -103,68 +150,8 @@ const HomePage = () => {
     } else {
       setIsAdmin(false)
     }
+    setIsLoading(false)
   }
-
-  // Function to check credit limit
-  const checkCreditLimit = useCallback(async () => {
-    try {
-      const userAuthToken = await checkTokenAndRedirect(navigation)
-      if (!userAuthToken) return null
-      const decodedToken = jwtDecode(userAuthToken)
-      const customerId = decodedToken.id
-
-      const creditLimitResponse = await fetch(`http://${ipAddress}:8091/credit-limit?customerId=${customerId}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${userAuthToken}`, "Content-Type": "application/json" },
-      })
-
-      if (creditLimitResponse.ok) {
-        const creditData = await creditLimitResponse.json()
-        return Number.parseFloat(creditData.creditLimit)
-      } else if (creditLimitResponse.status === 404) {
-        return Number.POSITIVE_INFINITY
-      } else {
-        console.error("Error fetching credit limit:", creditLimitResponse.status, creditLimitResponse.statusText)
-        return null
-      }
-    } catch (error) {
-      console.error("Error checking credit limit:", error)
-      return null
-    }
-  }, [navigation])
-
-  // Function to fetch pending amount
-  const fetchPendingAmount = useCallback(async () => {
-    setIsPendingAmountLoading(true)
-    try {
-      const userAuthToken = await checkTokenAndRedirect(navigation)
-      if (!userAuthToken) return
-      const decodedToken = jwtDecode(userAuthToken)
-      const customerId = decodedToken.id
-
-      const amountDueResponse = await fetch(`http://${ipAddress}:8091/collect_cash?customerId=${customerId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
-
-      if (amountDueResponse.ok) {
-        const amountDueData = await amountDueResponse.json()
-        setPendingAmount(amountDueData.amountDue !== undefined ? amountDueData.amountDue.toString() : "0")
-      } else {
-        console.error(
-          "Failed to fetch pending amount using /collect_cash:",
-          amountDueResponse.status,
-          amountDueResponse.statusText,
-        )
-        setPendingAmount("Error")
-      }
-    } catch (error) {
-      console.error("Error fetching pending amount using /collect_cash:", error)
-      setPendingAmount("Error")
-    } finally {
-      setIsPendingAmountLoading(false)
-    }
-  }, [navigation])
 
   // Back button handler
   const handleBackButton = useCallback(() => {
@@ -180,65 +167,80 @@ const HomePage = () => {
     return true
   }, [])
 
-  // Fetch user details and recent order from API
+  // Main function to fetch all necessary data
   const userDetailsData1 = useCallback(async () => {
     try {
       const token = await checkTokenAndRedirect(navigation)
-      const response = await fetch(`http://${ipAddress}:8091/userDetails`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      })
-      const userGetResponse = await response.json()
-      if (!response.ok || !userGetResponse.status) {
-        Alert.alert("Failed", userGetResponse.message || "Something went wrong")
-        setIsLoading(false)
-        return
+      if (!token) {
+        setIsLoading(false); // Set loading to false if no token
+        return null; // Return null to indicate failure or no data
       }
 
-      const userDetails = {
-        customerName: userGetResponse.user.name,
-        customerID: userGetResponse.user.customer_id,
-        route: userGetResponse.user.route,
-      }
+      // Fetch data concurrently
+      const [
+        allProductsResponse,
+        userResponse,
+        recentOrderResponse,
+      ] = await Promise.all([
+        fetch(`http://${ipAddress}:8091/products`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", } }),
+        fetch(`http://${ipAddress}:8091/userDetails`, { method: "GET", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }),
+        fetch(`http://${ipAddress}:8091/most-recent-order?customerId=${jwtDecode(token).id}`, { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", } }),
+      ]);
 
-      // Fetch most recent order using the new API
-      const recentOrderResponse = await fetch(
-        `http://${ipAddress}:8091/most-recent-order?customerId=${userGetResponse.user.customer_id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // Process API responses
+      const productsData = allProductsResponse.ok ? await allProductsResponse.json() : [];
+      setAllProductsData(productsData); // Always set products data, even if empty on error
+
+      const userGetResponse = userResponse.ok ? await userResponse.json() : null;
+      const orderData = recentOrderResponse.ok ? await recentOrderResponse.json() : null;
+
+      let userDetails = null;
+      if (userGetResponse && userGetResponse.status) {
+         userDetails = {
+          customerName: userGetResponse.user.name,
+          customerID: userGetResponse.user.customer_id,
+          route: userGetResponse.user.route,
+        };
+        setUserDetails(userDetails);
+      } else if (userGetResponse) {
+         Alert.alert("Failed", userGetResponse.message || "Failed to fetch user details");
+      } else {
+         console.error("Failed to fetch user details: No response");
+         Alert.alert("Error", "An error occurred while fetching user details.");
+      }
 
       let lastIndentDate = "", totalAmount = 0, orderType = "AM", items = []
-
-      if (recentOrderResponse.ok) {
-        const orderData = await recentOrderResponse.json();
-        console.log("Last Order Details:", orderData);
-        if (orderData && orderData.order) {
+      if (orderData && orderData.order) {
           lastIndentDate = orderData.order.placed_on || "";
           totalAmount = orderData.order.total_amount || 0;
           orderType = orderData.order.order_type || "AM";
           
-          // Fetch order products using the order-products API
-          const orderProductsResponse = await fetch(
-            `http://${ipAddress}:8091/order-products?orderId=${orderData.order.id}`,
-            {
+          // Fetch order products - This still needs the order ID from the recent order response, so it's sequential
+          const orderProductsResponse = await fetch(`http://${ipAddress}:8091/order-products?orderId=${orderData.order.id}`, {
               headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
               },
-            }
-          );
+          });
           
           if (orderProductsResponse.ok) {
             items = await orderProductsResponse.json() || [];
-            console.log("Order Products:", items);
-            setLastOrderItems(items); // Set the items in state so they can be used for total quantity calculation
+            const mappedOrderItems = items.map(orderItem => {
+              const productDetails = productsData.find(p => p.id === orderItem.product_id) || {};
+              return {
+                name: orderItem.name || productDetails.name || 'Product Name Not Found',
+                price: (orderItem.price !== undefined && parseFloat(orderItem.price) > 0) 
+                  ? parseFloat(orderItem.price) 
+                  : (productDetails.price || 0),
+                quantity: orderItem.quantity || 0,
+                product_id: orderItem.product_id,
+                image: orderItem.image || productDetails.image || '',
+              };
+            });
+            items = mappedOrderItems;
+          } else {
+            console.warn('Failed to fetch order products:', orderProductsResponse.status);
           }
-        }
       }
 
       return { userDetails, latestOrder: { lastIndentDate, totalAmount, orderType, items } }
@@ -254,15 +256,14 @@ const HomePage = () => {
     setIsLoading(true)
     const userDetailsData = await userDetailsData1()
     if (userDetailsData) {
-      setUserDetails(userDetailsData.userDetails)
-      setLastOrderDetails(userDetailsData.latestOrder)
-      setLastOrderItems(userDetailsData.latestOrder.items)
+      setUserDetails(userDetailsData.userDetails);
+      if (userDetailsData.latestOrder) {
+        setLastOrderDetails(userDetailsData.latestOrder);
+        setLastOrderItems(userDetailsData.latestOrder.items || []);
+      }
     }
-    const creditLimitValue = await checkCreditLimit()
-    setCreditLimit(creditLimitValue)
-    await fetchPendingAmount()
     setIsLoading(false)
-  }, [userDetailsData1, checkCreditLimit, fetchPendingAmount])
+  }, [userDetailsData1]) // userDetailsData1 is now the main fetch logic
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -271,53 +272,79 @@ const HomePage = () => {
   }, [fetchData])
 
   useFocusEffect(
-  useCallback(() => {
-    const fetchDataAsync = async () => await fetchData();
-    fetchDataAsync();
-    checkUserRole();
+    useCallback(() => {
+      const fetchDataAsync = async () => await fetchData();
+      fetchDataAsync(); // Fetch all necessary data when screen is focused
+      checkUserRole();
+      const backHandler = BackHandler.addEventListener("hardwareBackPress", handleBackButton);
+      return () => backHandler.remove();
+    }, [fetchData, handleBackButton])
+  );
 
-    // Get the listener object returned by addEventListener
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      handleBackButton
-    );
-
-    return () => {
-      // Call the remove method on the listener object
-      backHandler.remove();
-    };
-  }, [fetchData, handleBackButton]), // Added fetchData and handleBackButton as dependencies
-);
-
-  // Handle Full Payment
-  const handleFullPayment = () => {
-    const parsedPending = Number.parseFloat(pendingAmount)
-    if (isNaN(parsedPending) || parsedPending <= 0) {
-      Alert.alert("Error", "No valid pending amount to pay.")
-      return
+  const handleRepeatOrderCheckout = async () => {
+    if (!lastOrderDetails || !lastOrderItems || lastOrderItems.length === 0) {
+      Alert.alert("Error", "No items in the last order to repeat.");
+      return;
     }
-    setModalVisible(false)
-    navigation.navigate("Payments", { amount: parsedPending })
-  }
 
-  // Handle Partial Payment
-  const handlePartialPayment = () => {
-    const parsedAmount = Number.parseFloat(partialAmount)
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert("Invalid Amount", "Please enter a positive number.")
-      return
+    setIsPlacingRepeatOrder(true);
+    try {
+      const userAuthToken = await checkTokenAndRedirect(navigation);
+      if (!userAuthToken) {
+        setIsPlacingRepeatOrder(false);
+        return;
+      }
+
+      const decodedToken = jwtDecode(userAuthToken);
+      const localCustomerId = decodedToken.id;
+
+      const now = new Date();
+      const currentOrderType = now.getHours() < 12 ? "AM" : "PM"; 
+      const orderDate = now.toISOString();
+
+      const orderData = {
+        customer_id: localCustomerId,
+        orderDate: orderDate,
+        orderType: currentOrderType,
+        products: lastOrderItems.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: parseFloat(item.price || 0)
+        })),
+        total_amount: parseFloat(lastOrderDetails.totalAmount || 0),
+        payment_method: "cod", 
+        status: "pending"
+      };
+
+      const response = await fetch(`http://${ipAddress}:8091/place`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userAuthToken}`,
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success", responseData.message || "Your repeat order has been placed successfully!");
+        setRepeatOrderModalVisible(false);
+        fetchData(); 
+      } else {
+        Alert.alert("Error", responseData.message || "Could not place the repeat order. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error placing repeat order:", error);
+      Alert.alert("Error", "An unexpected error occurred while placing your repeat order.");
+    } finally {
+      setIsPlacingRepeatOrder(false);
     }
-    setModalVisible(false)
-    setPartialAmount("") // Reset input
-    navigation.navigate("Payments", { amount: parsedAmount })
-  }
+  };
 
-  const { customerName, customerID, route } = userDetails || {}
-  const { lastIndentDate, totalAmount, orderType } = lastOrderDetails || {}
-  // Calculate total quantity from lastOrderItems
-  const totalQuantity = lastOrderItems?.reduce((total, item) => total + (parseInt(item.quantity) || 0), 0) || 0
-
-  const isPendingAmountHigh = Number.parseFloat(pendingAmount) > 5000
+  const { customerName } = userDetails || {}
+  const { lastIndentDate, totalAmount, orderType: lastOrderType } = lastOrderDetails || {}; 
+  const totalQuantity = lastOrderItems?.reduce((total, item) => total + (parseInt(item.quantity) || 0), 0) || 0;
 
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
@@ -341,7 +368,7 @@ const HomePage = () => {
         {userDetails && (
           <View style={styles.headerBottom}>
             <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName}>{userDetails.customerName || "User"}</Text>
+            <Text style={styles.userName}>{customerName || "User"}</Text>
           </View>
         )}
       </Animated.View>
@@ -371,27 +398,25 @@ const HomePage = () => {
           </View>
         ) : (
           <View style={styles.content}>
-            {/* Financial Overview */}
-            {!isAdmin && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Financial Overview</Text>
-                <View style={styles.financialCards}>
-                  <View style={[styles.financeCard, styles.creditLimitCard]}>
-                    <View style={styles.financeCardHeader}>
-                      <MaterialIcons name="account-balance-wallet" size={20} color={COLORS.primary} />
-                      <Text style={styles.financeCardTitle}>Credit Limit</Text>
-                    </View>
-                    <Text style={styles.financeAmount}>
-                      {creditLimit !== null
-                        ? creditLimit === Number.POSITIVE_INFINITY
-                          ? "Unlimited"
-                          : formatCurrency(creditLimit)
-                        : "Fetching..."}
-                    </Text>
-                  </View>
-
-                 
-                </View>
+            {/* Featured Products Section */}
+            {randomProducts.length > 0 && (
+              <View style={styles.featuredProductsContainer}>
+                <Text style={styles.featuredProductsTitle}>Quick Picks</Text>
+                <FlatList
+                  data={randomProducts}
+                  renderItem={renderFeaturedProductItem}
+                  keyExtractor={(item, index) => item.id ? item.id.toString() : `random-${index}`}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: 16 }}
+                />
+                <TouchableOpacity
+                  style={styles.seeMoreButton}
+                  onPress={() => navigation.navigate('Catalogue')}
+                >
+                  <Text style={styles.seeMoreButtonText}>See More Products</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color={COLORS.text.light} style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
               </View>
             )}
 
@@ -414,182 +439,202 @@ const HomePage = () => {
                     <View style={styles.orderHeader}>
                       <View style={styles.orderType}>
                         <MaterialIcons 
-                          name={orderType === "AM" ? "wb-sunny" : "nights-stay"} 
+                          name={lastOrderType === "AM" ? "wb-sunny" : "nights-stay"} 
                           size={20} 
                           color={COLORS.text.light} 
                         />
-                        <Text style={styles.orderTypeText}>{orderType} Shift</Text>
+                        <Text style={styles.orderTypeText}>{lastOrderType} Shift</Text>
                       </View>
                       <Text style={styles.orderDate}>{formatDate(lastIndentDate)}</Text>
                     </View>
 
                     <View style={styles.orderBody}>
-                      {/* Summary Section */}
                       <View style={styles.orderSummary}>
                         <View style={styles.orderInfo}>
                           <Text style={styles.orderInfoLabel}>Total Items</Text>
-                          <Text style={styles.orderInfoValue}>
-                            {totalQuantity}
-                          </Text>
+                          <Text style={styles.orderInfoValue}>{totalQuantity}</Text>
                         </View>
                         <View style={styles.orderInfo}>
                           <Text style={styles.orderInfoLabel}>Total Amount</Text>
-                          <Text style={styles.orderInfoValue}>
-                            {formatCurrency(totalAmount || 0)}
-                          </Text>
+                          <Text style={styles.orderInfoValue}>{formatCurrency(totalAmount || 0)}</Text>
                         </View>
                       </View>
 
-                      {/* Items List */}
                       {lastOrderItems && lastOrderItems.length > 0 && (
                         <View style={styles.orderItems}>
                           <Text style={styles.orderItemsTitle}>Order Details</Text>
                           {lastOrderItems.map((item, index) => (
                             <View key={index} style={styles.orderItem}>
+                              {item.image ? (
+                                <Image 
+                                  source={{ uri: `http://${ipAddress}:8091/images/products/${item.image}` }} 
+                                  style={styles.orderItemImage} 
+                                  resizeMode="cover" 
+                                  onError={(e) => console.warn('Image load error:', item.image, e.nativeEvent.error)}
+                                />
+                              ) : (
+                                <View style={styles.orderItemImagePlaceholder}>
+                                  <MaterialIcons name="image-not-supported" size={24} color={COLORS.text.secondary} />
+                                </View>
+                              )}
                               <View style={styles.itemInfo}>
-                                <Text style={styles.itemName}>{item.name}</Text>
-                                <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+                                <Text style={styles.itemName} numberOfLines={2}>{item.name || 'Product Name'}</Text>
+                                <View style={styles.itemDetails}>
+                                  <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+                                  <Text style={styles.itemUnitPrice}>{formatCurrency(parseFloat(item.price || 0))} each</Text>
+                                </View>
                               </View>
-                              <Text style={styles.itemPrice}>
-                                {formatCurrency(item.price * item.quantity)}
-                              </Text>
+                              <Text style={styles.itemPrice}>{formatCurrency(parseFloat(item.price || 0) * item.quantity)}</Text>
                             </View>
                           ))}
                         </View>
-                      )}
+                     )}
                     </View>
                   </View>
                 ) : (
                   <View style={styles.emptyState}>
                     <MaterialIcons name="history" size={48} color={COLORS.text.tertiary} />
                     <Text style={styles.emptyStateText}>No orders yet</Text>
-                    <Text style={styles.emptyStateSubtext}>
-                      Your order history will appear here
-                    </Text>
+                    <Text style={styles.emptyStateSubtext}>Your order history will appear here</Text>
                   </View>
                 )}
               </View>
             )}
 
-            {/* Admin Quick Links */}
-            {isAdmin && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-                <View style={styles.adminGrid}>
-                  <TouchableOpacity 
-                    style={styles.adminCard}
-                    onPress={() => navigation.navigate("AdminAssignedUsers")}
-                  >
-                    <View style={[styles.adminCardIcon, { backgroundColor: COLORS.primaryLight }]}>
-                      <MaterialIcons name="shopping-bag" size={24} color={COLORS.text.light} />
-                    </View>
-                    <Text style={styles.adminCardTitle}>Order Acceptance</Text>
-                    <Text style={styles.adminCardSubtitle}>Manage customer orders</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.adminCard}
-                    onPress={() => navigation.navigate("InvoicePage")}
-                  >
-                    <View style={[styles.adminCardIcon, { backgroundColor: COLORS.secondary }]}>
-                      <MaterialIcons name="receipt" size={24} color={COLORS.text.light} />
-                    </View>
-                    <Text style={styles.adminCardTitle}>Invoice</Text>
-                    <Text style={styles.adminCardSubtitle}>Generate & manage invoices</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+            {/* Repeat Last Order Button */}
+            {!isAdmin && lastOrderDetails && (
+              <TouchableOpacity
+                style={styles.repeatOrderButton}
+                onPress={() => setRepeatOrderModalVisible(true)}
+                disabled={!lastOrderItems || lastOrderItems.length === 0}
+              >
+                <MaterialIcons name="repeat" size={20} color={COLORS.text.light} />
+                <Text style={styles.repeatOrderButtonText}>Repeat Recent Order</Text>
+              </TouchableOpacity>
             )}
-
-            {/* Support Section */}
-            <View style={styles.supportSection}>
-              <View style={styles.supportContent}>
-                <MaterialIcons name="headset-mic" size={32} color={COLORS.primary} />
-                <Text style={styles.supportTitle}>Need Help?</Text>
-                <Text style={styles.supportText}>
-                  Our support team is available 24/7 to assist you
-                </Text>
-                <TouchableOpacity 
-                  style={styles.supportButton}
-                  onPress={() => Linking.openURL("tel:9008828409")}
-                >
-                  <MaterialIcons name="phone" size={20} color={COLORS.text.light} />
-                  <Text style={styles.supportButtonText}>Contact Support</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </View>
         )}
       </ScrollView>
 
-      {/* Payment Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Make Payment</Text>
-              <TouchableOpacity 
-                style={styles.modalCloseButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <MaterialIcons name="close" size={24} color={COLORS.text.light} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.paymentSummary}>
-                <Text style={styles.paymentSummaryLabel}>Total Pending Amount</Text>
-                <Text style={styles.paymentSummaryAmount}>
-                  {pendingAmount === "Error" 
-                    ? "Error" 
-                    : formatCurrency(Number.parseFloat(pendingAmount))}
-                </Text>
+      {/* Product Detail Modal */}
+      {selectedProductForModal && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={isProductModalVisible}
+          onRequestClose={() => setIsProductModalVisible(false)}
+        >
+          <View style={styles.centeredModalOverlay}>
+            <View style={styles.productDetailModalContent}>
+              <View style={styles.productDetailModalHeader}>
+                <Text style={styles.productDetailModalTitle}>{selectedProductForModal.name}</Text>
+                <TouchableOpacity onPress={() => setIsProductModalVisible(false)} style={styles.modalCloseButton}>
+                  <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
+                </TouchableOpacity>
               </View>
-
-              <TouchableOpacity 
-                style={styles.fullPaymentButton}
-                onPress={handleFullPayment}
-              >
-                <MaterialIcons name="check-circle" size={24} color={COLORS.text.light} />
-                <Text style={styles.fullPaymentText}>Pay Full Amount</Text>
-              </TouchableOpacity>
-
-              <View style={styles.modalDivider} />
-
-              <Text style={styles.partialPaymentTitle}>Pay Partial Amount</Text>
-
-              <View style={styles.amountInputContainer}>
-                <Text style={styles.currencySymbol}>₹</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  placeholder="Enter amount"
-                  placeholderTextColor={COLORS.text.tertiary}
-                  keyboardType="numeric"
-                  value={partialAmount}
-                  onChangeText={(text) => setPartialAmount(text.replace(/[^0-9.]/g, ""))}
+              {selectedProductForModal.image ? (
+                <Image 
+                  source={{ uri: `http://${ipAddress}:8091/images/products/${selectedProductForModal.image}` }} 
+                  style={styles.productDetailModalImage} 
+                  resizeMode="contain" 
+                  onError={(e) => console.warn('Modal image load error:', selectedProductForModal.image, e.nativeEvent.error)}
                 />
+              ) : (
+                <View style={[styles.productDetailModalImage, styles.productDetailModalImagePlaceholder]}>
+                  <MaterialIcons name="image-not-supported" size={60} color={COLORS.text.tertiary} />
+                </View>
+              )}
+              <View style={styles.productDetailModalInfoContainer}>
+                <Text style={styles.productDetailModalPrice}>{formatCurrency(selectedProductForModal.price !== undefined ? selectedProductForModal.price : 0)}</Text>
+                {selectedProductForModal.size && <Text style={styles.productDetailModalDescription}>Size: {selectedProductForModal.size}</Text>}
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.partialPaymentButton,
-                  (!partialAmount || Number.parseFloat(partialAmount) <= 0) && styles.disabledButton
-                ]}
-                onPress={handlePartialPayment}
-                disabled={!partialAmount || Number.parseFloat(partialAmount) <= 0}
-              >
-                <Text style={styles.partialPaymentButtonText}>Proceed with Payment</Text>
-                <MaterialIcons name="arrow-forward" size={20} color={COLORS.text.light} />
-              </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
+
+      {/* Repeat Order Modal */}
+      {lastOrderDetails && (
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={repeatOrderModalVisible}
+          onRequestClose={() => {
+            if (!isPlacingRepeatOrder) {
+              setRepeatOrderModalVisible(false);
+            }
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.cartModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Confirm Repeat Order</Text>
+                <TouchableOpacity 
+                  onPress={() => setRepeatOrderModalVisible(false)} 
+                  style={styles.modalCloseButton}
+                  disabled={isPlacingRepeatOrder}
+                >
+                  <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={styles.cartItemsContainer}>
+                {lastOrderItems && lastOrderItems.length > 0 ? (
+                  lastOrderItems.map((item, index) => (
+                    <View key={index} style={styles.cartItem}>
+                      {item.image ? (
+                        <Image 
+                          source={{ uri: `http://${ipAddress}:8091/images/products/${item.image}` }} 
+                          style={styles.cartItemImage} 
+                          resizeMode="cover" 
+                          onError={(e) => console.warn('Cart image load error:', item.image, e.nativeEvent.error)}
+                        />
+                      ) : (
+                        <View style={styles.cartItemImagePlaceholder}>
+                          <MaterialIcons name="image-not-supported" size={30} color={COLORS.text.secondary} />
+                        </View>
+                      )}
+                      <View style={styles.cartItemDetails}>
+                        <Text style={styles.cartItemName} numberOfLines={2}>{item.name || 'Product Name'}</Text>
+                        <View style={styles.cartItemSubtext}>
+                          <Text style={styles.cartItemQuantity}>Qty: {item.quantity}</Text>
+                          <Text style={styles.cartItemUnitPrice}>{formatCurrency(parseFloat(item.price || 0))} each</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.cartItemPrice}>{formatCurrency(parseFloat(item.price || 0) * item.quantity)}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyCartText}>No items in the last order to repeat.</Text>
+                )}
+              </ScrollView>
+
+              {lastOrderItems && lastOrderItems.length > 0 && (
+                <View style={styles.cartFooter}>
+                  <View style={styles.cartTotalContainer}>
+                    <Text style={styles.cartTotalLabel}>Total Amount:</Text>
+                    <Text style={styles.cartTotalPrice}>{formatCurrency(parseFloat(lastOrderDetails.totalAmount || 0))}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.checkoutButton,
+                      (isPlacingRepeatOrder) && styles.disabledButton,
+                    ]}
+                    onPress={handleRepeatOrderCheckout}
+                    disabled={isPlacingRepeatOrder}
+                  >
+                    {isPlacingRepeatOrder ? (
+                      <ActivityIndicator color={COLORS.text.light} size="small" />
+                    ) : (
+                      <Text style={styles.checkoutButtonText}>Place Repeat Order</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   )
 }
@@ -729,236 +774,55 @@ const styles = StyleSheet.create({
   },
   orderItem: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  orderItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  orderItemImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   itemInfo: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
+    marginRight: 8,
+  },
+  itemDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   itemName: {
-    flex: 1,
     fontSize: 14,
     color: COLORS.text.primary,
+    fontWeight: '500',
   },
   itemQuantity: {
     fontSize: 14,
     color: COLORS.text.secondary,
     marginLeft: 8,
-    minWidth: 40,
+  },
+  itemUnitPrice: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+    marginLeft: 8,
   },
   itemPrice: {
     fontSize: 14,
     fontWeight: "500",
     color: COLORS.text.primary,
     marginLeft: 16,
-  },
-  adminGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  adminCard: {
-    width: '48%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  adminCardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  adminCardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  adminCardSubtitle: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-  },
-  supportSection: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 24,
-    marginTop: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  supportContent: {
-    alignItems: "center",
-  },
-  supportTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text.primary,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  supportText: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  supportButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-  },
-  supportButtonText: {
-    color: COLORS.text.light,
-    marginLeft: 8,
-    fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text.primary,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  paymentSummary: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  paymentSummaryLabel: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 8,
-  },
-  paymentSummaryAmount: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: COLORS.text.primary,
-  },
-  fullPaymentButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  fullPaymentText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 20,
-  },
-  partialPaymentTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-    marginBottom: 16,
-  },
-  amountInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  currencySymbol: {
-    fontSize: 18,
-    color: COLORS.text.secondary,
-    marginRight: 8,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text.primary,
-    paddingVertical: 12,
-  },
-  partialPaymentButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 12,
-  },
-  partialPaymentButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "600",
-    marginRight: 8,
-  },
-  disabledButton: {
-    backgroundColor: COLORS.text.tertiary,
   },
   loadingContainer: {
     flex: 1,
@@ -1000,45 +864,281 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-  financialCards: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  financeCard: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  financeCardHeader: {
+  repeatOrderButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 10,
+    marginBottom: 16,
+    alignSelf: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  financeCardTitle: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
+  repeatOrderButtonText: {
+    color: COLORS.text.light,
+    fontSize: 16,
+    fontWeight: "600",
     marginLeft: 8,
   },
-  financeAmount: {
-    fontSize: 20,
-    fontWeight: "700",
+  centeredModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  cartModalContent: {
+    width: '100%',
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
     color: COLORS.text.primary,
   },
-  highAmountText: {
-    color: COLORS.error,
+  modalCloseButton: {
+    padding: 4,
+  },
+  cartItemsContainer: {
+    paddingBottom: 16,
+  },
+  productDetailModalContent: {
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  productDetailModalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productDetailModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    flex: 1,
+    marginRight: 8,
+  },
+  productDetailModalImage: {
+    width: '80%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    marginBottom: 20,
+    backgroundColor: COLORS.divider,
+  },
+  productDetailModalImagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productDetailModalInfoContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+    width: '100%',
+  },
+  productDetailModalPrice: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.accent,
+    marginBottom: 8,
+  },
+  productDetailModalDescription: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  emptyCartText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    paddingVertical: 20,
+  },
+  cartItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  cartItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  cartItemImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 4,
+    marginRight: 10,
+    backgroundColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartItemDetails: {
+    flex: 1,
+    marginRight: 8,
+  },
+  cartItemName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text.primary,
+  },
+  cartItemSubtext: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginTop: 4,
+  },
+  cartItemPrice: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.text.primary,
+  },
+  cartFooter: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 16,
+    marginTop: 8,
+  },
+  cartTotalContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cartTotalLabel: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: COLORS.text.secondary,
+  },
+  cartTotalPrice: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.text.primary,
+  },
+  checkoutButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkoutButtonText: {
+    color: COLORS.text.light,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  disabledButton: {
+    backgroundColor: COLORS.neutralLight,
+    opacity: 0.7,
+  },
+  featuredProductsContainer: {
+    marginTop: 24,
+  },
+  featuredProductsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  productCard: {
+    backgroundColor: COLORS.card.background,
+    borderRadius: 12,
+    marginRight: 16,
+    width: Dimensions.get('window').width / 2.2,
+    shadowColor: COLORS.card.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: '100%',
+    height: 130,
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: 130,
+    backgroundColor: COLORS.divider,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productInfo: {
+    padding: 12,
+    flexGrow: 1,
+    justifyContent: 'space-between',
+  },
+  productName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+    minHeight: 36,
+  },
+  productPrice: {
+    fontSize: 14,
+    color: COLORS.accent,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  seeMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 24,
+    marginBottom: 16,
+    alignSelf: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  seeMoreButtonText: {
+    color: COLORS.text.light,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 })
 

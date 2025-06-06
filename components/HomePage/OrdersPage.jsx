@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import axios from "axios";
 import { ipAddress } from "../../services/urls";
@@ -15,6 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 import moment from "moment";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
 
@@ -26,6 +28,7 @@ const OrdersPage = () => {
   const [orderDetails, setOrderDetails] = useState({});
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [allProductsData, setAllProductsData] = useState([]);
 
   const showDatePicker = () => {
     setDatePickerVisibility(true);
@@ -39,6 +42,23 @@ const OrdersPage = () => {
     hideDatePicker();
     setSelectedDate(date);
   };
+
+  const fetchAllProducts = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("userAuthToken");
+      if (!token) {
+          throw new Error("Authentication token missing");
+      }
+      const response = await axios.get(`http://${ipAddress}:8091/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data) {
+        setAllProductsData(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching all products:", error);
+    }
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -83,6 +103,7 @@ const OrdersPage = () => {
   }, [navigation, selectedDate]);
 
   useEffect(() => {
+    fetchAllProducts();
     fetchOrders();
   }, [fetchOrders]);
 
@@ -127,6 +148,7 @@ const OrdersPage = () => {
 
   const renderOrderDetails = (orderId) => {
     const products = orderDetails[orderId];
+    const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
     if (!expandedOrderDetailsId || expandedOrderDetailsId !== orderId || !products) {
       return null;
     }
@@ -135,21 +157,33 @@ const OrdersPage = () => {
       <View style={detailStyles.orderDetailsContainer}>
         <Text style={detailStyles.orderDetailsTitle}>Order Items</Text>
         <View style={detailStyles.headerRow}>
-          <Text style={[detailStyles.headerCell, { flex: 2 }]}>Product</Text>
+          <Text style={[detailStyles.headerCell, detailStyles.imageHeader]}></Text>
+          <Text style={[detailStyles.headerCell, detailStyles.imageHeader]}></Text>
+          <Text style={[detailStyles.headerCell, detailStyles.productNameHeader]}>Product</Text>
           <Text style={detailStyles.headerCell}>Qty</Text>
           <Text style={detailStyles.headerCell}>Price</Text>
         </View>
         {products.length > 0 ? (
           products.map((product, index) => (
             <View
-              key={`${orderId}-${product.product_id}-${index}`}
+              key={`${orderId}-${product.product_id || index}`}
               style={detailStyles.productRow}
             >
-              <Text style={[detailStyles.productCell, { flex: 2 }]}>
-                {product.name}
-              </Text>
-              <Text style={detailStyles.productCell}>{product.quantity}</Text>
-              <Text style={detailStyles.productCell}>₹{product.price}</Text>
+              {allProductsMap.get(product.product_id)?.image ? (
+                <Image
+                  source={{ uri: `http://${ipAddress}:8091/images/products/${allProductsMap.get(product.product_id).image}` }}
+                  style={detailStyles.productImage}
+                  resizeMode="cover"
+                  onError={(e) => console.log('Order item image load error:', e.nativeEvent.error, allProductsMap.get(product.product_id).image)}
+                />
+              ) : (
+                <View style={detailStyles.productImagePlaceholder}>
+                  <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
+                </View>
+              )}
+              <Text style={[detailStyles.productCell, detailStyles.productNameCell]}>{product.name || (allProductsMap.get(product.product_id)?.name || 'Product Name')}</Text>
+              <Text style={detailStyles.productCell}>{product.quantity || 0}</Text>
+              <Text style={detailStyles.productCell}>₹{product.price !== undefined ? product.price : 0}</Text>
             </View>
           ))
         ) : (
@@ -266,7 +300,6 @@ const OrdersPage = () => {
   );
 };
 
-// Styles remain unchanged = StyleSheet.create({...}) (unchanged from your original code)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -400,29 +433,56 @@ const detailStyles = StyleSheet.create({
     marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
+    alignItems: 'center',
   },
   headerCell: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#003366",
     flex: 1,
+    textAlign: 'left',
+  },
+  imageHeader: {
+    width: 50 + 12,
+    flexBasis: 62,
+  },
+  productNameHeader: {
+    flex: 2,
   },
   productRow: {
     flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
+  productImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  productImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 4,
+    marginRight: 12,
+    backgroundColor: "#e0e0e0",
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   productCell: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#555",
     flex: 1,
   },
   noProductsText: {
     fontSize: 14,
     color: "#777",
-    textAlign: "center",
-    marginTop: 10,
+  },
+  productNameCell: {
+    flex: 2,
+    fontWeight: '500',
   },
 });
 
