@@ -26,6 +26,7 @@ import InvoiceSA from './InvoiceSA';
 import OrderTrackingScreen from './OrderTrackingScreen';
 
 import OrderTrackingCustomerScreen from './OrderTrackingCustomerScreen';
+import Cart from '../HomePage/Cart';
 
 const Stack = createStackNavigator();
 
@@ -193,6 +194,12 @@ const ProfileStack = () => {
         name="OrderTrackingCustomerScreen"
         component={OrderTrackingCustomerScreen}
         options={{ title: 'Order Tracking Customer' }}
+      />
+
+      <Stack.Screen
+        name="Cart"
+        component={Cart}
+        options={{ headerShown: false }}
       />
 
 

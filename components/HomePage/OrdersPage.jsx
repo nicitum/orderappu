@@ -158,34 +158,39 @@ const OrdersPage = () => {
         <Text style={detailStyles.orderDetailsTitle}>Order Items</Text>
         <View style={detailStyles.headerRow}>
           <Text style={[detailStyles.headerCell, detailStyles.imageHeader]}></Text>
-          <Text style={[detailStyles.headerCell, detailStyles.imageHeader]}></Text>
           <Text style={[detailStyles.headerCell, detailStyles.productNameHeader]}>Product</Text>
           <Text style={detailStyles.headerCell}>Qty</Text>
           <Text style={detailStyles.headerCell}>Price</Text>
         </View>
         {products.length > 0 ? (
-          products.map((product, index) => (
-            <View
-              key={`${orderId}-${product.product_id || index}`}
-              style={detailStyles.productRow}
-            >
-              {allProductsMap.get(product.product_id)?.image ? (
-                <Image
-                  source={{ uri: `http://${ipAddress}:8091/images/products/${allProductsMap.get(product.product_id).image}` }}
-                  style={detailStyles.productImage}
-                  resizeMode="cover"
-                  onError={(e) => console.log('Order item image load error:', e.nativeEvent.error, allProductsMap.get(product.product_id).image)}
-                />
-              ) : (
-                <View style={detailStyles.productImagePlaceholder}>
-                  <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
+          products.map((product, index) => {
+            const prodData = allProductsMap.get(product.product_id);
+            const imageUrl = prodData && prodData.image ? `http://${ipAddress}:8091/images/products/${prodData.image}` : null;
+            return (
+              <View
+                key={`${orderId}-${product.product_id || index}`}
+                style={detailStyles.productRow}
+              >
+                <View style={detailStyles.productImageBox}>
+                  {imageUrl ? (
+                    <Image
+                      source={{ uri: imageUrl }}
+                      style={detailStyles.productImage}
+                      resizeMode="contain"
+                      onError={(e) => console.log('Order item image load error:', e.nativeEvent.error, prodData?.image)}
+                    />
+                  ) : (
+                    <View style={detailStyles.productImagePlaceholder}>
+                      <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
+                    </View>
+                  )}
                 </View>
-              )}
-              <Text style={[detailStyles.productCell, detailStyles.productNameCell]}>{product.name || (allProductsMap.get(product.product_id)?.name || 'Product Name')}</Text>
-              <Text style={detailStyles.productCell}>{product.quantity || 0}</Text>
-              <Text style={detailStyles.productCell}>₹{product.price !== undefined ? product.price : 0}</Text>
-            </View>
-          ))
+                <Text style={[detailStyles.productCell, detailStyles.productNameCell]}>{product.name || (prodData?.name || 'Product Name')}</Text>
+                <Text style={detailStyles.productCell}>{product.quantity || 0}</Text>
+                <Text style={detailStyles.productCell}>₹{product.price !== undefined ? product.price : 0}</Text>
+              </View>
+            );
+          })
         ) : (
           <Text style={detailStyles.noProductsText}>No products found.</Text>
         )}
@@ -456,21 +461,9 @@ const detailStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-  productImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 4,
-    marginRight: 12,
-  },
-  productImagePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 4,
-    marginRight: 12,
-    backgroundColor: "#e0e0e0",
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  productImageBox: { width: 44, height: 44, borderRadius: 8, backgroundColor: '#F5F5F5', justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
+  productImage: { width: 40, height: 40, borderRadius: 6 },
+  productImagePlaceholder: { width: 40, height: 40, borderRadius: 6, backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' },
   productCell: {
     fontSize: 14,
     color: "#555",

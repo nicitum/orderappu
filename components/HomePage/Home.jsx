@@ -281,64 +281,27 @@ const HomePage = () => {
     }, [fetchData, handleBackButton])
   );
 
-  const handleRepeatOrderCheckout = async () => {
+  const handleRepeatOrder = async () => {
     if (!lastOrderDetails || !lastOrderItems || lastOrderItems.length === 0) {
       Alert.alert("Error", "No items in the last order to repeat.");
       return;
     }
 
-    setIsPlacingRepeatOrder(true);
     try {
-      const userAuthToken = await checkTokenAndRedirect(navigation);
-      if (!userAuthToken) {
-        setIsPlacingRepeatOrder(false);
-        return;
-      }
-
-      const decodedToken = jwtDecode(userAuthToken);
-      const localCustomerId = decodedToken.id;
-
-      const now = new Date();
-      const currentOrderType = now.getHours() < 12 ? "AM" : "PM"; 
-      const orderDate = now.toISOString();
-
-      const orderData = {
-        customer_id: localCustomerId,
-        orderDate: orderDate,
-        orderType: currentOrderType,
-        products: lastOrderItems.map(item => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          price: parseFloat(item.price || 0)
-        })),
-        total_amount: parseFloat(lastOrderDetails.totalAmount || 0),
-        payment_method: "cod", 
-        status: "pending"
-      };
-
-      const response = await fetch(`http://${ipAddress}:8091/place`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${userAuthToken}`,
-        },
-        body: JSON.stringify(orderData),
+      // Convert last order items to cart format
+      const cartItems = {};
+      lastOrderItems.forEach(item => {
+        cartItems[item.product_id] = item.quantity;
       });
 
-      const responseData = await response.json();
-
-      if (response.ok) {
-        Alert.alert("Success", responseData.message || "Your repeat order has been placed successfully!");
-        setRepeatOrderModalVisible(false);
-        fetchData(); 
-      } else {
-        Alert.alert("Error", responseData.message || "Could not place the repeat order. Please try again.");
-      }
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('catalogueCart', JSON.stringify(cartItems));
+      
+      // Navigate to Cart page
+      navigation.navigate('Cart');
     } catch (error) {
-      console.error("Error placing repeat order:", error);
-      Alert.alert("Error", "An unexpected error occurred while placing your repeat order.");
-    } finally {
-      setIsPlacingRepeatOrder(false);
+      console.error('Error preparing repeat order:', error);
+      Alert.alert('Error', 'Failed to prepare repeat order');
     }
   };
 
@@ -505,7 +468,7 @@ const HomePage = () => {
             {!isAdmin && lastOrderDetails && (
               <TouchableOpacity
                 style={styles.repeatOrderButton}
-                onPress={() => setRepeatOrderModalVisible(true)}
+                onPress={handleRepeatOrder}
                 disabled={!lastOrderItems || lastOrderItems.length === 0}
               >
                 <MaterialIcons name="repeat" size={20} color={COLORS.text.light} />
@@ -548,89 +511,6 @@ const HomePage = () => {
                 <Text style={styles.productDetailModalPrice}>{formatCurrency(selectedProductForModal.price !== undefined ? selectedProductForModal.price : 0)}</Text>
                 {selectedProductForModal.size && <Text style={styles.productDetailModalDescription}>Size: {selectedProductForModal.size}</Text>}
               </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* Repeat Order Modal */}
-      {lastOrderDetails && (
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={repeatOrderModalVisible}
-          onRequestClose={() => {
-            if (!isPlacingRepeatOrder) {
-              setRepeatOrderModalVisible(false);
-            }
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.cartModalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Confirm Repeat Order</Text>
-                <TouchableOpacity 
-                  onPress={() => setRepeatOrderModalVisible(false)} 
-                  style={styles.modalCloseButton}
-                  disabled={isPlacingRepeatOrder}
-                >
-                  <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView contentContainerStyle={styles.cartItemsContainer}>
-                {lastOrderItems && lastOrderItems.length > 0 ? (
-                  lastOrderItems.map((item, index) => (
-                    <View key={index} style={styles.cartItem}>
-                      {item.image ? (
-                        <Image 
-                          source={{ uri: `http://${ipAddress}:8091/images/products/${item.image}` }} 
-                          style={styles.cartItemImage} 
-                          resizeMode="cover" 
-                          onError={(e) => console.warn('Cart image load error:', item.image, e.nativeEvent.error)}
-                        />
-                      ) : (
-                        <View style={styles.cartItemImagePlaceholder}>
-                          <MaterialIcons name="image-not-supported" size={30} color={COLORS.text.secondary} />
-                        </View>
-                      )}
-                      <View style={styles.cartItemDetails}>
-                        <Text style={styles.cartItemName} numberOfLines={2}>{item.name || 'Product Name'}</Text>
-                        <View style={styles.cartItemSubtext}>
-                          <Text style={styles.cartItemQuantity}>Qty: {item.quantity}</Text>
-                          <Text style={styles.cartItemUnitPrice}>{formatCurrency(parseFloat(item.price || 0))} each</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.cartItemPrice}>{formatCurrency(parseFloat(item.price || 0) * item.quantity)}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyCartText}>No items in the last order to repeat.</Text>
-                )}
-              </ScrollView>
-
-              {lastOrderItems && lastOrderItems.length > 0 && (
-                <View style={styles.cartFooter}>
-                  <View style={styles.cartTotalContainer}>
-                    <Text style={styles.cartTotalLabel}>Total Amount:</Text>
-                    <Text style={styles.cartTotalPrice}>{formatCurrency(parseFloat(lastOrderDetails.totalAmount || 0))}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.checkoutButton,
-                      (isPlacingRepeatOrder) && styles.disabledButton,
-                    ]}
-                    onPress={handleRepeatOrderCheckout}
-                    disabled={isPlacingRepeatOrder}
-                  >
-                    {isPlacingRepeatOrder ? (
-                      <ActivityIndicator color={COLORS.text.light} size="small" />
-                    ) : (
-                      <Text style={styles.checkoutButtonText}>Place Repeat Order</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           </View>
         </Modal>

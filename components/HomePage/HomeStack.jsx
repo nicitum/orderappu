@@ -6,6 +6,7 @@ import AdminHomePage from './AdminHomePage';
 import Payments from '../Profile/Payments';
 import OrderHistorySA from './OrderHistorySA';
 import InvoiceDisplay from './InvoiceDisplay';
+import Cart from './Cart';
 
 import InvoicePage from './Invoice';
 import AdminAssignedUsersPage from './AdminAssignedUsers';
@@ -58,6 +59,7 @@ const HomeStack = () => {
          
             <Stack.Screen name="AdminAssignedUsers" component={AdminAssignedUsersPage} />
             <Stack.Screen name="OrdersPage" component={OrdersPage} />
+            <Stack.Screen name="Cart" component={Cart} />
         </Stack.Navigator>
     );
 };

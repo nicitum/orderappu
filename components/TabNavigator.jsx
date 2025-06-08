@@ -13,7 +13,7 @@ import { jwtDecode } from "jwt-decode";
 import AdminOrderHistory from "./Profile/AdminOrderHistory";
 import AdminTransactions from "./Profile/AdminTransactions";
 import ProductsComponent from "./HomePage/ProductList";
-import Catalogue from "./HomePage/Catalogue";
+import CatalogueStack from "./HomePage/CatalogueStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -113,7 +113,7 @@ const TabNavigator = () => {
             {!isSuperAdmin && !isAdmin && (
                 <Tab.Screen
                     name="Catalogue"
-                    component={Catalogue}
+                    component={CatalogueStack}
                     options={{
                         tabBarIcon: ({ color, size }) => (
                             <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />

@@ -33,7 +33,6 @@ const Catalogue = () => {
   const [cart, setCart] = useState({}); // { productId: quantity }
   const [enlargedProduct, setEnlargedProduct] = useState(null); // For image modal
   const [searchTerm, setSearchTerm] = useState('');
-  const [cartModalVisible, setCartModalVisible] = useState(false);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -87,7 +86,6 @@ const Catalogue = () => {
     };
 
     loadCart();
-    // Fetch products when the component mounts
     fetchProducts();
   }, []);
 
@@ -137,21 +135,55 @@ const Catalogue = () => {
     }));
   };
 
+  const handleQuantityChange = (productId, newQuantity) => {
+    // Allow empty string for clearing
+    if (newQuantity === '') {
+      setCart(prevCart => ({
+        ...prevCart,
+        [productId]: 0
+      }));
+      return;
+    }
+
+    // Convert to number and validate
+    const quantity = parseInt(newQuantity);
+    
+    // Only allow positive numbers
+    if (isNaN(quantity) || quantity < 1) {
+      return;
+    }
+
+    setCart(prevCart => ({
+      ...prevCart,
+      [productId]: quantity
+    }));
+  };
+
+  const handleQuantityBlur = (productId, value) => {
+    // If empty or invalid, set to 1
+    if (!value || parseInt(value) < 1) {
+      setCart(prevCart => ({
+        ...prevCart,
+        [productId]: 1
+      }));
+    }
+  };
+
   const handleIncreaseQuantity = (productId) => {
     setCart(prevCart => ({
       ...prevCart,
-      [productId]: (prevCart[productId] || 0) + 1,
+      [productId]: (prevCart[productId] || 0) + 1
     }));
   };
 
   const handleDecreaseQuantity = (productId) => {
     setCart(prevCart => {
-      const newQuantity = (prevCart[productId] || 0) - 1;
-      if (newQuantity <= 0) {
-        const { [productId]: _, ...restCart } = prevCart;
-        return restCart;
-      }
-      return { ...prevCart, [productId]: newQuantity };
+      const currentQuantity = prevCart[productId] || 0;
+      if (currentQuantity <= 1) return prevCart;
+      return {
+        ...prevCart,
+        [productId]: currentQuantity - 1
+      };
     });
   };
 
@@ -246,7 +278,6 @@ const Catalogue = () => {
               text: 'OK',
               onPress: () => {
                 setCart({});
-                setCartModalVisible(false);
                 navigation.navigate('Orders');
               }
             }
@@ -260,6 +291,9 @@ const Catalogue = () => {
       Alert.alert('Error', 'An error occurred while placing your order');
     }
   };
+
+  const uniqueBrands = brands.filter(b => (typeof b === 'string' ? b : b.name) !== 'All');
+  const uniqueCategories = categories.filter(c => (typeof c === 'string' ? c : c.name) !== 'All');
 
   const renderBrandItem = ({ item }) => (
     <TouchableOpacity
@@ -289,61 +323,68 @@ const Catalogue = () => {
     </TouchableOpacity>
   );
 
-  const renderProductItem = ({ item }) => {
+  const renderProduct = ({ item }) => {
+    const quantity = cart[item.id] || 0;
     const imageUri = `http://${ipAddress}:8091/images/products/${item.image}`;
-    const quantityInCart = cart[item.id] || 0;
-
+    
     return (
-      // Main TouchableOpacity for the entire card, triggers modal
-      <TouchableOpacity style={styles.productCard} onPress={() => setEnlargedProduct(item)} activeOpacity={0.7}>
-        {/* Product Image */}
-        <Image source={{ uri: imageUri }} style={styles.productImage} resizeMode="contain" />
-        
-        {/* Product Information Section */}
+      <View style={styles.productCard}>
+        <TouchableOpacity 
+          style={styles.productImageContainer}
+          onPress={() => setEnlargedProduct(item)}
+        >
+          <Image 
+            source={{ uri: imageUri }} 
+            style={styles.productImage} 
+            resizeMode="contain" 
+          />
+        </TouchableOpacity>
         <View style={styles.productInfo}>
-          <View style={styles.priceContainer}>
-            <Text style={styles.currentPrice}>₹{item.price}</Text>
-          </View>
-          <Text style={styles.productWeight}>{item.size || '250 g'}</Text> 
           <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-        </View>
-
-        {/* ADD Button or Quantity Controls - Placed within the main TouchableOpacity */}
-        {quantityInCart === 0 ? (
-          <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={(e) => { 
-              e.stopPropagation(); // IMPORTANT: Prevents card's onPress (modal) from firing
-              handleAddItem(item); 
-            }}
-          >
-            <Text style={styles.addButtonText}>ADD</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.quantityControlContainer}>
+          <Text style={styles.productPrice}>₹{item.price}</Text>
+          <View style={styles.quantityContainer}>
             <TouchableOpacity 
               style={styles.quantityButton} 
-              onPress={(e) => { 
-                e.stopPropagation(); // IMPORTANT
-                handleDecreaseQuantity(item.id); 
-              }}
+              onPress={() => handleDecreaseQuantity(item.id)}
             >
               <Icon name="remove" size={20} color="#FF3B30" />
             </TouchableOpacity>
-            <Text style={styles.quantityText}>{quantityInCart}</Text>
+            <TextInput
+              style={styles.quantityInput}
+              value={quantity.toString()}
+              onChangeText={(text) => handleQuantityChange(item.id, text)}
+              onBlur={(e) => handleQuantityBlur(item.id, e.nativeEvent.text)}
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="1"
+              placeholderTextColor="#999"
+            />
             <TouchableOpacity 
               style={styles.quantityButton} 
-              onPress={(e) => { 
-                e.stopPropagation(); // IMPORTANT
-                handleIncreaseQuantity(item.id); 
-              }}
+              onPress={() => handleIncreaseQuantity(item.id)}
             >
               <Icon name="add" size={20} color="#34C759" />
             </TouchableOpacity>
           </View>
-        )}
-      </TouchableOpacity>
+        </View>
+      </View>
     );
+  };
+
+  const handleViewCart = () => {
+    if (Object.keys(cart).length === 0) {
+      Alert.alert("Empty Cart", "Your cart is empty. Add some items first!");
+      return;
+    }
+    navigation.navigate('Cart');
+  };
+
+  const handleCartIconPress = () => {
+    if (Object.keys(cart).length === 0) {
+      Alert.alert("Empty Cart", "Your cart is empty. Add some items first!");
+      return;
+    }
+    navigation.navigate('Cart');
   };
 
   if (loading) {
@@ -363,8 +404,11 @@ const Catalogue = () => {
           <Icon name="arrow-back-ios" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Products</Text>
-        <TouchableOpacity style={styles.headerButton} onPress={() => console.log('Search icon in header pressed')}>
-          
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={handleCartIconPress}
+        >
+          <Icon name="shopping-cart" size={24} color="#000000" />
         </TouchableOpacity>
       </View>
 
@@ -385,107 +429,88 @@ const Catalogue = () => {
         ) : null}
       </View>
 
-      <View style={styles.mainContainer}>
+      <View style={styles.container}>
         <View style={styles.sidebar}>
-          <Text style={styles.sidebarTitle}>Brands</Text>
-          <FlatList
-            data={brands}
-            renderItem={renderBrandItem}
-            keyExtractor={(item) => item.id.toString()}
-            showsVerticalScrollIndicator={false}
-          />
-          <Text style={[styles.sidebarTitle, { marginTop: 20 }]}>Categories</Text>
-          <FlatList
-            data={categories}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id.toString()}
-            showsVerticalScrollIndicator={false}
-          />
+          <View style={styles.sidebarHeader}>
+            <Text style={{fontSize:16,marginRight:2}}>🏷️</Text>
+            <Text style={styles.sidebarHeaderText}>Brands</Text>
+          </View>
+          {['All', ...uniqueBrands].map((brand, idx) => {
+            const label = typeof brand === 'string' ? brand : brand.name;
+            const value = typeof brand === 'string' ? brand : brand.id;
+            return (
+              <TouchableOpacity
+                key={value || 'all'}
+                style={[
+                  styles.sidebarOption,
+                  selectedBrandId === value && styles.sidebarOptionActive
+                ]}
+                activeOpacity={0.7}
+                onPress={() => handleSelectBrand(value)}
+              >
+                <Text style={[
+                  styles.sidebarOptionText,
+                  selectedBrandId === value && styles.sidebarOptionTextActive
+                ]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <View style={styles.sidebarHeader}>
+            <Text style={{fontSize:16,marginRight:2}}>🗂️</Text>
+            <Text style={styles.sidebarHeaderText}>Categories</Text>
+          </View>
+          {['All', ...uniqueCategories].map((cat, idx) => {
+            const label = typeof cat === 'string' ? cat : cat.name;
+            const value = typeof cat === 'string' ? cat : cat.id;
+            return (
+              <TouchableOpacity
+                key={value || 'all'}
+                style={[
+                  styles.sidebarOption,
+                  selectedCategoryId === value && styles.sidebarOptionActive
+                ]}
+                activeOpacity={0.7}
+                onPress={() => handleSelectCategory(value)}
+              >
+                <Text style={[
+                  styles.sidebarOptionText,
+                  selectedCategoryId === value && styles.sidebarOptionTextActive
+                ]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <View style={styles.productsContainer}>
-          {displayedProducts.length > 0 ? (
-            <FlatList
-              data={displayedProducts}
-              renderItem={renderProductItem}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={2}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.productListContent}
-            />
-          ) : (
-             !loading && <View style={styles.emptyProductsContainer}><Text>No products found.</Text></View>
-          )}
-          {loading && products.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
+        <View style={styles.mainContent}>
+          <View style={styles.productsContainer}>
+            {displayedProducts.length > 0 ? (
+              <FlatList
+                data={displayedProducts}
+                renderItem={renderProduct}
+                keyExtractor={(item) => item.id.toString()}
+                numColumns={2}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.productListContent}
+              />
+            ) : (
+               !loading && <View style={styles.emptyProductsContainer}><Text>No products found.</Text></View>
+            )}
+            {loading && products.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
+          </View>
         </View>
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity 
-          style={styles.viewCartButton}
-          onPress={() => {
-            const totalItems = Object.values(cart).reduce((sum, q) => sum + q, 0);
-            if (totalItems === 0) {
-              Alert.alert('Empty Cart', 'Please add items to your cart before proceeding.');
-              return;
-            }
-            setCartModalVisible(true);
-          }}
+          style={[styles.viewCartButton, Object.keys(cart).length === 0 && styles.viewCartButtonDisabled]}
+          onPress={handleViewCart}
+          disabled={Object.keys(cart).length === 0}
         >
           <Text style={styles.viewCartButtonText}>
-            {Object.values(cart).reduce((sum, q) => sum + q, 0)} Items | View Cart
+            {Object.keys(cart).length === 0 ? 'Add items to cart' : `View Cart (${Object.values(cart).reduce((sum, q) => sum + q, 0)})`}
           </Text>
         </TouchableOpacity>
       </View>
-
-      {/* Cart Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={cartModalVisible}
-        onRequestClose={() => setCartModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.cartModalContent}>
-            <View style={styles.cartModalHeader}>
-              <Text style={styles.cartModalTitle}>Your Cart</Text>
-              <TouchableOpacity 
-                onPress={() => setCartModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Icon name="close" size={24} color="#000" />
-              </TouchableOpacity>
-            </View>
-
-            <FlatList
-              data={Object.entries(cart).map(([productId, quantity]) => ({
-                productId,
-                quantity
-              }))}
-              renderItem={renderCartItem}
-              keyExtractor={(item) => item.productId}
-              contentContainerStyle={styles.cartItemsList}
-            />
-
-            <View style={styles.cartSummary}>
-              <View style={styles.cartTotalRow}>
-                <Text style={styles.cartTotalLabel}>Total Amount:</Text>
-                <Text style={styles.cartTotalAmount}>₹{calculateTotalAmount()}</Text>
-              </View>
-              <View style={styles.cartTotalRow}>
-                <Text style={styles.cartTotalLabel}>Order Type:</Text>
-                <Text style={styles.cartTotalAmount}>{getOrderType()}</Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.checkoutButton}
-                onPress={placeOrder}
-              >
-                <Text style={styles.checkoutButtonText}>Proceed to Checkout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Enlarged Image Modal - CORRECTLY PLACED */}
       {enlargedProduct && (
@@ -546,274 +571,200 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000000',
   },
-  mainContainer: {
+  container: {
     flex: 1,
     flexDirection: 'row',
+    backgroundColor: '#F8F8F8',
   },
   sidebar: {
-    width: 100, // Adjust as needed
-    backgroundColor: '#F5F5F5',
-    paddingTop: 10,
-  },
-  sidebarTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#003366',
-    paddingHorizontal: 10,
-    marginBottom: 10,
-  },
-  categoryItem: {
-    paddingVertical: 15,
-    paddingHorizontal: 10,
+    width: 80,
+    backgroundColor: '#F9FAFB',
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
     alignItems: 'center',
-    marginBottom: 5,
+    paddingBottom: 16,
   },
-  selectedCategoryItem: {
-    backgroundColor: '#003366', // Example selection color
-    borderRadius: 8,
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    marginTop: 8,
   },
-  categoryText: {
+  sidebarHeaderText: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#003366',
+    marginLeft: 4,
+    letterSpacing: 0.2,
+  },
+  sidebarOption: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+    marginLeft: 0,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    minWidth: 56,
+  },
+  sidebarOptionActive: {
+    backgroundColor: '#003366',
+    shadowColor: '#003366',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sidebarOptionText: {
     fontSize: 12,
     color: '#003366',
-    marginTop: 4,
-    textAlign: 'center',
+    fontWeight: '500',
   },
-  selectedCategoryText: {
-    color: '#FFFFFF',
+  sidebarOptionTextActive: {
+    color: '#FFF',
     fontWeight: 'bold',
   },
-  productsContainer: {
+  mainContent: {
     flex: 1,
-    paddingHorizontal: 5,
+    padding: 8,
   },
-  productListContent: {
-    paddingVertical: 10,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    marginTop: 4,
+    elevation: 1,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+    height: 40,
+  },
+  productList: {
+    paddingBottom: 80,
   },
   productCard: {
-    flex: 0.5, // For 2 columns
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    margin: 5,
+    flex: 0.5,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    margin: 6,
     padding: 10,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    alignItems: 'center', // Center content like image
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    alignItems: 'center',
+    minWidth: 150,
+    maxWidth: '48%',
+  },
+  productImageContainer: {
+    width: 90,
+    height: 90,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    marginBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   productImage: {
-    width: '100%',
-    height: 120, // Adjust as needed
-    marginBottom: 8,
-    borderRadius: 4,
+    width: '90%',
+    height: '90%',
+    resizeMode: 'contain',
   },
   productInfo: {
     alignItems: 'flex-start',
     width: '100%',
   },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 2,
-  },
-  currentPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: '#757575',
-    textDecorationLine: 'line-through',
-    marginLeft: 5,
-  },
-  productWeight: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 2,
-  },
-
   productName: {
     fontSize: 14,
-    color: '#333333',
+    color: '#222',
     marginBottom: 4,
-    minHeight: 35, // To ensure consistent card height for 2 lines
-  },
-  productRating: {
-    fontSize: 12,
-    color: '#757575',
-    // marginBottom: 8, // Removed to allow ADD button to be closer if no rating exists
-  },
-  addButton: {
-    borderColor: '#FF3B30', // Zepto-like pink/red
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#FF3B30',
+    minHeight: 35,
     fontWeight: 'bold',
-    fontSize: 14,
   },
-  quantityControlContainer: {
+  productPrice: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    borderColor: '#FF3B30',
-    borderWidth: 1,
-    borderRadius: 6,
-    width: '80%',
-    paddingVertical: 4, // Reduced padding for controls
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 2,
+    marginTop: 6,
+    alignSelf: 'center',
   },
   quantityButton: {
-    paddingHorizontal: 10, // Ample touch area
+    padding: 6,
+    backgroundColor: '#FFF',
+    borderRadius: 6,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
   },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF3B30',
-    minWidth: 20, // Ensure number doesn't jump around too much
+  quantityInput: {
+    width: 40,
     textAlign: 'center',
-  },
-  emptyProductsContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+    paddingHorizontal: 4,
+    marginHorizontal: 2,
+    backgroundColor: '#FFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   footer: {
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
     backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
   },
   viewCartButton: {
     backgroundColor: '#003366',
-    paddingVertical: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    padding: 14,
     alignItems: 'center',
+  },
+  viewCartButtonDisabled: {
+    backgroundColor: '#CCCCCC',
   },
   viewCartButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
+  },
+  emptyProductsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyProductsText: {
+    fontSize: 15,
+    color: '#666',
   },
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
-  cartModalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  cartModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  cartModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#003366',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  cartItemsList: {
-    paddingBottom: 20,
-  },
-  cartItemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  cartItemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-  },
-  cartItemDetails: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  cartItemName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  cartItemPrice: {
-    fontSize: 14,
-    color: '#666',
-  },
-  cartItemQuantity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cartSummary: {
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    paddingTop: 20,
-  },
-  cartTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  cartTotalLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  cartTotalAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#003366',
-  },
-  checkoutButton: {
-    backgroundColor: '#FF3B30',
-    paddingVertical: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  checkoutButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // Search Bar Styles
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 8,
-    marginHorizontal: 15,
-    marginVertical: 10,
-    paddingHorizontal: 10,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 16,
-    color: '#333',
-  },
-  clearSearchButton: {
-    padding: 5,
-  },
-  // Modal Styles
   modalCloseButton: {
     position: 'absolute',
     top: 40, // Adjust based on status bar height if needed
@@ -843,6 +794,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    marginHorizontal: 15,
+    marginVertical: 10,
+    paddingHorizontal: 10,
+  },
+  clearSearchButton: {
+    padding: 5,
+  },
+  productListContent: {
+    paddingVertical: 10,
   },
 });
 
