@@ -84,11 +84,7 @@ const HomePage = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [scrollY] = useState(new Animated.Value(0));
   const navigation = useNavigation();
-  const [repeatOrderModalVisible, setRepeatOrderModalVisible] = useState(false);
-  const [isPlacingRepeatOrder, setIsPlacingRepeatOrder] = useState(false);
   const [randomProducts, setRandomProducts] = useState([]);
-  const [isProductModalVisible, setIsProductModalVisible] = useState(false);
-  const [selectedProductForModal, setSelectedProductForModal] = useState(null);
 
   useEffect(() => {
     if (allProductsData && allProductsData.length > 0) {
@@ -103,38 +99,6 @@ const HomePage = () => {
       setRandomProducts([]);
     }
   }, [allProductsData]);
-
-  const renderFeaturedProductItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => {
-        if (item && item.id) {
-          setSelectedProductForModal(item);
-          setIsProductModalVisible(true);
-        } else {
-          console.warn("Attempted to open modal with invalid product item:", item);
-          Alert.alert("Product Error", "Could not display product details.");
-        }
-      }}
-    >
-      {item.image ? (
-        <Image
-          source={{ uri: `http://${ipAddress}:8091/images/products/${item.image}` }}
-          style={styles.productImage}
-          resizeMode="contain"
-          onError={(e) => console.warn('Image load error for product ID:', item.id, item.image, e.nativeEvent.error)}
-        />
-      ) : (
-        <View style={[styles.productImage, styles.productImagePlaceholder]} >
-          <MaterialIcons name="image-not-supported" size={40} color={COLORS.text.tertiary} />
-        </View>
-      )}
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>{item.name || "Product Name Unavailable"}</Text>
-        <Text style={styles.productPrice}>{formatCurrency(item.price !== undefined ? item.price : 0)}</Text>
-      </View>
-    </TouchableOpacity>
-  );
 
   const checkUserRole = async () => {
     setIsLoading(true)
@@ -281,37 +245,13 @@ const HomePage = () => {
     }, [fetchData, handleBackButton])
   );
 
-  const handleRepeatOrder = async () => {
-    if (!lastOrderDetails || !lastOrderItems || lastOrderItems.length === 0) {
-      Alert.alert("Error", "No items in the last order to repeat.");
-      return;
-    }
-
-    try {
-      // Convert last order items to cart format
-      const cartItems = {};
-      lastOrderItems.forEach(item => {
-        cartItems[item.product_id] = item.quantity;
-      });
-
-      // Save to AsyncStorage
-      await AsyncStorage.setItem('catalogueCart', JSON.stringify(cartItems));
-      
-      // Navigate to Cart page
-      navigation.navigate('Cart');
-    } catch (error) {
-      console.error('Error preparing repeat order:', error);
-      Alert.alert('Error', 'Failed to prepare repeat order');
-    }
-  };
-
   const { customerName } = userDetails || {}
   const { lastIndentDate, totalAmount, orderType: lastOrderType } = lastOrderDetails || {}; 
   const totalQuantity = lastOrderItems?.reduce((total, item) => total + (parseInt(item.quantity) || 0), 0) || 0;
 
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
-    outputRange: [160, 80],
+    outputRange: [80, 56],
     extrapolate: 'clamp'
   })
 
@@ -319,22 +259,17 @@ const HomePage = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
 
-      {/* Animated Header */}
-      <Animated.View style={[styles.header, { height: headerHeight }]}>
-        <View style={styles.headerTop}>
-          <Image source={require("../../assets/logo.jpg")} style={styles.logo} resizeMode="contain" />
-          <Text style={styles.headerTitle}>{isAdmin ? "Admin Dashboard" : "Customer Dashboard"}</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-            <MaterialIcons name="refresh" size={24} color={COLORS.text.light} />
-          </TouchableOpacity>
+      {/* Simple Deep Blue Header */}
+      <View style={styles.simpleHeaderContainer}>
+        <Image source={require("../../assets/logo.jpg")} style={styles.simpleHeaderLogo} resizeMode="contain" />
+        <View style={styles.simpleHeaderTextContainer}>
+          <Text style={styles.simpleHeaderMainTitle}>Customer Dashboard</Text>
+          <Text style={styles.simpleHeaderUserName}>{customerName || "User"}</Text>
         </View>
-        {userDetails && (
-          <View style={styles.headerBottom}>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName}>{customerName || "User"}</Text>
-          </View>
-        )}
-      </Animated.View>
+        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+          <MaterialIcons name="refresh" size={24} color={COLORS.text.light} />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         style={styles.container}
@@ -361,28 +296,6 @@ const HomePage = () => {
           </View>
         ) : (
           <View style={styles.content}>
-            {/* Featured Products Section */}
-            {randomProducts.length > 0 && (
-              <View style={styles.featuredProductsContainer}>
-                <Text style={styles.featuredProductsTitle}>Quick Picks</Text>
-                <FlatList
-                  data={randomProducts}
-                  renderItem={renderFeaturedProductItem}
-                  keyExtractor={(item, index) => item.id ? item.id.toString() : `random-${index}`}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ paddingHorizontal: 16 }}
-                />
-                <TouchableOpacity
-                  style={styles.seeMoreButton}
-                  onPress={() => navigation.navigate('Catalogue')}
-                >
-                  <Text style={styles.seeMoreButtonText}>See More Products</Text>
-                  <MaterialIcons name="arrow-forward" size={20} color={COLORS.text.light} style={{ marginLeft: 8 }} />
-                </TouchableOpacity>
-              </View>
-            )}
-
             {/* Order History Section */}
             {!isAdmin && (
               <View style={styles.section}>
@@ -396,7 +309,6 @@ const HomePage = () => {
                     <MaterialIcons name="chevron-right" size={20} color={COLORS.primary} />
                   </TouchableOpacity>
                 </View>
-
                 {lastOrderDetails ? (
                   <View style={styles.orderCard}>
                     <View style={styles.orderHeader}>
@@ -410,7 +322,6 @@ const HomePage = () => {
                       </View>
                       <Text style={styles.orderDate}>{formatDate(lastIndentDate)}</Text>
                     </View>
-
                     <View style={styles.orderBody}>
                       <View style={styles.orderSummary}>
                         <View style={styles.orderInfo}>
@@ -422,7 +333,6 @@ const HomePage = () => {
                           <Text style={styles.orderInfoValue}>{formatCurrency(totalAmount || 0)}</Text>
                         </View>
                       </View>
-
                       {lastOrderItems && lastOrderItems.length > 0 && (
                         <View style={styles.orderItems}>
                           <Text style={styles.orderItemsTitle}>Order Details</Text>
@@ -463,58 +373,9 @@ const HomePage = () => {
                 )}
               </View>
             )}
-
-            {/* Repeat Last Order Button */}
-            {!isAdmin && lastOrderDetails && (
-              <TouchableOpacity
-                style={styles.repeatOrderButton}
-                onPress={handleRepeatOrder}
-                disabled={!lastOrderItems || lastOrderItems.length === 0}
-              >
-                <MaterialIcons name="repeat" size={20} color={COLORS.text.light} />
-                <Text style={styles.repeatOrderButtonText}>Repeat Recent Order</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
       </ScrollView>
-
-      {/* Product Detail Modal */}
-      {selectedProductForModal && (
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={isProductModalVisible}
-          onRequestClose={() => setIsProductModalVisible(false)}
-        >
-          <View style={styles.centeredModalOverlay}>
-            <View style={styles.productDetailModalContent}>
-              <View style={styles.productDetailModalHeader}>
-                <Text style={styles.productDetailModalTitle}>{selectedProductForModal.name}</Text>
-                <TouchableOpacity onPress={() => setIsProductModalVisible(false)} style={styles.modalCloseButton}>
-                  <MaterialIcons name="close" size={24} color={COLORS.text.primary} />
-                </TouchableOpacity>
-              </View>
-              {selectedProductForModal.image ? (
-                <Image 
-                  source={{ uri: `http://${ipAddress}:8091/images/products/${selectedProductForModal.image}` }} 
-                  style={styles.productDetailModalImage} 
-                  resizeMode="contain" 
-                  onError={(e) => console.warn('Modal image load error:', selectedProductForModal.image, e.nativeEvent.error)}
-                />
-              ) : (
-                <View style={[styles.productDetailModalImage, styles.productDetailModalImagePlaceholder]}>
-                  <MaterialIcons name="image-not-supported" size={60} color={COLORS.text.tertiary} />
-                </View>
-              )}
-              <View style={styles.productDetailModalInfoContainer}>
-                <Text style={styles.productDetailModalPrice}>{formatCurrency(selectedProductForModal.price !== undefined ? selectedProductForModal.price : 0)}</Text>
-                {selectedProductForModal.size && <Text style={styles.productDetailModalDescription}>Size: {selectedProductForModal.size}</Text>}
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
     </SafeAreaView>
   )
 }
@@ -524,43 +385,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.primary,
   },
-  header: {
+  simpleHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.primary,
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight,
-  },
-  headerTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  headerBottom: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  logo: {
+  simpleHeaderLogo: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    marginRight: 12,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text.light,
+  simpleHeaderTextContainer: {
     flex: 1,
-    marginLeft: 12,
+    justifyContent: 'center',
   },
-  welcomeText: {
+  simpleHeaderMainTitle: {
     fontSize: 16,
+    fontWeight: '600',
     color: COLORS.text.light,
-    opacity: 0.9,
   },
-  userName: {
-    fontSize: 24,
-    fontWeight: "700",
+  simpleHeaderUserName: {
+    fontSize: 13,
     color: COLORS.text.light,
-    marginTop: 4,
+    marginTop: 2,
   },
   container: {
     flex: 1,
@@ -744,281 +594,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-  repeatOrderButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    marginTop: 10,
-    marginBottom: 16,
-    alignSelf: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  repeatOrderButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "600",
+  refreshButton: {
+    padding: 6,
     marginLeft: 8,
-  },
-  centeredModalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  cartModalContent: {
-    width: '100%',
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: "80%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: 12,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.text.primary,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  cartItemsContainer: {
-    paddingBottom: 16,
-  },
-  productDetailModalContent: {
-    width: '90%',
-    maxWidth: 400,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  productDetailModalHeader: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  productDetailModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    flex: 1,
-    marginRight: 8,
-  },
-  productDetailModalImage: {
-    width: '80%',
-    aspectRatio: 1,
-    borderRadius: 12,
-    marginBottom: 20,
-    backgroundColor: COLORS.divider,
-  },
-  productDetailModalImagePlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productDetailModalInfoContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-    width: '100%',
-  },
-  productDetailModalPrice: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: COLORS.accent,
-    marginBottom: 8,
-  },
-  productDetailModalDescription: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  emptyCartText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    paddingVertical: 20,
-  },
-  cartItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  cartItemImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 4,
-    marginRight: 10,
-  },
-  cartItemImagePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 4,
-    marginRight: 10,
-    backgroundColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartItemDetails: {
-    flex: 1,
-    marginRight: 8,
-  },
-  cartItemName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  cartItemSubtext: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  cartItemPrice: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: COLORS.text.primary,
-  },
-  cartFooter: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 16,
-    marginTop: 8,
-  },
-  cartTotalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  cartTotalLabel: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: COLORS.text.secondary,
-  },
-  cartTotalPrice: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: COLORS.text.primary,
-  },
-  checkoutButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkoutButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  disabledButton: {
-    backgroundColor: COLORS.neutralLight,
-    opacity: 0.7,
-  },
-  featuredProductsContainer: {
-    marginTop: 24,
-  },
-  featuredProductsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-  },
-  productCard: {
-    backgroundColor: COLORS.card.background,
-    borderRadius: 12,
-    marginRight: 16,
-    width: Dimensions.get('window').width / 2.2,
-    shadowColor: COLORS.card.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-    overflow: 'hidden',
-  },
-  productImage: {
-    width: '100%',
-    height: 130,
-  },
-  productImagePlaceholder: {
-    width: '100%',
-    height: 130,
-    backgroundColor: COLORS.divider,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productInfo: {
-    padding: 12,
-    flexGrow: 1,
-    justifyContent: 'space-between',
-  },
-  productName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-    minHeight: 36,
-  },
-  productPrice: {
-    fontSize: 14,
-    color: COLORS.accent,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  seeMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    marginTop: 24,
-    marginBottom: 16,
-    alignSelf: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  seeMoreButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 })
 
