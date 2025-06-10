@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,28 +11,66 @@ import {
   StatusBar,
   Alert,
   Modal,
-  TextInput, // Double-checking TextInput import
-  Keyboard, // Import Keyboard for dismissing on search
+  TextInput,
+  Keyboard,
+
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
-import { ipAddress } from '../../services/urls'; // Assuming this path is correct
+import { ipAddress } from '../../services/urls';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { checkTokenAndRedirect } from '../../services/auth';
+
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
 
 const Catalogue = () => {
   const navigation = useNavigation();
   const [products, setProducts] = useState([]);
   const [displayedProducts, setDisplayedProducts] = useState([]);
-  const [categories, setCategories] = useState([]); // Will be populated from API
-  const [brands, setBrands] = useState([]); // State for brands
-  const [selectedBrandId, setSelectedBrandId] = useState('All'); // Default to 'All'
-  const [selectedCategoryId, setSelectedCategoryId] = useState('All'); // Default to 'All'
-  const [loading, setLoading] = useState(true); // Initial loading state
-  const [isFetchingProducts, setIsFetchingProducts] = useState(false); // Loading state specifically for product fetch
-  const [cart, setCart] = useState({}); // { productId: quantity }
-  const [enlargedProduct, setEnlargedProduct] = useState(null); // For image modal
+  const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [selectedBrandId, setSelectedBrandId] = useState('All');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [cart, setCart] = useState({});
+  const [cartItems, setCartItems] = useState({});
+  const [enlargedProduct, setEnlargedProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
+
+  const fetchBrands = async () => {
+    try {
+      const response = await fetch(`http://${ipAddress}:8091/brand-crud`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ operation: 'read' }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        const fetchedBrands = [{ id: 'All', name: 'All', image: '' }, ...data.data];
+        setBrands(fetchedBrands);
+        if (!selectedBrandId || !fetchedBrands.find(b => b.id === selectedBrandId)) {
+          setSelectedBrandId('All');
+        }
+      } else {
+        Alert.alert('Error', data.message || 'Failed to fetch brands');
+        setBrands([]);
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      Alert.alert('Error', 'An error occurred while fetching brands');
+      setBrands([]);
+    }
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -41,23 +79,15 @@ const Catalogue = () => {
       const data = await response.json();
       if (response.ok) {
         setProducts(data);
-
-        // Extract and set categories
         const uniqueCategoryNames = [...new Set(data.map(product => product.category).filter(Boolean))];
         const fetchedCategories = [
-          { id: 'All', name: 'All' }, 
+          { id: 'All', name: 'All' },
           ...uniqueCategoryNames.map(name => ({ id: name, name: name }))
         ];
         setCategories(fetchedCategories);
 
-        // Extract and set brands
-        const uniqueBrandNames = [...new Set(data.map(product => product.brand).filter(Boolean))];
-        const fetchedBrands = [{ id: 'All', name: 'All' }, ...uniqueBrandNames.map(name => ({ id: name, name: name }))];
-        setBrands(fetchedBrands);
-
-        // Ensure 'All' is selected by default or if current selection disappears
         if (!selectedCategoryId || !fetchedCategories.find(c => c.id === selectedCategoryId)) {
-            setSelectedCategoryId('All');
+          setSelectedCategoryId('All');
         }
       } else {
         Alert.alert('Error', 'Failed to fetch products');
@@ -72,24 +102,28 @@ const Catalogue = () => {
     }
   };
 
-  // Load cart from AsyncStorage on component mount
   useEffect(() => {
-    const loadCart = async () => {
+    const loadAndFetchData = async () => {
+      setLoading(true);
       try {
         const savedCart = await AsyncStorage.getItem('catalogueCart');
         if (savedCart !== null) {
           setCart(JSON.parse(savedCart));
         }
+        const savedCartItems = await AsyncStorage.getItem('cartItems');
+        if (savedCartItems !== null) {
+          setCartItems(JSON.parse(savedCartItems));
+        }
+        await Promise.all([fetchBrands(), fetchProducts()]);
       } catch (error) {
-        console.error('Failed to load cart from AsyncStorage:', error);
+        console.error('Initial data fetch error:', error);
+      } finally {
+        setLoading(false);
       }
     };
-
-    loadCart();
-    fetchProducts();
+    loadAndFetchData();
   }, []);
 
-  // Save cart to AsyncStorage whenever it changes
   useEffect(() => {
     const saveCart = async () => {
       try {
@@ -99,16 +133,26 @@ const Catalogue = () => {
       }
     };
     saveCart();
-  }, [cart]); // Depend on cart state
+  }, [cart]);
+
+  useEffect(() => {
+    const saveCartItems = async () => {
+      try {
+        await AsyncStorage.setItem('cartItems', JSON.stringify(cartItems));
+      } catch (error) {
+        console.error('Failed to save cart items to AsyncStorage:', error);
+      }
+    };
+    saveCartItems();
+  }, [cartItems]);
 
   useEffect(() => {
     let filtered = products;
     if (selectedCategoryId !== 'All') {
       filtered = filtered.filter(p => p.category === selectedCategoryId);
     }
-    // Add filtering by brand
     if (selectedBrandId !== 'All') {
-      filtered = filtered.filter(p => p.brand === selectedBrandId);
+      filtered = filtered.filter(p => p.brand === brands.find(b => b.id === selectedBrandId)?.name);
     }
     if (searchTerm) {
       filtered = filtered.filter(p =>
@@ -116,27 +160,31 @@ const Catalogue = () => {
       );
     }
     setDisplayedProducts(filtered);
-  }, [selectedCategoryId, selectedBrandId, products, searchTerm]);
+  }, [selectedCategoryId, selectedBrandId, products, searchTerm, brands]);
 
   const handleSelectCategory = (categoryId) => {
     setSelectedCategoryId(categoryId);
-    setSelectedBrandId('All'); // Reset brand filter when category changes
+    setSelectedBrandId('All');
   };
 
   const handleSelectBrand = (brandId) => {
     setSelectedBrandId(brandId);
-    Keyboard.dismiss(); // Dismiss keyboard when a brand is selected
+    Keyboard.dismiss();
   };
 
-  const handleAddItem = (product) => {
-    setCart(prevCart => ({
-      ...prevCart,
-      [product.id]: (prevCart[product.id] || 0) + 1,
-    }));
+  const handleAddItem = async (item) => {
+    const updatedCart = { ...cart };
+    updatedCart[item.id] = (updatedCart[item.id] || 0) + 1;
+    setCart(updatedCart);
+    await AsyncStorage.setItem('catalogueCart', JSON.stringify(updatedCart));
+    // Update cart items with discount price
+    const updatedCartItems = { ...cartItems, [item.id]: { ...item, price: item.discountPrice || item.price } };
+    setCartItems(updatedCartItems);
+    await AsyncStorage.setItem('cartItems', JSON.stringify(updatedCartItems));
+    console.log(`Added ${item.name} to cart`);
   };
 
   const handleQuantityChange = (productId, newQuantity) => {
-    // Allow empty string for clearing
     if (newQuantity === '') {
       setCart(prevCart => ({
         ...prevCart,
@@ -144,15 +192,10 @@ const Catalogue = () => {
       }));
       return;
     }
-
-    // Convert to number and validate
     const quantity = parseInt(newQuantity);
-    
-    // Only allow positive numbers
     if (isNaN(quantity) || quantity < 1) {
       return;
     }
-
     setCart(prevCart => ({
       ...prevCart,
       [productId]: quantity
@@ -160,7 +203,6 @@ const Catalogue = () => {
   };
 
   const handleQuantityBlur = (productId, value) => {
-    // If empty or invalid, set to 1
     if (!value || parseInt(value) < 1) {
       setCart(prevCart => ({
         ...prevCart,
@@ -179,7 +221,11 @@ const Catalogue = () => {
   const handleDecreaseQuantity = (productId) => {
     setCart(prevCart => {
       const currentQuantity = prevCart[productId] || 0;
-      if (currentQuantity <= 1) return prevCart;
+      if (currentQuantity <= 1) {
+        const newCart = { ...prevCart };
+        delete newCart[productId];
+        return newCart;
+      }
       return {
         ...prevCart,
         [productId]: currentQuantity - 1
@@ -187,127 +233,43 @@ const Catalogue = () => {
     });
   };
 
-  const getOrderType = () => {
-    const currentHour = new Date().getHours();
-    return currentHour < 12 ? 'AM' : 'PM';
-  };
 
-  const calculateTotalAmount = () => {
-    return Object.entries(cart).reduce((sum, [productId, quantity]) => {
-      const product = products.find(p => p.id === parseInt(productId));
-      return sum + (product ? product.price * quantity : 0);
-    }, 0);
-  };
 
-  const renderCartItem = ({ item }) => {
-    const product = products.find(p => p.id === parseInt(item.productId));
-    if (!product) return null;
+
+  const renderBrandItem = ({ item }) => {
+    const isAllBrand = item.id === 'All';
+    const imageSource = !isAllBrand && item.image
+      ? { uri: `http://${ipAddress}:8091/images/brands/${item.image}` }
+      : null;
 
     return (
-      <View style={styles.cartItemContainer}>
-        <Image 
-          source={{ uri: `http://${ipAddress}:8091/images/products/${product.image}` }} 
-          style={styles.cartItemImage} 
-          resizeMode="contain" 
-        />
-        <View style={styles.cartItemDetails}>
-          <Text style={styles.cartItemName}>{product.name}</Text>
-          <Text style={styles.cartItemPrice}>₹{product.price}</Text>
-        </View>
-        <View style={styles.cartItemQuantity}>
-          <TouchableOpacity 
-            style={styles.quantityButton} 
-            onPress={() => handleDecreaseQuantity(item.productId)}
-          >
-            <Icon name="remove" size={20} color="#FF3B30" />
-          </TouchableOpacity>
-          <Text style={styles.quantityText}>{item.quantity}</Text>
-          <TouchableOpacity 
-            style={styles.quantityButton} 
-            onPress={() => handleIncreaseQuantity(item.productId)}
-          >
-            <Icon name="add" size={20} color="#34C759" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <TouchableOpacity
+        style={[
+          styles.sidebarOption,
+          selectedBrandId === item.id && styles.sidebarOptionActive,
+          isAllBrand && styles.categoryItemAll,
+          isAllBrand && selectedBrandId === item.id && styles.selectedCategoryItem
+        ]}
+        onPress={() => handleSelectBrand(item.id)}
+      >
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.sidebarOptionImage}
+            resizeMode="contain"
+          />
+        ) : (
+          <Text style={[
+            styles.categoryText,
+            selectedBrandId === item.id && styles.selectedCategoryText
+          ]}>{item.name}</Text>
+        )}
+        {!isAllBrand && <Text style={[styles.sidebarOptionText, selectedBrandId === item.id && styles.sidebarOptionTextActive]} numberOfLines={2}>
+          {item.name}
+        </Text>}
+      </TouchableOpacity>
     );
   };
-
-  const placeOrder = async () => {
-    try {
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) {
-        Alert.alert('Error', 'Please login to place an order');
-        return;
-      }
-
-      const orderItems = Object.entries(cart).map(([productId, quantity]) => {
-        const product = products.find(p => p.id === parseInt(productId));
-        return {
-          product_id: parseInt(productId),
-          quantity: quantity,
-          price: product ? product.price : 0
-        };
-      });
-
-      const now = new Date();
-      const orderData = {
-        products: orderItems,
-        orderType: getOrderType(),
-        orderDate: now.toISOString(),
-        total_amount: calculateTotalAmount()
-      };
-
-      const response = await fetch(`http://${ipAddress}:8091/place`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(orderData)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        Alert.alert(
-          'Success',
-          'Order placed successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setCart({});
-                navigation.navigate('Orders');
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Error', data.message || 'Failed to place order');
-      }
-    } catch (error) {
-      console.error('Error placing order:', error);
-      Alert.alert('Error', 'An error occurred while placing your order');
-    }
-  };
-
-  const uniqueBrands = brands.filter(b => (typeof b === 'string' ? b : b.name) !== 'All');
-  const uniqueCategories = categories.filter(c => (typeof c === 'string' ? c : c.name) !== 'All');
-
-  const renderBrandItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.categoryItem,
-        selectedBrandId === item.id && styles.selectedCategoryItem,
-      ]}
-      onPress={() => handleSelectBrand(item.id)}
-    >
-      <Text style={[styles.categoryText, selectedBrandId === item.id && styles.selectedCategoryText]}>
-        {item.name}
-      </Text>
-    </TouchableOpacity>
-  );
 
   const renderCategoryItem = ({ item }) => (
     <TouchableOpacity
@@ -317,54 +279,69 @@ const Catalogue = () => {
       ]}
       onPress={() => handleSelectCategory(item.id)}
     >
-      <Text style={[styles.categoryText, selectedCategoryId === item.id && styles.selectedCategoryText]}>
-        {item.name}
-      </Text>
+      <Text style={[
+        styles.categoryText,
+        selectedCategoryId === item.id && styles.selectedCategoryText
+      ]}>{item.name}</Text>
     </TouchableOpacity>
   );
 
   const renderProduct = ({ item }) => {
-    const quantity = cart[item.id] || 0;
+    const quantityInCart = cart[item.id] || 0;
     const imageUri = `http://${ipAddress}:8091/images/products/${item.image}`;
-    
+
     return (
-      <View style={styles.productCard}>
-        <TouchableOpacity 
-          style={styles.productImageContainer}
-          onPress={() => setEnlargedProduct(item)}
-        >
-          <Image 
-            source={{ uri: imageUri }} 
-            style={styles.productImage} 
-            resizeMode="contain" 
-          />
-        </TouchableOpacity>
-        <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productPrice}>₹{item.price}</Text>
-          <View style={styles.quantityContainer}>
-            <TouchableOpacity 
-              style={styles.quantityButton} 
-              onPress={() => handleDecreaseQuantity(item.id)}
-            >
-              <Icon name="remove" size={20} color="#FF3B30" />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.quantityInput}
-              value={quantity.toString()}
-              onChangeText={(text) => handleQuantityChange(item.id, text)}
-              onBlur={(e) => handleQuantityBlur(item.id, e.nativeEvent.text)}
-              keyboardType="numeric"
-              maxLength={4}
-              placeholder="1"
-              placeholderTextColor="#999"
+      <View style={styles.productCardContainer}>
+        <View style={styles.productCardContent}>
+          <TouchableOpacity
+            style={styles.productImageWrapper}
+            onPress={() => setEnlargedProduct(item)}
+          >
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.productImageLarge}
+              resizeMode="contain"
+              onError={(e) => console.warn('Product image load error:', item.image, e.nativeEvent.error)}
             />
-            <TouchableOpacity 
-              style={styles.quantityButton} 
-              onPress={() => handleIncreaseQuantity(item.id)}
-            >
-              <Icon name="add" size={20} color="#34C759" />
-            </TouchableOpacity>
+          </TouchableOpacity>
+          <View style={styles.productDetailsRight}>
+            {item.offers ? <Text style={styles.productOfferText}>{item.offers}</Text> : null}
+            <Text style={styles.productNameLarge} numberOfLines={2}>{item.name}</Text>
+            {item.size ? <Text style={styles.productVolume}>{item.size}</Text> : null}
+            
+            <View style={styles.priceContainer}>
+              {item.price && (
+                <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
+              )}
+              {item.discountPrice && (
+                <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
+              )}
+            </View>
+
+            {quantityInCart === 0 ? (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => handleAddItem(item)}
+              >
+                <Text style={styles.addButtonText}>ADD</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.quantityControlsContainer}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => handleDecreaseQuantity(item.id)}
+                >
+                  <Icon name="remove" size={20} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.quantityDisplay}>{quantityInCart}</Text>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => handleIncreaseQuantity(item.id)}
+                >
+                  <Icon name="add" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -396,123 +373,82 @@ const Catalogue = () => {
     );
   }
 
+  const today = new Date();
+  const deliveryDate = new Date(today);
+  deliveryDate.setDate(today.getDate() + 1);
+  const formattedDeliveryDate = deliveryDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long' });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Icon name="arrow-back-ios" size={24} color="#000000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Products</Text>
-        <TouchableOpacity 
-          style={styles.headerButton} 
-          onPress={handleCartIconPress}
-        >
-          <Icon name="shopping-cart" size={24} color="#000000" />
+      
+      <View style={styles.topHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
+          <Icon name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchBarContainer}>
-        <Icon name="search" size={20} color="#888" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search products..."
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          placeholderTextColor="#888"
-          returnKeyType="search" // Show search button on keyboard
-        />
-        {searchTerm ? (
-          <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.clearSearchButton}>
-            <Icon name="close" size={20} color="#888" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      <View style={styles.container}>
+      <View style={styles.mainContainer}>
         <View style={styles.sidebar}>
           <View style={styles.sidebarHeader}>
-            <Text style={{fontSize:16,marginRight:2}}>🏷️</Text>
             <Text style={styles.sidebarHeaderText}>Brands</Text>
           </View>
-          {['All', ...uniqueBrands].map((brand, idx) => {
-            const label = typeof brand === 'string' ? brand : brand.name;
-            const value = typeof brand === 'string' ? brand : brand.id;
-            return (
-              <TouchableOpacity
-                key={value || 'all'}
-                style={[
-                  styles.sidebarOption,
-                  selectedBrandId === value && styles.sidebarOptionActive
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleSelectBrand(value)}
-              >
-                <Text style={[
-                  styles.sidebarOptionText,
-                  selectedBrandId === value && styles.sidebarOptionTextActive
-                ]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          <View style={styles.sidebarHeader}>
-            <Text style={{fontSize:16,marginRight:2}}>🗂️</Text>
+          <FlatList
+            data={brands}
+            renderItem={renderBrandItem}
+            keyExtractor={item => item.id.toString()}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.sidebarListContent}
+          />
+          <View style={[styles.sidebarHeader, { marginTop: 20 }]}>
             <Text style={styles.sidebarHeaderText}>Categories</Text>
           </View>
-          {['All', ...uniqueCategories].map((cat, idx) => {
-            const label = typeof cat === 'string' ? cat : cat.name;
-            const value = typeof cat === 'string' ? cat : cat.id;
-            return (
-              <TouchableOpacity
-                key={value || 'all'}
-                style={[
-                  styles.sidebarOption,
-                  selectedCategoryId === value && styles.sidebarOptionActive
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleSelectCategory(value)}
-              >
-                <Text style={[
-                  styles.sidebarOptionText,
-                  selectedCategoryId === value && styles.sidebarOptionTextActive
-                ]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          <FlatList
+            data={categories} 
+            renderItem={renderCategoryItem}
+            keyExtractor={item => item.id.toString()}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.sidebarListContent}
+          />
         </View>
 
         <View style={styles.mainContent}>
-          <View style={styles.productsContainer}>
-            {displayedProducts.length > 0 ? (
-              <FlatList
-                data={displayedProducts}
-                renderItem={renderProduct}
-                keyExtractor={(item) => item.id.toString()}
-                numColumns={2}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.productListContent}
-              />
-            ) : (
-               !loading && <View style={styles.emptyProductsContainer}><Text>No products found.</Text></View>
-            )}
-            {loading && products.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
-          </View>
+          {displayedProducts.length > 0 ? (
+            <FlatList
+              data={displayedProducts}
+              renderItem={renderProduct}
+              keyExtractor={(item) => item.id.toString()}
+              numColumns={1}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.productListContent}
+            />
+          ) : (
+             !loading && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No products found.</Text></View>
+          )}
+          {loading && products.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
         </View>
       </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.viewCartButton, Object.keys(cart).length === 0 && styles.viewCartButtonDisabled]}
-          onPress={handleViewCart}
-          disabled={Object.keys(cart).length === 0}
-        >
-          <Text style={styles.viewCartButtonText}>
-            {Object.keys(cart).length === 0 ? 'Add items to cart' : `View Cart (${Object.values(cart).reduce((sum, q) => sum + q, 0)})`}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={styles.floatingSearchButton}
+        onPress={() => setIsSearchModalVisible(true)}
+      >
+        <Icon name="search" size={24} color="#FFFFFF" />
+        <Text style={styles.floatingSearchButtonText}>Search</Text>
+      </TouchableOpacity>
 
-      {/* Enlarged Image Modal - CORRECTLY PLACED */}
+      <TouchableOpacity
+        style={styles.floatingCartButton}
+        onPress={handleCartIconPress}
+      >
+        <Icon name="shopping-cart" size={24} color="#FFFFFF" />
+        {Object.keys(cart).length > 0 && (
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{Object.values(cart).reduce((sum, q) => sum + q, 0)}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
       {enlargedProduct && (
         <Modal
           animationType="fade"
@@ -534,11 +470,57 @@ const Catalogue = () => {
             />
             <View style={styles.modalProductInfoContainer}>
                 <Text style={styles.modalProductName}>{enlargedProduct.name}</Text>
-                <Text style={styles.modalProductPrice}>₹{enlargedProduct.price}</Text>
+                <Text style={styles.modalProductPrice}>{formatCurrency(enlargedProduct.price)}</Text>
+                {enlargedProduct.offer > 0 && (
+                  <Text style={styles.modalProductOffer}>{enlargedProduct.offer}% OFF</Text>
+                )}
             </View>
           </View>
         </Modal>
       )}
+
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={isSearchModalVisible}
+        onRequestClose={() => setIsSearchModalVisible(false)}
+      >
+        <SafeAreaView style={styles.searchModalSafeArea}>
+          <View style={styles.searchModalHeader}>
+            <TouchableOpacity onPress={() => setIsSearchModalVisible(false)} style={styles.searchModalCloseButton}>
+              <Icon name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.searchModalInput}
+              placeholder="Search products..."
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholderTextColor="#888"
+              autoFocus={true}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                setIsSearchModalVisible(false);
+              }}
+            />
+            {searchTerm.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.searchModalClearButton}>
+                <Icon name="close" size={20} color="#888" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <FlatList
+            data={displayedProducts}
+            renderItem={renderProduct}
+            keyExtractor={(item) => item.id.toString()}
+            numColumns={1}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.productListContent}
+            ListEmptyComponent={!loading && searchTerm.length > 0 && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No matching products found.</Text></View>}
+          />
+          {loading && products.length > 0 && searchTerm.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -553,25 +535,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
+  topHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    backgroundColor: '#FFFFFF',
   },
-  headerButton: {
+  headerBackBtn: {
     padding: 5,
+    marginRight: 10,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  container: {
+  mainContainer: {
     flex: 1,
     flexDirection: 'row',
     backgroundColor: '#F8F8F8',
@@ -579,176 +556,298 @@ const styles = StyleSheet.create({
   sidebar: {
     width: 80,
     backgroundColor: '#F9FAFB',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
     borderRightWidth: 1,
     borderRightColor: '#E5E7EB',
     alignItems: 'center',
-    paddingBottom: 16,
+  },
+  sidebarListContent: {
+    paddingBottom: 20,
   },
   sidebarHeader: {
-    flexDirection: 'row',
+    width: '100%',
+    paddingVertical: 10,
     alignItems: 'center',
-    marginBottom: 6,
-    marginTop: 8,
+    justifyContent: 'center',
+    marginBottom: 5,
   },
   sidebarHeaderText: {
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 14,
     color: '#003366',
-    marginLeft: 4,
-    letterSpacing: 0.2,
   },
   sidebarOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    width: '90%',
+    paddingVertical: 10,
+    borderRadius: 10,
     marginBottom: 10,
-    marginLeft: 0,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    minWidth: 56,
+    justifyContent: 'center',
   },
   sidebarOptionActive: {
-    backgroundColor: '#003366',
-    shadowColor: '#003366',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#E0F2F7',
+    borderWidth: 2,
+    borderColor: '#003366',
+  },
+  sidebarOptionImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginBottom: 5,
+    backgroundColor: 'transparent',
+  },
+  sidebarImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginBottom: 5,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sidebarOptionText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#003366',
     fontWeight: '500',
+    textAlign: 'center',
   },
   sidebarOptionTextActive: {
-    color: '#FFF',
+    color: '#003366',
     fontWeight: 'bold',
   },
   mainContent: {
     flex: 1,
-    padding: 8,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 10,
     paddingHorizontal: 10,
-    marginBottom: 10,
-    marginTop: 4,
-    elevation: 1,
+    paddingVertical: 10,
   },
-  searchIcon: {
-    marginRight: 6,
+  productListContent: {
+    paddingBottom: 20,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    height: 40,
-  },
-  productList: {
-    paddingBottom: 80,
-  },
-  productCard: {
-    flex: 0.5,
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    margin: 6,
-    padding: 10,
-    elevation: 3,
+  productCardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginVertical: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    alignItems: 'center',
-    minWidth: 150,
-    maxWidth: '48%',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    overflow: 'hidden',
+    flex: 1,
+    marginHorizontal: 8,
   },
-  productImageContainer: {
-    width: 90,
-    height: 90,
-    backgroundColor: '#F5F5F5',
+  productCardContent: {
+    flexDirection: 'row',
+    padding: 12,
+    alignItems: 'center',
+  },
+  productImageWrapper: {
+    width: 120,
+    height: 120,
     borderRadius: 8,
-    marginBottom: 8,
+    marginRight: 12,
+    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
-  productImage: {
-    width: '90%',
-    height: '90%',
+  productImageLarge: {
+    width: '95%',
+    height: '95%',
     resizeMode: 'contain',
   },
-  productInfo: {
-    alignItems: 'flex-start',
-    width: '100%',
+  productDetailsRight: {
+    flex: 1,
+    justifyContent: 'space-between',
+    minHeight: 120, // Ensure consistent height to prevent shifting
   },
-  productName: {
-    fontSize: 14,
-    color: '#222',
-    marginBottom: 4,
-    minHeight: 35,
+  offerTagText: {
+    fontSize: 12,
+    color: '#059669',
     fontWeight: 'bold',
+    marginBottom: 4,
   },
-  productPrice: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  productOfferText: {
+    color: '#059669',
+    fontWeight: 'bold',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  productNameLarge: {
+    fontSize: 16,
     fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
   },
-  quantityContainer: {
+  productVolume: {
+    fontSize: 13,
+    color: '#666666',
+    marginBottom: 8,
+  },
+  priceContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 2,
-    marginTop: 6,
-    alignSelf: 'center',
+  },
+  originalPrice: {
+    fontSize: 14,
+    color: '#999999',
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
+  },
+  currentPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003366',
+  },
+  addButton: {
+    backgroundColor: '#003366',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    minWidth: 100, // Increased width to match quantity controls
+    height: 36, // Fixed height to match quantity controls
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  quantityControlsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    minWidth: 100, // Match add button width
+    height: 36, // Fixed height to match add button
   },
   quantityButton: {
-    padding: 6,
-    backgroundColor: '#FFF',
-    borderRadius: 6,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
-  quantityInput: {
-    width: 40,
-    textAlign: 'center',
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#333',
-    paddingHorizontal: 4,
-    marginHorizontal: 2,
-    backgroundColor: '#FFF',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  footer: {
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-  },
-  viewCartButton: {
     backgroundColor: '#003366',
+    padding: 6,
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+  quantityDisplay: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333333',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  offerTag: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderTopLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    zIndex: 1,
+    paddingHorizontal: 15,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomOfferText: {
+    color: '#059669',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  floatingSearchButton: {
+    position: 'absolute',
+    bottom: 20,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    backgroundColor: '#333333',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  floatingSearchButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  floatingCartButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#003366',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    zIndex: 1000,
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF3B30',
     borderRadius: 10,
-    padding: 14,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  viewCartButtonDisabled: {
-    backgroundColor: '#CCCCCC',
-  },
-  viewCartButtonText: {
+  cartBadgeText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: 'bold',
+  },
+  searchModalSafeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  searchModalCloseButton: {
+    padding: 5,
+    marginRight: 10,
+  },
+  searchModalInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    height: 40,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+  },
+  searchModalClearButton: {
+    padding: 5,
+    marginLeft: 10,
   },
   emptyProductsContainer: {
     flex: 1,
@@ -759,29 +858,35 @@ const styles = StyleSheet.create({
   emptyProductsText: {
     fontSize: 15,
     color: '#666',
+    textAlign: 'center',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalCloseButton: {
     position: 'absolute',
-    top: 40, // Adjust based on status bar height if needed
+    top: 50,
     right: 20,
-    zIndex: 1, // Ensure it's above the image
+    zIndex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    padding: 5,
   },
   enlargedImage: {
-    width: '100%',
-    height: '60%', // Adjust as needed
-    borderRadius: 8,
+    width: '90%',
+    height: '60%',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
   },
   modalProductInfoContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     padding: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: 'center',
   },
   modalProductName: {
     fontSize: 20,
@@ -795,20 +900,47 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
   },
-  searchBarContainer: {
-    flexDirection: 'row',
+  modalProductOffer: {
+    fontSize: 16,
+    color: '#34C759',
+    textAlign: 'center',
+  },
+  categoryItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+    marginLeft: 0,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 8,
-    marginHorizontal: 15,
-    marginVertical: 10,
-    paddingHorizontal: 10,
+    minWidth: 56,
   },
-  clearSearchButton: {
-    padding: 5,
+  categoryItemAll: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+    marginLeft: 0,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    minWidth: 56,
+    width: '90%',
   },
-  productListContent: {
-    paddingVertical: 10,
+  selectedCategoryItem: {
+    backgroundColor: '#003366',
+    shadowColor: '#003366',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: '#003366',
+    fontWeight: '500',
+  },
+  selectedCategoryText: {
+    color: '#FFF',
+    fontWeight: 'bold',
   },
 });
 

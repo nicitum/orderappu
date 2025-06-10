@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import {
   BackHandler,
   View,
@@ -85,6 +85,13 @@ const HomePage = () => {
   const [scrollY] = useState(new Animated.Value(0));
   const navigation = useNavigation();
   const [randomProducts, setRandomProducts] = useState([]);
+  const [advertisements, setAdvertisements] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef(null);
+  const { width: viewportWidth } = Dimensions.get('window');
+  const ITEM_WIDTH = viewportWidth - 32; // 16 padding on each side
+  const CAROUSEL_INTERVAL = 5000; // 5 seconds
 
   useEffect(() => {
     if (allProductsData && allProductsData.length > 0) {
@@ -141,6 +148,7 @@ const HomePage = () => {
       }
 
       // Fetch data concurrently
+      
       const [
         allProductsResponse,
         userResponse,
@@ -235,14 +243,66 @@ const HomePage = () => {
     setRefreshing(false)
   }, [fetchData])
 
+  // Fetch advertisements
+  const fetchAdvertisements = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("userAuthToken");
+      if (!token) return;
+      
+      const response = await fetch(`http://${ipAddress}:8091/advertisement-crud`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          operation: 'read'
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          // Filter out ads without images and only show active ones
+          const validAds = data.data.filter(ad => ad.image && ad.status === 'active');
+          setAdvertisements(validAds);
+          
+          // Log image size recommendation
+          if (validAds.length > 0) {
+            console.log('Recommended image size for advertisements: 800x450px (16:9 aspect ratio)');
+            console.log('This will ensure the best quality and proper display on all devices');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching advertisements:', error);
+    }
+  }, []);
+
+  // Auto-scroll carousel
+  useEffect(() => {
+    if (advertisements.length <= 1) return;
+    
+    const timer = setInterval(() => {
+      const nextIndex = (currentIndex + 1) % advertisements.length;
+      scrollViewRef.current?.scrollTo({ x: nextIndex * ITEM_WIDTH, animated: true });
+      setCurrentIndex(nextIndex);
+    }, CAROUSEL_INTERVAL);
+    
+    return () => clearInterval(timer);
+  }, [currentIndex, advertisements.length, ITEM_WIDTH]);
+
   useFocusEffect(
     useCallback(() => {
-      const fetchDataAsync = async () => await fetchData();
+      const fetchDataAsync = async () => {
+        await fetchData();
+        await fetchAdvertisements();
+      };
       fetchDataAsync(); // Fetch all necessary data when screen is focused
       checkUserRole();
       const backHandler = BackHandler.addEventListener("hardwareBackPress", handleBackButton);
       return () => backHandler.remove();
-    }, [fetchData, handleBackButton])
+    }, [fetchData, handleBackButton, fetchAdvertisements])
   );
 
   const { customerName } = userDetails || {}
@@ -254,6 +314,19 @@ const HomePage = () => {
     outputRange: [80, 56],
     extrapolate: 'clamp'
   })
+
+  // Handle scroll event
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    { useNativeDriver: false }
+  );
+
+  // Handle scroll end
+  const onScrollEnd = (e) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(offsetX / ITEM_WIDTH);
+    setCurrentIndex(newIndex);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -296,6 +369,37 @@ const HomePage = () => {
           </View>
         ) : (
           <View style={styles.content}>
+            {/* Advertisements Carousel */}
+            {advertisements.length > 0 && (
+              <View style={styles.section}>
+                
+                <View style={styles.carouselContainer}>
+                  <Animated.ScrollView
+                    ref={scrollViewRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onScroll={onScroll}
+                    onMomentumScrollEnd={onScrollEnd}
+                    scrollEventThrottle={16}
+                    contentContainerStyle={styles.scrollViewContent}
+                  >
+                    {advertisements.map((item, index) => (
+                      <View key={index} style={[styles.carouselItem, { width: ITEM_WIDTH }]}>
+                        <Image 
+                          source={{ uri: `http://${ipAddress}:8091/images/advertisements/${item.image}` }}
+                          style={styles.carouselImage}
+                          resizeMode="cover"
+                          onError={(e) => console.warn('Error loading ad image:', e.nativeEvent.error)}
+                        />
+                      </View>
+                    ))}
+                  </Animated.ScrollView>
+                 
+                </View>
+              </View>
+            )}
+
             {/* Order History Section */}
             {!isAdmin && (
               <View style={styles.section}>
@@ -493,6 +597,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
+  // Carousel Styles
+  carouselContainer: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surface,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.card.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  scrollViewContent: {
+    alignItems: 'center',
+  },
+  carouselItem: {
+    width: '100%',
+    aspectRatio: 16/9, // Standard widescreen aspect ratio
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.background,
+  },
   orderItems: {
     marginTop: 8,
   },
@@ -597,6 +731,55 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: 6,
     marginLeft: 8,
+  },
+  carouselContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.card.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+  },
+  carouselItem: {
+    width: '100%',
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.text.tertiary,
+    marginHorizontal: 4,
+  },
+  paginationDotActive: {
+    width: 20,
+    backgroundColor: COLORS.primary,
   },
 })
 

@@ -24,12 +24,13 @@ const { width } = Dimensions.get('window');
 const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatuses }) => {
     const [localStatus, setLocalStatus] = useState(item.delivery_status || 'pending');
     const isDelivered = localStatus === 'delivered';
+    const isObjection = localStatus === 'objection';
     const [showRemarksInput, setShowRemarksInput] = useState(false);
     const [remarks, setRemarks] = useState('');
     const [remarksSaved, setRemarksSaved] = useState(remarksSavedStatuses ? remarksSavedStatuses[item.id] : false);
 
     useEffect(() => {
-        setShowRemarksInput(localStatus === 'delivered' && !remarksSaved);
+        setShowRemarksInput(localStatus === 'objection' && !remarksSaved);
     }, [localStatus, remarksSaved]);
 
     const handleStatusChange = async (newStatus) => {
@@ -38,7 +39,7 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
         try {
             await onStatusUpdate(item.id, newStatus);
             setLocalStatus(newStatus);
-            if (newStatus === 'delivered') {
+            if (newStatus === 'objection') {
                 setShowRemarksInput(true);
             } else {
                 setShowRemarksInput(false);
@@ -123,6 +124,12 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
                 color: '#4CAF50',
                 bgColor: '#E8F5E9',
                 label: 'Delivered'
+            },
+            objection: {
+                icon: 'error',
+                color: '#F44336',
+                bgColor: '#FBE9E7',
+                label: 'Raise Objection'
             }
         };
         return statusConfig[status] || statusConfig.pending;
@@ -169,6 +176,7 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
                         >
                             <Picker.Item label="Pending" value="pending" color="#003366" />
                             <Picker.Item label="Delivered" value="delivered" color="#003366" />
+                            <Picker.Item label="Raise Objection" value="objection" color="#003366" />
                         </Picker>
                     </View>
                 </View>
@@ -176,10 +184,10 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
 
             {showRemarksInput && (
                 <View style={styles.remarksContainer}>
-                    <Text style={styles.remarksLabel}>Delivery Remarks</Text>
+                    <Text style={styles.remarksLabel}>{isObjection ? 'Objection Remarks' : 'Delivery Remarks'}</Text>
                     <TextInput
                         style={styles.remarksInput}
-                        placeholder="Add delivery remarks here..."
+                        placeholder={isObjection ? 'Add objection remarks here...' : 'Add delivery remarks here...'}
                         placeholderTextColor="#999999"
                         multiline
                         numberOfLines={2}
