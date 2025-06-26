@@ -13,13 +13,13 @@ import {
   Modal,
   TextInput,
   Keyboard,
-
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ipAddress } from '../../services/urls';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import { jwtDecode } from 'jwt-decode';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-IN', {
@@ -44,6 +44,8 @@ const Catalogue = () => {
   const [enlargedProduct, setEnlargedProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
+  const [priceMode, setPriceMode] = useState(null);
+  const [priceModeLoading, setPriceModeLoading] = useState(true);
 
   const fetchBrands = async () => {
     try {
@@ -57,8 +59,33 @@ const Catalogue = () => {
       const data = await response.json();
       if (response.ok && data.success) {
         const fetchedBrands = [{ id: 'All', name: 'All', image: '' }, ...data.data];
-        setBrands(fetchedBrands);
-        if (!selectedBrandId || !fetchedBrands.find(b => b.id === selectedBrandId)) {
+        
+        // Fetch images for all brands in parallel
+        const brandsWithImages = await Promise.all(
+          fetchedBrands.map(async (brand) => {
+            if (brand.id === 'All' || !brand.image) {
+              return brand;
+            }
+            try {
+              const imageResponse = await fetch(`http://${ipAddress}:8091/images/brands/${brand.image}`);
+              if (imageResponse.ok) {
+                const imageBlob = await imageResponse.blob();
+                const imageBase64 = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                  reader.readAsDataURL(imageBlob);
+                });
+                return { ...brand, imageData: imageBase64 };
+              }
+            } catch (error) {
+              console.warn(`Failed to fetch image for brand ${brand.name}:`, error);
+            }
+            return brand;
+          })
+        );
+        
+        setBrands(brandsWithImages);
+        if (!selectedBrandId || !brandsWithImages.find(b => b.id === selectedBrandId)) {
           setSelectedBrandId('All');
         }
       } else {
@@ -102,27 +129,63 @@ const Catalogue = () => {
     }
   };
 
-  useEffect(() => {
-    const loadAndFetchData = async () => {
-      setLoading(true);
-      try {
-        const savedCart = await AsyncStorage.getItem('catalogueCart');
-        if (savedCart !== null) {
-          setCart(JSON.parse(savedCart));
-        }
-        const savedCartItems = await AsyncStorage.getItem('cartItems');
-        if (savedCartItems !== null) {
-          setCartItems(JSON.parse(savedCartItems));
-        }
-        await Promise.all([fetchBrands(), fetchProducts()]);
-      } catch (error) {
-        console.error('Initial data fetch error:', error);
-      } finally {
-        setLoading(false);
+  // Refactored: fetch all catalogue data
+  const reloadCatalogueData = async () => {
+    setLoading(true);
+    setPriceModeLoading(true);
+    try {
+      // Load cart
+      const savedCart = await AsyncStorage.getItem('catalogueCart');
+      if (savedCart !== null) {
+        setCart(JSON.parse(savedCart));
       }
-    };
-    loadAndFetchData();
-  }, []);
+      const savedCartItems = await AsyncStorage.getItem('cartItems');
+      if (savedCartItems !== null) {
+        setCartItems(JSON.parse(savedCartItems));
+      }
+      // Fetch brands and products
+      await Promise.all([fetchBrands(), fetchProducts()]);
+      // Fetch price mode
+      const token = await AsyncStorage.getItem('userAuthToken');
+      if (!token) {
+        setPriceMode(null);
+        setPriceModeLoading(false);
+        return;
+      }
+      const decoded = jwtDecode(token);
+      const customer_id = decoded.id || decoded.customer_id;
+      if (!customer_id) {
+        setPriceMode(null);
+        setPriceModeLoading(false);
+        return;
+      }
+      const response = await fetch(`http://${ipAddress}:8091/user_price_mode?customer_id=${customer_id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPriceMode(data.price_mode);
+      } else {
+        setPriceMode(null);
+      }
+    } catch (error) {
+      setPriceMode(null);
+    } finally {
+      setLoading(false);
+      setPriceModeLoading(false);
+    }
+  };
+
+  // Always refresh catalogue when focused
+  useFocusEffect(
+    React.useCallback(() => {
+      reloadCatalogueData();
+    }, [])
+  );
 
   useEffect(() => {
     const saveCart = async () => {
@@ -233,13 +296,10 @@ const Catalogue = () => {
     });
   };
 
-
-
-
   const renderBrandItem = ({ item }) => {
     const isAllBrand = item.id === 'All';
-    const imageSource = !isAllBrand && item.image
-      ? { uri: `http://${ipAddress}:8091/images/brands/${item.image}` }
+    const imageSource = !isAllBrand && item.imageData
+      ? { uri: `data:image/jpeg;base64,${item.imageData}` }
       : null;
 
     return (
@@ -257,16 +317,14 @@ const Catalogue = () => {
             source={imageSource}
             style={styles.sidebarOptionImage}
             resizeMode="contain"
+            onError={() => {}}
           />
         ) : (
-          <Text style={[
-            styles.categoryText,
-            selectedBrandId === item.id && styles.selectedCategoryText
-          ]}>{item.name}</Text>
+          <View style={styles.sidebarImagePlaceholder}>
+            <Icon name="image" size={24} color="#bbb" />
+          </View>
         )}
-        {!isAllBrand && <Text style={[styles.sidebarOptionText, selectedBrandId === item.id && styles.sidebarOptionTextActive]} numberOfLines={2}>
-          {item.name}
-        </Text>}
+        {!isAllBrand && <Text style={styles.sidebarOptionText} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>}
       </TouchableOpacity>
     );
   };
@@ -292,57 +350,99 @@ const Catalogue = () => {
 
     return (
       <View style={styles.productCardContainer}>
-        <View style={styles.productCardContent}>
-          <TouchableOpacity
-            style={styles.productImageWrapper}
-            onPress={() => setEnlargedProduct(item)}
-          >
+        <TouchableOpacity
+          style={styles.productImageWrapper}
+          onPress={() => setEnlargedProduct(item)}
+        >
+          {item.image ? (
             <Image
               source={{ uri: imageUri }}
               style={styles.productImageLarge}
               resizeMode="contain"
-              onError={(e) => console.warn('Product image load error:', item.image, e.nativeEvent.error)}
+              onError={() => {}}
             />
-          </TouchableOpacity>
-          <View style={styles.productDetailsRight}>
-            {item.offers ? <Text style={styles.productOfferText}>{item.offers}</Text> : null}
-            <Text style={styles.productNameLarge} numberOfLines={2}>{item.name}</Text>
-            {item.size ? <Text style={styles.productVolume}>{item.size}</Text> : null}
-            
-            <View style={styles.priceContainer}>
-              {item.price && (
-                <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
-              )}
-              {item.discountPrice && (
-                <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
-              )}
+          ) : (
+            <View style={styles.productImagePlaceholder}>
+              <Icon name="image-not-supported" size={40} color="#CCC" />
             </View>
-
-            {quantityInCart === 0 ? (
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => handleAddItem(item)}
-              >
-                <Text style={styles.addButtonText}>ADD</Text>
-              </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+        <View style={styles.productDetailsRight}>
+          {item.offers && item.offers.trim() !== '' ? (
+            <View style={styles.offerBadge}>
+              <Text style={styles.offerText}>{item.offers.toLowerCase()}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.productNameLarge} numberOfLines={2}>{item.name}</Text>
+          {item.size ? <Text style={styles.productVolume}>{item.size}</Text> : null}
+          <View style={styles.priceContainer}>
+            {priceModeLoading ? (
+              <ActivityIndicator size="small" color="#003366" />
             ) : (
-              <View style={styles.quantityControlsContainer}>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => handleDecreaseQuantity(item.id)}
-                >
-                  <Icon name="remove" size={20} color="#FFF" />
-                </TouchableOpacity>
-                <Text style={styles.quantityDisplay}>{quantityInCart}</Text>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => handleIncreaseQuantity(item.id)}
-                >
-                  <Icon name="add" size={20} color="#FFF" />
-                </TouchableOpacity>
-              </View>
+              (() => {
+                // Normalize priceMode for robust matching
+                const mode = (priceMode || '').toLowerCase().replace(/\s|_/g, '');
+                if (mode === 'mrp' && item.price) {
+                  return <Text style={styles.currentPrice}>{formatCurrency(item.price)}</Text>;
+                } else if ((mode === 'sellingprice' || mode === 'discountprice') && item.discountPrice) {
+                  return <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>;
+                } else if (
+                  mode === 'both' ||
+                  mode === 'mrpandsellingprice' ||
+                  mode === 'mrpanddiscountprice' ||
+                  mode === 'mrpandselling' ||
+                  mode === 'mrpanddiscount' ||
+                  mode === 'mrpandsellingpriceboth' ||
+                  mode === 'mrpanddiscountpriceboth'
+                ) {
+                  return <>
+                    {item.price && (
+                      <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
+                    )}
+                    {item.discountPrice && (
+                      <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
+                    )}
+                  </>;
+                } else if (item.price && item.discountPrice) {
+                  // Fallback: if both prices exist and mode is not strictly MRP or sellingprice, show both
+                  return <>
+                    <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
+                    <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
+                  </>;
+                } else if (item.discountPrice) {
+                  return <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>;
+                } else if (item.price) {
+                  return <Text style={styles.currentPrice}>{formatCurrency(item.price)}</Text>;
+                } else {
+                  return null;
+                }
+              })()
             )}
           </View>
+          {quantityInCart === 0 ? (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => handleAddItem(item)}
+            >
+              <Text style={styles.addButtonText}>ADD</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.quantityControlsContainer}>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => handleDecreaseQuantity(item.id)}
+              >
+                <Icon name="remove" size={20} color="#FFF" />
+              </TouchableOpacity>
+              <Text style={styles.quantityDisplay}>{quantityInCart}</Text>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => handleIncreaseQuantity(item.id)}
+              >
+                <Icon name="add" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -378,14 +478,19 @@ const Catalogue = () => {
   deliveryDate.setDate(today.getDate() + 1);
   const formattedDeliveryDate = deliveryDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long' });
 
+  // In the sidebar, separate brand images and the 'All' button
+  const brandImageItems = brands.filter(b => b.id !== 'All');
+  const allBrandItem = brands.find(b => b.id === 'All');
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, Platform.OS === 'android' ? { paddingTop: StatusBar.currentHeight || 24 } : {}]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
           <Icon name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
+        <Text style={styles.topHeaderTitle}>Catalogue</Text>
       </View>
 
       <View style={styles.mainContainer}>
@@ -393,18 +498,36 @@ const Catalogue = () => {
           <View style={styles.sidebarHeader}>
             <Text style={styles.sidebarHeaderText}>Brands</Text>
           </View>
+          {/* Brand images */}
           <FlatList
-            data={brands}
+            data={brandImageItems}
             renderItem={renderBrandItem}
             keyExtractor={item => item.id.toString()}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.sidebarListContent}
           />
-          <View style={[styles.sidebarHeader, { marginTop: 20 }]}>
+          {/* 'All' brand button directly below brand images */}
+          {allBrandItem && (
+            <TouchableOpacity
+              style={[
+                styles.categoryItem,
+                selectedBrandId === allBrandItem.id && styles.selectedCategoryItem,
+                { marginTop: 8, marginBottom: 16 }
+              ]}
+              onPress={() => handleSelectBrand(allBrandItem.id)}
+            >
+              <Text style={[
+                styles.categoryText,
+                selectedBrandId === allBrandItem.id && styles.selectedCategoryText
+              ]}>{allBrandItem.name}</Text>
+            </TouchableOpacity>
+          )}
+          {/* Categories header and list below brands and 'All' button */}
+          <View style={[styles.sidebarHeader, { marginTop: 0 }]}> 
             <Text style={styles.sidebarHeaderText}>Categories</Text>
           </View>
           <FlatList
-            data={categories} 
+            data={categories}
             renderItem={renderCategoryItem}
             keyExtractor={item => item.id.toString()}
             showsVerticalScrollIndicator={false}
@@ -626,95 +749,102 @@ const styles = StyleSheet.create({
   },
   productCardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    marginVertical: 6,
+    borderRadius: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    overflow: 'hidden',
-    flex: 1,
-    marginHorizontal: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    alignItems: 'center',
   },
   productCardContent: {
     flexDirection: 'row',
-    padding: 12,
+    flex: 1,
     alignItems: 'center',
   },
   productImageWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 8,
-    marginRight: 12,
+    width: 140,
+    height: 140,
+    borderRadius: 10,
+    marginRight: 15,
     backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   productImageLarge: {
-    width: '95%',
-    height: '95%',
+    width: '90%',
+    height: '90%',
     resizeMode: 'contain',
   },
   productDetailsRight: {
     flex: 1,
     justifyContent: 'space-between',
-    minHeight: 120, // Ensure consistent height to prevent shifting
+    minHeight: 140,
   },
-  offerTagText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: 'bold',
+  offerBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#eafaf1',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     marginBottom: 4,
+    marginTop: 2,
+  },
+  offerText: {
+    color: '#27ae60',
+    fontSize: 12,
+    fontWeight: '400',
+    textTransform: 'lowercase',
+    letterSpacing: 0.2,
   },
   productOfferText: {
-    color: '#059669',
-    fontWeight: 'bold',
-    fontSize: 13,
-    marginBottom: 4,
+    display: 'none',
   },
   productNameLarge: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
+    color: '#222',
+    marginBottom: 2,
+    marginTop: 2,
+    maxWidth: 180,
   },
   productVolume: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666666',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   priceContainer: {
     flexDirection: 'column',
     alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginBottom: 10,
   },
   originalPrice: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#999999',
     textDecorationLine: 'line-through',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   currentPrice: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#003366',
   },
   addButton: {
     backgroundColor: '#003366',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-end',
-    minWidth: 100, // Increased width to match quantity controls
-    height: 36, // Fixed height to match quantity controls
+    minWidth: 120,
+    height: 40,
   },
   addButtonText: {
     color: '#FFFFFF',
@@ -726,14 +856,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-end',
-    minWidth: 100, // Match add button width
-    height: 36, // Fixed height to match add button
+    minWidth: 120,
+    height: 40,
   },
   quantityButton: {
     backgroundColor: '#003366',
-    padding: 6,
-    borderRadius: 4,
-    marginHorizontal: 4,
+    padding: 8,
+    borderRadius: 5,
+    marginHorizontal: 5,
   },
   quantityDisplay: {
     fontSize: 16,
@@ -941,6 +1071,12 @@ const styles = StyleSheet.create({
   selectedCategoryText: {
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  topHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003366',
+    marginLeft: 10,
   },
 });
 

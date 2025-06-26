@@ -14,6 +14,7 @@ import {
   Platform,
   StatusBar,
   ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,6 +37,24 @@ const LoginPage = () => {
   const [clientImage, setClientImage] = useState(null);
   const [error, setError] = useState("");
   const passwordInput = useRef();
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const [customerId, userAuthToken] = await AsyncStorage.multiGet(["customerId", "userAuthToken"]);
+        if (customerId[1] && userAuthToken[1]) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'TabNavigator' }],
+          });
+        }
+      } catch (e) {
+        console.error('Error checking session:', e);
+      }
+    };
+    checkSession();
+  }, []);
 
   useEffect(() => {
     const fetchClientImage = async () => {
@@ -185,119 +204,125 @@ const LoginPage = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#003366" />
-      
-      <View style={styles.topLogoContainer}>
-        <Image 
-          source={require("../assets/logo.jpg")} 
-          style={styles.topLogo} 
-          resizeMode="contain"
-        />
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <View style={styles.header}>
-          {clientImage && (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 24}
+    >
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#003366" />
+        
+        <View style={styles.topLogoContainer}>
           <Image 
-            source={{ uri: clientImage }} 
-            style={styles.clientLogo} 
+            source={require("../assets/logo.jpg")} 
+            style={styles.topLogo} 
             resizeMode="contain"
-            onError={(error) => {
-              console.error('=== IMAGE LOADING ERROR ===');
-              console.error('Error details:', error.nativeEvent.error);
-              console.error('Image URL that failed:', clientImage);
-            }}
-            onLoad={() => {
-              console.log('=== IMAGE LOADED SUCCESSFULLY ===');
-              console.log('Image URL:', clientImage);
-            }}
           />
-          )}
-          <Text style={styles.tagline}>Streamline Your Business Orders</Text>
-          <Text style={styles.taglineSubtext}>Fast • Reliable • Efficient</Text>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Please sign in to continue</Text>
         </View>
 
-        {error ? <ErrorMessage message={error} /> : null}
-
-        <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <Icon name="person" size={20} color="#666666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#999999"
-              value={username}
-              onChangeText={(text) => {
-                setUsername(text);
-                setError("");
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.header}>
+            {clientImage && (
+            <Image 
+              source={{ uri: clientImage }} 
+              style={styles.clientLogo} 
+              resizeMode="contain"
+              onError={(error) => {
+                console.error('=== IMAGE LOADING ERROR ===');
+                console.error('Error details:', error.nativeEvent.error);
+                console.error('Image URL that failed:', clientImage);
               }}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordInput.current.focus()}
-              autoCapitalize="none"
+              onLoad={() => {
+                console.log('=== IMAGE LOADED SUCCESSFULLY ===');
+                console.log('Image URL:', clientImage);
+              }}
             />
+            )}
+            <Text style={styles.tagline}>Streamline Your Business Orders</Text>
+            <Text style={styles.taglineSubtext}>Fast • Reliable • Efficient</Text>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subtitle}>Please sign in to continue</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Icon name="lock" size={20} color="#666666" style={styles.inputIcon} />
-            <TextInput
-              ref={passwordInput}
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999999"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setError("");
-              }}
-              secureTextEntry={!isPasswordVisible}
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-            <TouchableOpacity 
-              onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-              style={styles.eyeButton}
-            >
-              <Icon 
-                name={isPasswordVisible ? "visibility" : "visibility-off"} 
-                size={20} 
-                color="#666666" 
+          {error ? <ErrorMessage message={error} /> : null}
+
+          <View style={styles.formContainer}>
+            <View style={styles.inputContainer}>
+              <Icon name="person" size={20} color="#666666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Username"
+                placeholderTextColor="#999999"
+                value={username}
+                onChangeText={(text) => {
+                  setUsername(text);
+                  setError("");
+                }}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInput.current.focus()}
+                autoCapitalize="none"
               />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Icon name="lock" size={20} color="#666666" style={styles.inputIcon} />
+              <TextInput
+                ref={passwordInput}
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor="#999999"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setError("");
+                }}
+                secureTextEntry={!isPasswordVisible}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity 
+                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                style={styles.eyeButton}
+              >
+                <Icon 
+                  name={isPasswordVisible ? "visibility" : "visibility-off"} 
+                  size={20} 
+                  color="#666666" 
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.button, isLoading && styles.buttonDisabled]} 
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Text style={styles.buttonText}>SIGN IN</Text>
+                  <Icon name="arrow-forward" size={20} color="#FFFFFF" />
+                </View>
+              )}
             </TouchableOpacity>
           </View>
+        </ScrollView>
 
-          <TouchableOpacity 
-            style={[styles.button, isLoading && styles.buttonDisabled]} 
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Text style={styles.buttonText}>SIGN IN</Text>
-                <Icon name="arrow-forward" size={20} color="#FFFFFF" />
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <FirstTimePasswordChangeModal
-        isVisible={showPasswordModal}
-        onClose={() => setShowPasswordModal(false)}
-        onSuccess={handlePasswordChangeSuccess}
-        username={username}
-        tempToken={tempToken}
-      />
-    </View>
+        <FirstTimePasswordChangeModal
+          isVisible={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+          onSuccess={handlePasswordChangeSuccess}
+          username={username}
+          tempToken={tempToken}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 

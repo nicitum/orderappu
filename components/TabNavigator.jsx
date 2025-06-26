@@ -9,11 +9,13 @@ import IndentStack from "./IndentPage/IndentStack";
 import { View, Text, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AdminOrderHistory from "./Profile/AdminOrderHistory";
 import AdminTransactions from "./Profile/AdminTransactions";
 import ProductsComponent from "./HomePage/ProductList";
 import CatalogueStack from "./HomePage/CatalogueStack";
+import PlaceIndent from "./IndentPage/PlaceIndent";
 
 const Tab = createBottomTabNavigator();
 
@@ -91,6 +93,7 @@ const TabNavigator = () => {
     }
 
     return (
+        <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
         <Tab.Navigator
             screenOptions={{
                 headerShown: false,
@@ -124,11 +127,11 @@ const TabNavigator = () => {
 
             {!isSuperAdmin && (
                 <Tab.Screen
-                    name="Indent"
+                    name="Orders"
                     component={isAdmin ? AdminOrderHistory : IndentStack}
                     options={{
                        
-                        headerTitle: isAdmin ? "Order History" : "Indent",
+                        headerTitle: isAdmin ? "Order History" : "Order History",
                         headerStyle: styles.header,
                         headerTitleStyle: styles.headerTitle,
                         tabBarIcon: ({ color, size }) => (
@@ -138,9 +141,21 @@ const TabNavigator = () => {
                 />
             )}
 
+                {!isSuperAdmin && isAdmin && (
+                    <Tab.Screen
+                        name="Place Order"
+                        component={PlaceIndent}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="playlist-plus" size={size} color={color} />
+                            ),
+                        }}
+                    />
+                )}
+
             {!isSuperAdmin && !isAdmin && (
                 <Tab.Screen
-                    name="Transactions"
+                    name="Reports"
                     component={Transactions}
                     options={{
                         headerShown: true,
@@ -159,7 +174,7 @@ const TabNavigator = () => {
 
             {isSuperAdmin && (
                 <Tab.Screen
-                    name="Transactions"
+                    name="Reports"
                     component={AdminTransactions}
                     options={{
                         headerShown: true,
@@ -204,6 +219,7 @@ const TabNavigator = () => {
                 }}
             />
         </Tab.Navigator>
+        </SafeAreaView>
     );
 };
 

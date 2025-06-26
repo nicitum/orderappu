@@ -87,11 +87,12 @@ const HomePage = () => {
   const [randomProducts, setRandomProducts] = useState([]);
   const [advertisements, setAdvertisements] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [advTimer, setAdvTimer] = useState(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
   const { width: viewportWidth } = Dimensions.get('window');
   const ITEM_WIDTH = viewportWidth - 32; // 16 padding on each side
-  const CAROUSEL_INTERVAL = 5000; // 5 seconds
+  const CAROUSEL_INTERVAL = advTimer * 1000; // Convert seconds to milliseconds
 
   useEffect(() => {
     if (allProductsData && allProductsData.length > 0) {
@@ -106,6 +107,69 @@ const HomePage = () => {
       setRandomProducts([]);
     }
   }, [allProductsData]);
+
+  // Fetch client status for adv_timer - Highest priority
+  const fetchClientStatus = async () => {
+    try {
+      console.log('Fetching client status...'); // Debug log
+      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      const data = await response.json();
+      console.log('Raw API Response:', data); // Log raw response
+      
+      if (data.success && data.data && data.data.length > 0) {
+        const advTimerValue = parseInt(data.data[0].adv_timer);
+        console.log('Parsed adv_timer value:', advTimerValue); // Log parsed value
+        
+        if (!isNaN(advTimerValue) && advTimerValue > 0) {
+          console.log('Setting timer to:', advTimerValue, 'seconds');
+          setAdvTimer(advTimerValue);
+        } else {
+          console.error('Invalid adv_timer value received:', data.data[0].adv_timer);
+        }
+      } else {
+        console.error('Invalid API response structure:', data);
+      }
+    } catch (error) {
+      console.error('Error fetching client status:', error);
+    }
+  };
+
+  // Call API immediately on mount
+  useEffect(() => {
+    fetchClientStatus();
+  }, []);
+
+  // Call API when returning to this screen
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused - refreshing timer');
+      fetchClientStatus();
+    }, [])
+  );
+
+  // Auto-scroll carousel - only start when we have a valid timer
+  useEffect(() => {
+    if (advertisements.length <= 1 || !advTimer) return; // Don't start if no timer
+    
+    console.log('Starting carousel with interval:', advTimer, 'seconds');
+    
+    const timer = setInterval(() => {
+      const nextIndex = (currentIndex + 1) % advertisements.length;
+      scrollViewRef.current?.scrollTo({ x: nextIndex * ITEM_WIDTH, animated: true });
+      setCurrentIndex(nextIndex);
+    }, advTimer * 1000);
+    
+    return () => {
+      console.log('Clearing carousel interval');
+      clearInterval(timer);
+    };
+  }, [currentIndex, advertisements.length, ITEM_WIDTH, advTimer]);
 
   const checkUserRole = async () => {
     setIsLoading(true)
@@ -279,19 +343,6 @@ const HomePage = () => {
     }
   }, []);
 
-  // Auto-scroll carousel
-  useEffect(() => {
-    if (advertisements.length <= 1) return;
-    
-    const timer = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % advertisements.length;
-      scrollViewRef.current?.scrollTo({ x: nextIndex * ITEM_WIDTH, animated: true });
-      setCurrentIndex(nextIndex);
-    }, CAROUSEL_INTERVAL);
-    
-    return () => clearInterval(timer);
-  }, [currentIndex, advertisements.length, ITEM_WIDTH]);
-
   useFocusEffect(
     useCallback(() => {
       const fetchDataAsync = async () => {
@@ -331,9 +382,7 @@ const HomePage = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
-
-      {/* Simple Deep Blue Header */}
-      <View style={styles.simpleHeaderContainer}>
+      <View style={[styles.simpleHeaderContainer, Platform.OS === 'android' ? { paddingTop: StatusBar.currentHeight || 24 } : {}]}>
         <Image source={require("../../assets/logo.jpg")} style={styles.simpleHeaderLogo} resizeMode="contain" />
         <View style={styles.simpleHeaderTextContainer}>
           <Text style={styles.simpleHeaderMainTitle}>Customer Dashboard</Text>
