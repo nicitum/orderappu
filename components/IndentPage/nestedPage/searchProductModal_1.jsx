@@ -152,6 +152,8 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         price: item.finalPrice || item.price || 0,
         finalPrice: item.finalPrice || item.price || 0,
         quantity: 1,
+        min_selling_price: item.min_selling_price ?? item.minSellingPrice ?? 0,
+        discountPrice: item.discountPrice ?? item.selling_price ?? item.price ?? 0,
       });
     }
   };
@@ -160,6 +162,8 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
   const handleConfirmEditProduct = () => {
     const priceNum = parseFloat(editPrice);
     const qtyNum = parseInt(editQty);
+    const minPrice = editProduct?.min_selling_price ?? editProduct?.minSellingPrice ?? 0;
+    const maxPrice = editProduct?.discountPrice ?? editProduct?.selling_price ?? editProduct?.price ?? 0;
     if (isNaN(priceNum) || priceNum < 0) {
       setError('Please enter a valid price');
       return;
@@ -168,11 +172,17 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
       setError('Please enter a valid quantity');
       return;
     }
+    if (priceNum < minPrice || priceNum > maxPrice) {
+      setError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
+      return;
+    }
     onAddProduct({
       ...editProduct,
       price: priceNum,
       finalPrice: priceNum,
       quantity: qtyNum,
+      min_selling_price: minPrice,
+      discountPrice: maxPrice,
     });
     setEditModalVisible(false);
     setEditProduct(null);
@@ -395,6 +405,11 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
                 value={editPrice}
                 onChangeText={setEditPrice}
               />
+              {editProduct && (
+                <Text style={{ color: '#888', fontSize: 13, alignSelf: 'flex-start', marginBottom: 2 }}>
+                  Allowed: ₹{editProduct.min_selling_price ?? editProduct.minSellingPrice ?? 0} - ₹{editProduct.discountPrice ?? editProduct.selling_price ?? editProduct.price ?? 0}
+                </Text>
+              )}
               <Text style={styles.editModalLabel}>Quantity:</Text>
               <TextInput
                 style={styles.editModalInput}
@@ -655,52 +670,57 @@ const styles = StyleSheet.create({
   },
   editModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   editModalCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: 300,
-    alignItems: 'center',
-    elevation: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '85%',
+    maxWidth: 400,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    padding: 16,
   },
   editModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
     marginBottom: 16,
-    color: '#003087',
+    textAlign: 'center',
   },
   editModalLabel: {
-    fontSize: 14,
-    color: '#003087',
-    alignSelf: 'flex-start',
-    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#4B5563',
+    marginBottom: 4,
   },
   editModalInput: {
-    width: '100%',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#bbb',
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 16,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#111827',
     marginBottom: 8,
-    color: '#222',
   },
   editModalButtonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
     marginTop: 16,
   },
   editModalButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 6,
     alignItems: 'center',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
 });
 

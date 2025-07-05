@@ -1,0 +1,23 @@
+import React from 'react';
+import { createStackNavigator } from '@react-navigation/stack';
+import ReportsAdmin from './ReportsAdmin';
+import AdminOrderHistory from '../Profile/AdminOrderHistory';
+import AdminCartPage from '../Profile/AdminCartPage';
+
+const Stack = createStackNavigator();
+
+const ReportsStack = () => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="ReportsAdmin" component={ReportsAdmin} />
+      <Stack.Screen name="AdminOrderHistory" component={AdminOrderHistory} />
+      <Stack.Screen name="AdminCartPage" component={AdminCartPage} />
+    </Stack.Navigator>
+  );
+};
+
+export default ReportsStack; 

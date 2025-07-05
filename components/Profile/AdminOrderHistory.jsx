@@ -9,6 +9,7 @@ import {
     Alert,
     Platform,
     ToastAndroid,
+    Image,
 } from "react-native";
 import axios from "axios";
 import { ipAddress } from "../../services/urls";
@@ -19,10 +20,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import moment from 'moment';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import * as XLSX from 'xlsx';
-import RNFS from 'react-native-fs';
-import Share from 'react-native-share';
+
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import Toast from 'react-native-toast-message';
 
 const AdminOrderHistory = () => {
     const [orders, setOrders] = useState([]);
@@ -32,6 +33,30 @@ const AdminOrderHistory = () => {
     const [orderDetails, setOrderDetails] = useState({});
     const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [customerNames, setCustomerNames] = useState({});
+    const [allProductsData, setAllProductsData] = useState([]);
+    const [loadingCustomerNames, setLoadingCustomerNames] = useState(false);
+
+    // Cart functions (local implementation)
+    const addOrderToCart = (orderProducts) => {
+        // This will be handled by AdminCartPage when navigating
+        console.log('Adding order to cart:', orderProducts);
+    };
+
+    const clearCart = () => {
+        // This will be handled by AdminCartPage
+        console.log('Clearing cart');
+    };
+
+    const setSelectedCustomer = (customer) => {
+        // This will be handled by AdminCartPage
+        console.log('Setting selected customer:', customer);
+    };
+
+    const addToCart = (product) => {
+        // This will be handled by AdminCartPage
+        console.log('Adding to cart:', product);
+    };
 
     const showDatePicker = () => {
         setDatePickerVisibility(true);
@@ -89,6 +114,9 @@ const AdminOrderHistory = () => {
             setOrders(fetchedOrders);
             console.log('Fetched orders:', fetchedOrders);
 
+            // Fetch customer names for all orders (non-blocking)
+            fetchCustomerNamesForOrders(fetchedOrders);
+
         } catch (fetchOrdersError) {
             console.error("FETCH ADMIN ORDERS - Fetch Error:", fetchOrdersError);
             Alert.alert("Error", fetchOrdersError.message || "Failed to fetch admin orders.");
@@ -97,17 +125,135 @@ const AdminOrderHistory = () => {
         }
     }, []);
 
+    // Function to fetch all products for images
+    const fetchAllProducts = useCallback(async () => {
+        try {
+            const token = await AsyncStorage.getItem("userAuthToken");
+            if (!token) {
+                throw new Error("Authentication token missing");
+            }
+            const response = await fetch(`http://${ipAddress}:8091/products`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to fetch products");
+            }
+            
+            const data = await response.json();
+            setAllProductsData(data);
+        } catch (error) {
+            console.error("Error fetching all products:", error);
+        }
+    }, []);
+
+    // Function to fetch customer name by customer ID
+    const fetchCustomerName = async (customerId) => {
+        try {
+            const token = await AsyncStorage.getItem("userAuthToken");
+            const response = await fetch(`http://${ipAddress}:8091/fetch-names?customer_id=${customerId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                console.error(`Failed to fetch customer name for ID ${customerId}`);
+                return null;
+            }
+
+            const data = await response.json();
+            return data.name;
+        } catch (error) {
+            console.error(`Error fetching customer name for ID ${customerId}:`, error);
+            return null;
+        }
+    };
+
+    // Function to fetch customer names for all orders - OPTIMIZED
+    const fetchCustomerNamesForOrders = async (ordersList) => {
+        try {
+            setLoadingCustomerNames(true);
+            
+            // Get unique customer IDs that we don't already have
+            const uniqueCustomerIds = [...new Set(
+                ordersList
+                    .map(order => order.customer_id)
+                    .filter(id => id && !customerNames[id])
+            )];
+
+            if (uniqueCustomerIds.length === 0) {
+                setLoadingCustomerNames(false);
+                return; // No new customers to fetch
+            }
+
+            const token = await AsyncStorage.getItem("userAuthToken");
+            if (!token) {
+                setLoadingCustomerNames(false);
+                return;
+            }
+
+            // Fetch all customer names in one API call
+            const customerIdsParam = uniqueCustomerIds.join(',');
+            const response = await fetch(`http://${ipAddress}:8091/fetch-names-bulk?customer_ids=${customerIdsParam}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.names) {
+                    setCustomerNames(prev => ({ ...prev, ...data.names }));
+                }
+            } else {
+                // Fallback to individual calls if bulk API doesn't exist
+                const names = {};
+                for (const customerId of uniqueCustomerIds) {
+                    const name = await fetchCustomerName(customerId);
+                    if (name) {
+                        names[customerId] = name;
+                    }
+                }
+                setCustomerNames(prev => ({ ...prev, ...names }));
+            }
+        } catch (error) {
+            console.error('Error fetching customer names:', error);
+            // Fallback to individual calls
+            const names = {};
+            for (const order of ordersList) {
+                if (order.customer_id && !customerNames[order.customer_id]) {
+                    const name = await fetchCustomerName(order.customer_id);
+                    if (name) {
+                        names[order.customer_id] = name;
+                    }
+                }
+            }
+            setCustomerNames(prev => ({ ...prev, ...names }));
+        } finally {
+            setLoadingCustomerNames(false);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
-            fetchOrders(); // Fetch today's orders on focus
+            // Only fetch if not already loading
+            if (!loading) {
+                fetchAllProducts(); // Fetch all products for images
+                fetchOrders(); // Fetch today's orders on focus
+            }
             return () => {};
-        }, [fetchOrders])
+        }, [fetchOrders, fetchAllProducts, loading])
     );
 
     const fetchOrderProducts = async (orderId) => {
         try {
-            const token = await checkTokenAndRedirect(navigation);
-            if (!token) throw new Error("No authorization token found.");
+            const token = await AsyncStorage.getItem("userAuthToken");
+            if (!token) {
+                throw new Error("No authorization token found.");
+            }
 
             const response = await axios.get(
                 `http://${ipAddress}:8091/order-products?orderId=${orderId}`,
@@ -116,7 +262,11 @@ const AdminOrderHistory = () => {
             return response.data;
         } catch (error) {
             console.error("Error fetching order products:", error);
-            Alert.alert("Error", "Failed to fetch order details.");
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to fetch order details'
+            });
             return [];
         }
     };
@@ -133,8 +283,147 @@ const AdminOrderHistory = () => {
         }
     };
 
+    const handleReorder = async (orderId) => {
+        try {
+            const products = await fetchOrderProducts(orderId);
+            if (products && products.length > 0) {
+                // Find the order object for this orderId
+                const order = orders.find(o => o.id === orderId);
+                if (!order) {
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Error',
+                        text2: 'Order not found'
+                    });
+                    return;
+                }
+                
+                // Show popup with 2 options
+                Alert.alert(
+                    'Reorder Options',
+                    'Choose how you want to reorder this order:',
+                    [
+                        {
+                            text: 'Cancel',
+                            style: 'cancel'
+                        },
+                        {
+                            text: 'Confirm Reorder',
+                            onPress: () => handleConfirmReorder(orderId, products)
+                        },
+                        {
+                            text: 'Edit and Reorder',
+                            onPress: () => handleEditAndReorder(products, order)
+                        }
+                    ]
+                );
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'No products found in this order'
+                });
+            }
+        } catch (error) {
+            console.error('Error adding order to cart:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to add order to cart'
+            });
+        }
+    };
+
+    const handleConfirmReorder = async (orderId, products) => {
+        try {
+            // Get the order details to get customer_id
+            const order = orders.find(o => o.id === orderId);
+            if (!order) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'Order not found'
+                });
+                return;
+            }
+
+            const token = await AsyncStorage.getItem("userAuthToken");
+            if (!token) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'Authentication token missing'
+                });
+                return;
+            }
+
+            // Call updated on-behalf API - order_type will be determined automatically by the API
+            const response = await fetch(`http://${ipAddress}:8091/on-behalf`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    customer_id: order.customer_id,
+                    reference_order_id: orderId,
+                }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to place reorder');
+            }
+
+            Toast.show({
+                type: 'success',
+                text1: 'Reorder Placed',
+                text2: `Order has been successfully reordered with ${data.product_count} products`
+            });
+        } catch (error) {
+            console.error('Error placing reorder:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Reorder Failed',
+                text2: error.message || 'Failed to place reorder'
+            });
+        }
+    };
+
+    const handleEditAndReorder = (products, order) => {
+        // Navigate to AdminCartPage with customer info and products
+        const customerInfo = {
+            cust_id: order.customer_id,
+            name: customerNames[order.customer_id] || `Customer ${order.customer_id}`
+        };
+        
+        // Store the products in AsyncStorage for AdminCartPage to load
+        const cartData = {
+            customer: customerInfo,
+            products: products.map(product => ({
+                product_id: product.product_id,
+                id: product.product_id,
+                name: product.name,
+                price: product.price,
+                quantity: product.quantity,
+                image: product.image || null,
+                category: product.category || '',
+                gst_rate: product.gst_rate || 0
+            }))
+        };
+        
+        AsyncStorage.setItem('adminCart', JSON.stringify(cartData.products));
+        AsyncStorage.setItem('adminCartCustomer', JSON.stringify(customerInfo));
+        
+        navigation.navigate('AdminCartPage', { 
+            customer: customerInfo,
+            products: products 
+        });
+    };
+
     const renderOrderDetails = (orderId) => {
         const products = orderDetails[orderId];
+        const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
         if (!expandedOrderDetailsId || expandedOrderDetailsId !== orderId || !products) {
             return null;
         }
@@ -144,19 +433,60 @@ const AdminOrderHistory = () => {
                 <Text style={detailStyles.orderDetailsTitle}>Order Items</Text>
 
                 <View style={detailStyles.headerRow}>
-                    <Text style={[detailStyles.headerCell, { flex: 2 }]}>Product</Text>
-                    <Text style={detailStyles.headerCell}>Qty</Text>
-                    <Text style={detailStyles.headerCell}>Price</Text>
+                    <View style={detailStyles.imageHeader}>
+                        <Text style={detailStyles.headerCell}></Text>
+                    </View>
+                    <View style={detailStyles.productNameHeader}>
+                        <Text style={detailStyles.headerCell}>Product</Text>
+                    </View>
+                    <View style={detailStyles.qtyHeader}>
+                        <Text style={detailStyles.headerCell}>Qty</Text>
+                    </View>
+                    <View style={detailStyles.priceHeader}>
+                        <Text style={detailStyles.headerCell}>Price</Text>
+                    </View>
                 </View>
 
                 {products.length > 0 ? (
-                    products.map((product, index) => (
-                        <View key={`${orderId}-${product.product_id}-${index}`} style={detailStyles.productRow}>
-                            <Text style={[detailStyles.productCell, { flex: 2 }]}>{product.name}</Text>
-                            <Text style={detailStyles.productCell}>{product.quantity}</Text>
-                            <Text style={detailStyles.productCell}>₹{product.price}</Text>
-                        </View>
-                    ))
+                    products.map((product, index) => {
+                        const prodData = allProductsMap.get(product.product_id);
+                        const imageUrl = prodData && prodData.image ? `http://${ipAddress}:8091/images/products/${prodData.image}` : null;
+                        return (
+                            <View key={`${orderId}-${product.product_id}-${index}`} style={detailStyles.productRow}>
+                                <View style={detailStyles.imageColumn}>
+                                    <View style={detailStyles.productImageBox}>
+                                        {imageUrl ? (
+                                            <Image
+                                                source={{ uri: imageUrl }}
+                                                style={detailStyles.productImage}
+                                                resizeMode="contain"
+                                                onError={(e) => console.log('Order item image load error:', e.nativeEvent.error, prodData?.image)}
+                                            />
+                                        ) : (
+                                            <View style={detailStyles.productImagePlaceholder}>
+                                                <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                                <View style={detailStyles.productNameColumn}>
+                                    <Text 
+                                        style={detailStyles.productNameText}
+                                        numberOfLines={2}
+                                        ellipsizeMode="tail"
+                                    >
+                                        {product.name || (prodData?.name || 'Product Name')}
+                                    </Text>
+                                </View>
+                                <View style={detailStyles.qtyColumn}>
+                                    <Text style={detailStyles.qtyText}>{product.quantity}</Text>
+                                </View>
+                                <View style={detailStyles.priceColumn}>
+                                    <Text style={detailStyles.priceText}>₹{product.price}</Text>
+                                </View>
+                            </View>
+                        );
+                    })
                 ) : (
                     <Text style={detailStyles.noProductsText}>No products found.</Text>
                 )}
@@ -177,106 +507,7 @@ const AdminOrderHistory = () => {
         }
     };
 
-    const save = async (uri, filename, mimetype, reportType) => {
-        if (Platform.OS === "android") {
-            try {
-                let directoryUriToUse = await AsyncStorage.getItem('orderReportDirectoryUri');
 
-                if (!directoryUriToUse) {
-                    // For Android, we'll use the Downloads directory
-                    directoryUriToUse = RNFS.DownloadDirectoryPath;
-                    await AsyncStorage.setItem('orderReportDirectoryUri', directoryUriToUse);
-                }
-
-                const filePath = `${directoryUriToUse}/${filename}`;
-                await RNFS.copyFile(uri, filePath);
-
-                ToastAndroid.show(`${reportType} Saved Successfully!`, ToastAndroid.SHORT);
-            } catch (error) {
-                console.error("Error saving file:", error);
-                if (error.message.includes('permission')) {
-                    await AsyncStorage.removeItem('orderReportDirectoryUri');
-                }
-                ToastAndroid.show(`Failed to save ${reportType}. Please try again.`, ToastAndroid.SHORT);
-            }
-        } else {
-            shareAsync(uri, reportType);
-        }
-    };
-
-    const generateOrderExcelReport = async () => {
-        const reportType = 'Order Report';
-        setLoading(true);
-        try {
-            if (!orders || orders.length === 0) {
-                Alert.alert("No Orders", "No orders to include in the report for the selected date.");
-                return;
-            }
-
-            const wb = XLSX.utils.book_new();
-            const wsData = [
-                [`${reportType} - Date: ${moment(selectedDate).format('YYYY-MM-DD')}`],
-                [],
-                ["Customer ID", "Total Amount", "Order Type", "Placed On", "Cancelled","Approve Status", "Delivery Status"],
-                ...orders.map(order => [
-                    order.customer_id,
-                    order.total_amount,
-                    order.order_type,
-                    moment.unix(parseInt(order.placed_on, 10)).format('YYYY-MM-DD HH:mm:ss'),
-                    order.cancelled,
-                    order.approve_status,
-                    order.delivery_status,
-                ])
-            ];
-
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            XLSX.utils.book_append_sheet(wb, ws, `${reportType} Data`);
-
-            const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-            const base64Workbook = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-            const filename = `${reportType.replace(/\s/g, '')}-${moment(selectedDate).format('YYYY-MM-DD')}.xlsx`;
-            const mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-            if (Platform.OS === 'web') {
-                const blob = new Blob([wbout], { type: mimetype });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                Alert.alert('Success', `${reportType} Generated Successfully!`);
-            } else {
-                const fileDir = RNFS.DocumentDirectoryPath;
-                const fileUri = `${fileDir}/${filename}`;
-
-                await RNFS.writeFile(fileUri, base64Workbook, 'base64');
-                
-                if (Platform.OS === 'android') {
-                    save(fileUri, filename, mimetype, reportType);
-                } else {
-                    try {
-                        await Share.open({
-                            url: fileUri,
-                            type: mimetype,
-                            title: `${reportType} Report`
-                        });
-                    } catch (shareError) {
-                        console.error("Sharing Error:", shareError);
-                        Alert.alert("Sharing Failed", `Error occurred while trying to share the ${reportType.toLowerCase()}.`);
-                    }
-                }
-            }
-
-        } catch (e) {
-            console.error("Excel Generation Error:", e);
-            Alert.alert("Generation Failed", `Error generating Excel ${reportType.toLowerCase()}.`);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (loading) {
         return (
@@ -289,7 +520,7 @@ const AdminOrderHistory = () => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Admin Order History</Text>
+               
                 <View style={styles.headerActions}>
                     <TouchableOpacity 
                         style={styles.dateFilterButton} 
@@ -300,15 +531,6 @@ const AdminOrderHistory = () => {
                         <Text style={styles.dateFilterText}>
                             {moment(selectedDate).format('MMM D, YYYY')}
                         </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        style={styles.reportButton}
-                        onPress={generateOrderExcelReport}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="document-text-outline" size={18} color="#fff" />
-                        <Text style={styles.reportButtonText}>Report</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -333,7 +555,7 @@ const AdminOrderHistory = () => {
                             <View style={styles.orderHeader}>
                                 <View>
                                     <Text style={styles.orderId}>Order #{order.id}</Text>
-                                    <Text style={styles.orderCustomer}>Customer ID: {order.customer_id}</Text>
+                                    <Text style={styles.orderCustomer}>Customer: {customerNames[order.customer_id] || `ID: ${order.customer_id}`}</Text>
                                     <Text style={styles.orderDate}>
                                         {moment.unix(order.placed_on).format('MMM D, YYYY [at] h:mm A')}
                                     </Text>
@@ -354,20 +576,30 @@ const AdminOrderHistory = () => {
                                         {(order.delivery_status || 'pending').toUpperCase()}
                                     </Text>
                                 </Text>
-                                <TouchableOpacity 
-                                    onPress={() => handleOrderDetailsPress(order.id)}
-                                    style={styles.detailsButton}
-                                    activeOpacity={0.7}
-                                >
-                                    <Text style={styles.detailsButtonText}>
-                                        {expandedOrderDetailsId === order.id ? 'HIDE DETAILS' : 'VIEW DETAILS'}
-                                    </Text>
-                                    <Ionicons 
-                                        name={expandedOrderDetailsId === order.id ? "chevron-up" : "chevron-down"} 
-                                        size={16} 
-                                        color="#003366" 
-                                    />
-                                </TouchableOpacity>
+                                <View style={styles.orderActions}>
+                                    <TouchableOpacity 
+                                        onPress={() => handleReorder(order.id)}
+                                        style={styles.reorderButton}
+                                        activeOpacity={0.7}
+                                    >
+                                        <MaterialIcons name="replay" size={16} color="#10B981" />
+                                        <Text style={styles.reorderButtonText}>Reorder</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => handleOrderDetailsPress(order.id)}
+                                        style={styles.detailsButton}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.detailsButtonText}>
+                                            {expandedOrderDetailsId === order.id ? 'HIDE DETAILS' : 'VIEW DETAILS'}
+                                        </Text>
+                                        <Ionicons 
+                                            name={expandedOrderDetailsId === order.id ? "chevron-up" : "chevron-down"} 
+                                            size={16} 
+                                            color="#003366" 
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
 
                             {renderOrderDetails(order.id)}
@@ -417,19 +649,7 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         fontSize: 14,
     },
-    reportButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#4CAF50',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 20,
-    },
-    reportButtonText: {
-        color: '#fff',
-        marginLeft: 8,
-        fontSize: 14,
-    },
+
     loadingContainer: {
         flex: 1,
         justifyContent: "center",
@@ -522,6 +742,27 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#666',
     },
+    orderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    reorderButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F0FDF4',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#10B981',
+    },
+    reorderButtonText: {
+        color: '#10B981',
+        fontWeight: '600',
+        marginLeft: 4,
+        fontSize: 12,
+    },
     detailsButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -549,27 +790,96 @@ const detailStyles = StyleSheet.create({
     },
     headerRow: {
         flexDirection: 'row',
-        paddingBottom: 8,
-        marginBottom: 8,
+        paddingBottom: 12,
+        marginBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
+        alignItems: 'center',
     },
     headerCell: {
         fontSize: 13,
         fontWeight: '600',
         color: '#003366',
-        flex: 1,
+        textAlign: 'left',
+    },
+    imageHeader: {
+        width: 56,
+        alignItems: 'center',
+    },
+    productNameHeader: {
+        flex: 2,
+        paddingHorizontal: 8,
+    },
+    qtyHeader: {
+        width: 60,
+        alignItems: 'center',
+    },
+    priceHeader: {
+        width: 80,
+        alignItems: 'flex-end',
     },
     productRow: {
         flexDirection: 'row',
-        paddingVertical: 8,
+        alignItems: 'center',
+        paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
+        minHeight: 60,
     },
-    productCell: {
-        fontSize: 13,
+    imageColumn: {
+        width: 56,
+        alignItems: 'center',
+    },
+    productNameColumn: {
+        flex: 2,
+        paddingHorizontal: 8,
+        justifyContent: 'center',
+    },
+    qtyColumn: {
+        width: 60,
+        alignItems: 'center',
+    },
+    priceColumn: {
+        width: 80,
+        alignItems: 'flex-end',
+    },
+    productImageBox: { 
+        width: 44, 
+        height: 44, 
+        borderRadius: 8, 
+        backgroundColor: '#F5F5F5', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        overflow: 'hidden' 
+    },
+    productImage: { 
+        width: 40, 
+        height: 40, 
+        borderRadius: 6 
+    },
+    productImagePlaceholder: { 
+        width: 40, 
+        height: 40, 
+        borderRadius: 6, 
+        backgroundColor: '#e0e0e0', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
+    productNameText: {
+        fontSize: 14,
+        color: '#333',
+        fontWeight: '500',
+        lineHeight: 18,
+    },
+    qtyText: {
+        fontSize: 14,
         color: '#555',
-        flex: 1,
+        fontWeight: '500',
+    },
+    priceText: {
+        fontSize: 14,
+        color: '#003366',
+        fontWeight: '600',
     },
     noProductsText: {
         fontSize: 14,

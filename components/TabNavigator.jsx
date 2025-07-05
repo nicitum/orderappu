@@ -12,10 +12,12 @@ import { jwtDecode } from "jwt-decode";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AdminOrderHistory from "./Profile/AdminOrderHistory";
-import AdminTransactions from "./Profile/AdminTransactions";
 import ProductsComponent from "./HomePage/ProductList";
 import CatalogueStack from "./HomePage/CatalogueStack";
-import PlaceIndent from "./IndentPage/PlaceIndent";
+import HomeAdmin from "./HomePage/HomeAdmin";
+import TransactionsAdmin from "./HomePage/TransactionsAdmin";
+import AdminStack from "./HomePage/AdminStack";
+import ReportsStack from "./HomePage/ReportsStack";
 
 const Tab = createBottomTabNavigator();
 
@@ -105,7 +107,7 @@ const TabNavigator = () => {
         >
            <Tab.Screen
                 name="Home"
-                component={HomeStack}
+                component={isAdmin || isSuperAdmin ? HomeAdmin : HomeStack}
                 options={{
                     tabBarIcon: ({ color, size }) => (
                         <MaterialCommunityIcons name="home-outline" size={size} color={color} />
@@ -125,13 +127,12 @@ const TabNavigator = () => {
                 />
             )}
 
-            {!isSuperAdmin && (
+            {!isSuperAdmin && !isAdmin && (
                 <Tab.Screen
                     name="Orders"
-                    component={isAdmin ? AdminOrderHistory : IndentStack}
+                    component={IndentStack}
                     options={{
-                       
-                        headerTitle: isAdmin ? "Order History" : "Order History",
+                        headerTitle: "Order History",
                         headerStyle: styles.header,
                         headerTitleStyle: styles.headerTitle,
                         tabBarIcon: ({ color, size }) => (
@@ -141,17 +142,30 @@ const TabNavigator = () => {
                 />
             )}
 
-                {!isSuperAdmin && isAdmin && (
-                    <Tab.Screen
-                        name="Place Order"
-                        component={PlaceIndent}
-                        options={{
-                            tabBarIcon: ({ color, size }) => (
-                                <MaterialCommunityIcons name="playlist-plus" size={size} color={color} />
-                            ),
-                        }}
-                    />
-                )}
+            {/* Admin Tabs */}
+            {(isAdmin || isSuperAdmin) && (
+                <Tab.Screen
+                    name="Transactions"
+                    component={AdminStack}
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                        ),
+                    }}
+                />
+            )}
+
+            {(isAdmin || isSuperAdmin) && (
+                <Tab.Screen
+                    name="Reports"
+                    component={ReportsStack}
+                    options={{
+                        tabBarIcon: ({ color, size }) => (
+                            <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+                        ),
+                    }}
+                />
+            )}
 
             {!isSuperAdmin && !isAdmin && (
                 <Tab.Screen
@@ -169,29 +183,6 @@ const TabNavigator = () => {
                 />
             )}
 
-
-            
-
-            {isSuperAdmin && (
-                <Tab.Screen
-                    name="Reports"
-                    component={AdminTransactions}
-                    options={{
-                        headerShown: true,
-                        headerTitle: "Admin Transactions",
-                        headerStyle: styles.header,
-                        headerTitleStyle: styles.headerTitle,
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
-                        ),
-                    }}
-                />
-
-
-                
-            )}
-
-
             {isSuperAdmin && (
                 <Tab.Screen
                     name="Products"
@@ -206,7 +197,6 @@ const TabNavigator = () => {
                         ),
                     }}
                 />
-                
             )}
 
             <Tab.Screen

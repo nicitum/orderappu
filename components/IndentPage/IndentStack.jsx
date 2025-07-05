@@ -3,6 +3,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import IndentPage from "./indent"
 import PlaceOrderPage from "./placeOrder";
 import UpdateOrdersU from "./UpdateOrdersU";
+import PlaceIndent from "./PlaceIndent";
 
 const Stack = createStackNavigator();
 
@@ -20,6 +21,9 @@ const IndentStack = () => {
       <Stack.Screen name="PlaceOrderPage" component={PlaceOrderPage} />
 
       <Stack.Screen name="UpdateOrdersPage" component={UpdateOrdersU} />
+
+      {/* Admin Place Order page */}
+      <Stack.Screen name="PlaceIndent" component={PlaceIndent} />
     </Stack.Navigator>
   );
 };

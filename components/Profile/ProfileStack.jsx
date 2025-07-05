@@ -7,21 +7,17 @@ import UpdateOrderScreen from './UpdateOrders';
 
 import PlaceOrderAdmin from './PlaceOrderAdmin';
 import LoadingSlip from './LoadingSlip';
-import PaymentScreen from './Payments';
-import CollectCashPage from './CollectCash';
-import CreditLimitPage from './CreditLimit';
+
 import DailyOrdersReport from './DailyOrdersReport';
 import Remarks from './Remarks';
-import AmountDueReport from './AmountDueReport';
-import CashCollectedReport from './CashCollectedReport';
+
 import AutoOrderUpdate from './AutoOrderUpdate';
 
 import UpdateOrdersSA from './UpdateOrdersSA';
-import PaymentHistory from './PaymentHistory';
 import OrderAcceptSA from './OrderAcceptSA';
 import AutoOrderPage from './AutoOrderPage';
 import LoadingSlipSA from './LoadingSlipSA';
-import CollectCashSA from './CollectCashSA';
+
 import InvoiceSA from './InvoiceSA';
 import OrderTrackingScreen from './OrderTrackingScreen';
 
@@ -73,27 +69,9 @@ const ProfileStack = () => {
         
       />
 
-      <Stack.Screen 
-        name="Payments" 
-        component={PaymentScreen} 
-        options={{ title: 'Payment Screen' }} 
-        
-      />
-
-      <Stack.Screen 
-        name="CollectCash" 
-        component={CollectCashPage} 
-        options={{ title: 'Collect Cash' }} 
-        
-      />
 
 
-      <Stack.Screen 
-        name="CreditLimit" 
-        component={CreditLimitPage} 
-        options={{ title: 'CreditLimit' }} 
-        
-      />
+
 
       <Stack.Screen 
         name="DailyOrdersReport" 
@@ -111,20 +89,11 @@ const ProfileStack = () => {
         
       />
 
-      <Stack.Screen 
-        name="CashCollectedReport" 
-        component={CashCollectedReport} 
-        options={{ title: 'Cash Collected Report'}} 
-        
-      />
+      
 
       
 
-      <Stack.Screen 
-        name="AmountDueReport" 
-        component={AmountDueReport} 
-        options={{ title: 'Outstanding Report' }} 
-      />
+    
 
     
 
@@ -135,11 +104,7 @@ const ProfileStack = () => {
       />
 
 
-    <Stack.Screen 
-        name="PaymentHistory"
-        component={PaymentHistory} 
-        options={{ title: 'Payment History' }} 
-      />
+    
 
 
       <Stack.Screen 
@@ -171,12 +136,7 @@ const ProfileStack = () => {
       />
 
 
-      <Stack.Screen 
-        name="CollectCashSA"
-        component={CollectCashSA}
-        options={{ title: 'Cash Collection' }} 
-      />
-
+      
       <Stack.Screen 
         name="AutoOrderUpdate"
         component={AutoOrderUpdate}
