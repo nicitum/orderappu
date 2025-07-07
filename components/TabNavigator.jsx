@@ -2,22 +2,29 @@ import React, { useEffect, useState } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
-import HomeStack from "./HomePage/HomeStack";
-import ProfileStack from "./Profile/ProfileStack";
-import Transactions from "./Transactions/transactions";
-import IndentStack from "./IndentPage/IndentStack";
 import { View, Text, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import AdminOrderHistory from "./Profile/AdminOrderHistory";
-import ProductsComponent from "./HomePage/ProductList";
-import CatalogueStack from "./HomePage/CatalogueStack";
-import HomeAdmin from "./HomePage/HomeAdmin";
-import TransactionsAdmin from "./HomePage/TransactionsAdmin";
-import AdminStack from "./HomePage/AdminStack";
-import ReportsStack from "./HomePage/ReportsStack";
+import CustomerStack from './Customer/CustomerStack';
+import CatalogueStack from './Customer/CatalogueStack';
+import ReportsCustomerStack from './Customer/ReportsCustomerStack';
+import AdminStack from './Admin/AdminStack';
+import ReportsStack from './Admin/ReportsStack';
+import ProfileStack from "./Profile/ProfileStack";
+
+import TransactionCustomer from './Customer/TransactionCustomer';
+
+
+
+import OwnerStack from './Owner/OwnerStack';
+import HomeAdmin from './Admin/HomeAdmin';
+import ProductsComponent from './Owner/ProductList';
+import OwnerHomeStack from './Owner/OwnerHomeStack';
+import OwnerProductsStack from './Owner/OwnerProductsStack';
+import TransactionsOwnerStack from './Owner/TransactionsOwnerStack';
+import ReportsOwnerStack from './Owner/ReportsOwnerStack';
 
 const Tab = createBottomTabNavigator();
 
@@ -25,6 +32,7 @@ const TabNavigator = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [isUser, setIsUser] = useState(false);
     const navigation = useNavigation();
 
     const checkClientStatus = async () => {
@@ -65,21 +73,26 @@ const TabNavigator = () => {
                     if (decodedToken.role === "admin") {
                         setIsAdmin(true);
                         setIsSuperAdmin(false);
+                        setIsUser(false);
                     } else if (decodedToken.role === "superadmin") {
                         setIsAdmin(true);
                         setIsSuperAdmin(true);
+                        setIsUser(false);
                     } else {
                         setIsAdmin(false);
                         setIsSuperAdmin(false);
+                        setIsUser(true);
                     }
                 } catch (error) {
                     console.error("Token verification error:", error);
                     setIsAdmin(false);
                     setIsSuperAdmin(false);
+                    setIsUser(false);
                 }
             } else {
                 setIsAdmin(false);
                 setIsSuperAdmin(false);
+                setIsUser(false);
             }
             setIsLoading(false);
         };
@@ -105,109 +118,162 @@ const TabNavigator = () => {
                 tabBarLabelStyle: styles.tabLabel, // Custom label style
             }}
         >
-           <Tab.Screen
-                name="Home"
-                component={isAdmin || isSuperAdmin ? HomeAdmin : HomeStack}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="home-outline" size={size} color={color} />
-                    ),
-                }}
-            />
-            
-            {!isSuperAdmin && !isAdmin && (
-                <Tab.Screen
-                    name="Catalogue"
-                    component={CatalogueStack}
-                    options={{
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            {!isSuperAdmin && !isAdmin && (
-                <Tab.Screen
-                    name="Orders"
-                    component={IndentStack}
-                    options={{
-                        headerTitle: "Order History",
-                        headerStyle: styles.header,
-                        headerTitleStyle: styles.headerTitle,
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="file-document-outline" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            {/* Admin Tabs */}
-            {(isAdmin || isSuperAdmin) && (
-                <Tab.Screen
-                    name="Transactions"
-                    component={AdminStack}
-                    options={{
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            {(isAdmin || isSuperAdmin) && (
-                <Tab.Screen
-                    name="Reports"
-                    component={ReportsStack}
-                    options={{
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="chart-line" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            {!isSuperAdmin && !isAdmin && (
-                <Tab.Screen
-                    name="Reports"
-                    component={Transactions}
-                    options={{
-                        headerShown: true,
-                        headerTitle: "Transactions",
-                        headerStyle: styles.header,
-                        headerTitleStyle: styles.headerTitle,
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            {isSuperAdmin && (
-                <Tab.Screen
-                    name="Products"
-                    component={ProductsComponent}
-                    options={{
-                        headerShown: true,
-                        headerTitle: "Products",
-                        headerStyle: styles.header,
-                        headerTitleStyle: styles.headerTitle,
-                        tabBarIcon: ({ color, size }) => (
-                            <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
-                        ),
-                    }}
-                />
-            )}
-
-            <Tab.Screen
-                name="Profile"
-                component={ProfileStack}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <MaterialCommunityIcons name="account-outline" size={size} color={color} />
-                    ),
-                }}
-            />
+            {isSuperAdmin ? (
+                <>
+                    <Tab.Screen
+                        name="Home"
+                        component={OwnerHomeStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="home-outline" size={size} color={color} />
+                            ),
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Products"
+                        component={OwnerProductsStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="view-grid-outline" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Products',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Transactions"
+                        component={TransactionsOwnerStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Transactions',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Reports"
+                        component={ReportsOwnerStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Reports',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Profile"
+                        component={ProfileStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="account-outline" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Profile',
+                        }}
+                    />
+                </>
+            ) : isAdmin ? (
+                <>
+                    <Tab.Screen
+                        name="Home"
+                        component={HomeAdmin}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="home-outline" size={size} color={color} />
+                            ),
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Transactions"
+                        component={AdminStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Transactions',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Reports"
+                        component={ReportsStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="chart-line" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Reports',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Profile"
+                        component={ProfileStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="account-outline" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Profile',
+                        }}
+                    />
+                </>
+            ) : isUser ? (
+                <>
+                    <Tab.Screen
+                        name="Home"
+                        component={CustomerStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="home-outline" size={size} color={color} />
+                            ),
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Catalogue"
+                        component={CatalogueStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="view-grid-outline" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Catalogue',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Transactions"
+                        component={TransactionCustomer}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="swap-horizontal" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Transactions',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Reports"
+                        component={ReportsCustomerStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="file-document-outline" size={size} color={color} />
+                            ),
+                            headerShown: true,
+                            headerTitle: 'Reports',
+                        }}
+                    />
+                    <Tab.Screen
+                        name="Profile"
+                        component={ProfileStack}
+                        options={{
+                            tabBarIcon: ({ color, size }) => (
+                                <MaterialCommunityIcons name="account-outline" size={size} color={color} />
+                            ),
+                        }}
+                    />
+                </>
+            ) : null}
         </Tab.Navigator>
         </SafeAreaView>
     );

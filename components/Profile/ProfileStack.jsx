@@ -14,16 +14,14 @@ import Remarks from './Remarks';
 import AutoOrderUpdate from './AutoOrderUpdate';
 
 import UpdateOrdersSA from './UpdateOrdersSA';
-import OrderAcceptSA from './OrderAcceptSA';
+import OrderAcceptSA from '../Owner/OrderAcceptSA';
 import AutoOrderPage from './AutoOrderPage';
 import LoadingSlipSA from './LoadingSlipSA';
 
-import InvoiceSA from './InvoiceSA';
 import OrderTrackingScreen from './OrderTrackingScreen';
 
 import OrderTrackingCustomerScreen from './OrderTrackingCustomerScreen';
-import Cart from '../HomePage/Cart';
-
+import CartCustomer from '../Customer/CartCustomer';
 const Stack = createStackNavigator();
 
 const ProfileStack = () => {
@@ -129,12 +127,6 @@ const ProfileStack = () => {
       />
 
 
-      <Stack.Screen 
-        name="InvoiceSA"
-        component={InvoiceSA}
-        options={{ title: 'Invoice Page' }} 
-      />
-
 
       
       <Stack.Screen 
@@ -157,8 +149,8 @@ const ProfileStack = () => {
       />
 
       <Stack.Screen
-        name="Cart"
-        component={Cart}
+        name="CartCustomer"
+        component={CartCustomer}
         options={{ headerShown: false }}
       />
 

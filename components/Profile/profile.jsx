@@ -106,7 +106,7 @@ const ProfilePage = ({ setIsLoggedIn }) => {
         {
             text: "Shopping Cart",
             icon: <MaterialIcons name="shopping-cart" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("Cart", { clearCartOnOpen: true })
+            onPress: () => navigation.navigate("CartCustomer", { clearCartOnOpen: true })
         },
         {
             text: "Location Update",
