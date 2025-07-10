@@ -273,28 +273,7 @@ const CartCustomer = ({ hideHeader = false }) => {
     }
   };
 
-  const filterProducts = (text, brand, category) => {
-    let filtered = products;
-    
-    // Apply search filter
-    if (text) {
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(text.toLowerCase())
-      );
-    }
-    
-    // Apply brand filter
-    if (brand && brand !== 'All') {
-      filtered = filtered.filter(p => p.brand === brand);
-    }
-    
-    // Apply category filter
-    if (category && category !== 'All') {
-      filtered = filtered.filter(p => p.category === category);
-    }
-    
-    setFilteredProducts(filtered);
-  };
+ 
 
   const renderCartItem = ({ item }) => {
     const quantity = cart[item.id];

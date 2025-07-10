@@ -403,6 +403,7 @@ const AdminCartPage = () => {
     const productData = products.find(p => p.id === item.product_id || p.id === item.id);
     const imageUri = (productData?.image || item.image) ? 
       `http://${ipAddress}:8091/images/products/${productData?.image || item.image}` : null;
+    const itemTotal = (item.price || 0) * (item.quantity || 1);
 
     return (
       <View style={styles.cartItemCard}>
@@ -423,7 +424,7 @@ const AdminCartPage = () => {
           
           <View style={styles.cartItemDetails}>
             <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.cartItemPrice}>₹{item.price}</Text>
+            <Text style={styles.cartItemPrice}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
             {item.size && <Text style={styles.cartItemVolume}>{item.size}</Text>}
             <TouchableOpacity 
               style={styles.editButton}
@@ -464,7 +465,7 @@ const AdminCartPage = () => {
             
             <TouchableOpacity
               style={styles.removeButton}
-              onPress={() => removeFromCart(item.product_id)}
+              onPress={() => deleteCartItem(item.product_id)}
             >
               <Icon name="delete" size={20} color="#DC2626" />
             </TouchableOpacity>
@@ -610,7 +611,11 @@ const AdminCartPage = () => {
         <View style={styles.cartSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Cart Items ({cartItems.length})</Text>
-            <Text style={styles.totalAmount}>Total: {formatCurrency(getCartTotal())}</Text>
+            {/* Grand total styled like CartCustomer */}
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Total Amount:</Text>
+              <Text style={styles.totalAmount}>{formatCurrency(getCartTotal())}</Text>
+            </View>
           </View>
           
           <FlatList
@@ -1260,6 +1265,17 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text.primary,
   },
 });
 

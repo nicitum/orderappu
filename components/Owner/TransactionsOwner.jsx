@@ -33,7 +33,7 @@ const TransactionsOwner = () => {
   const navigation = useNavigation();
 
   const handlePlaceOrder = () => {
-    navigation.navigate('PlaceOrderAdmin');
+    navigation.navigate('PlaceOrderOwner');
   };
 
   const handleInvoice = () => {
@@ -41,7 +41,7 @@ const TransactionsOwner = () => {
   };
 
   const handleOrderAcceptance = () => {
-    navigation.navigate('OrderAcceptSA');
+    navigation.navigate('OrderAcceptOwner');
   };
 
   return (
@@ -138,54 +138,54 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
     ...Platform.select({
       ios: {
         shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 4,
+        elevation: 1,
       },
     }),
   },
   cardHeader: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   cardTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.text.secondary,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 16,
+    marginBottom: 10,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },

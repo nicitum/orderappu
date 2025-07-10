@@ -14,7 +14,7 @@ import Remarks from './Remarks';
 import AutoOrderUpdate from './AutoOrderUpdate';
 
 import UpdateOrdersSA from './UpdateOrdersSA';
-import OrderAcceptSA from '../Owner/OrderAcceptSA';
+
 import AutoOrderPage from './AutoOrderPage';
 import LoadingSlipSA from './LoadingSlipSA';
 
@@ -105,14 +105,7 @@ const ProfileStack = () => {
     
 
 
-      <Stack.Screen 
-        name="OrderAcceptSA"
-        component={OrderAcceptSA}
-        options={{ title: 'Order Accept' }} 
-      />
-
-
-
+    
     <Stack.Screen 
         name="AutoOrderPage"
         component={AutoOrderPage}

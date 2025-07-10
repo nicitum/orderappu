@@ -25,7 +25,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Toast from 'react-native-toast-message';
 
-const AdminOrderHistory = () => {
+const AdminOrderHistory = ({ route }) => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigation = useNavigation();
@@ -36,6 +36,10 @@ const AdminOrderHistory = () => {
     const [customerNames, setCustomerNames] = useState({});
     const [allProductsData, setAllProductsData] = useState([]);
     const [loadingCustomerNames, setLoadingCustomerNames] = useState(false);
+
+    // Get navigation parameters
+    const expandedOrderId = route?.params?.expandedOrderId;
+    const initialSelectedDate = route?.params?.selectedDate;
 
     // Cart functions (local implementation)
     const addOrderToCart = (orderProducts) => {
@@ -119,6 +123,13 @@ const AdminOrderHistory = () => {
                 fetchCustomerNamesForOrders(fetchedOrders);
             }
 
+            // If we have an expanded order ID and the order exists in the fetched orders,
+            // fetch its details automatically
+            if (expandedOrderId && fetchedOrders.some(order => order.id === expandedOrderId)) {
+                const products = await fetchOrderProducts(expandedOrderId);
+                setOrderDetails((prevDetails) => ({ ...prevDetails, [expandedOrderId]: products }));
+            }
+
         } catch (fetchOrdersError) {
             console.error("FETCH ADMIN ORDERS - Fetch Error:", fetchOrdersError);
             Alert.alert("Error", fetchOrdersError.message || "Failed to fetch admin orders.");
@@ -126,7 +137,7 @@ const AdminOrderHistory = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [expandedOrderId]);
 
     // Function to fetch all products for images
     const fetchAllProducts = useCallback(async () => {
@@ -231,10 +242,21 @@ const AdminOrderHistory = () => {
 
     useFocusEffect(
         useCallback(() => {
+            // Set initial date if provided from navigation
+            if (initialSelectedDate) {
+                setSelectedDate(initialSelectedDate);
+            }
+            
             fetchAllProducts(); // Fetch all products for images
-            fetchOrders(); // Fetch today's orders on focus
+            fetchOrders(initialSelectedDate || new Date()); // Fetch orders for the specified date
+            
+            // Set expanded order if provided from navigation
+            if (expandedOrderId) {
+                setExpandedOrderDetailsId(expandedOrderId);
+            }
+            
             return () => {};
-        }, [fetchOrders, fetchAllProducts])
+        }, [fetchOrders, fetchAllProducts, expandedOrderId, initialSelectedDate])
     );
 
     const fetchOrderProducts = async (orderId) => {

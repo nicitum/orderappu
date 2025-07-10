@@ -6,6 +6,7 @@ import InvoiceAdmin from './InvoiceAdmin';
 import AdminOrderHistory from './AdminOrderHistory';
 import AdminCartPage from './AdminCartPage';
 import OrderAcceptAdmin from './OrderAcceptAdmin';
+import AdminOrderStatus from './AdminOrderStatus';
 
 const Stack = createStackNavigator();
 
@@ -22,6 +23,7 @@ const AdminStack = () => {
       <Stack.Screen name="AdminOrderHistory" component={AdminOrderHistory} />
       <Stack.Screen name="AdminCartPage" component={AdminCartPage} />
       <Stack.Screen name="OrderAcceptAdmin" component={OrderAcceptAdmin} />
+      <Stack.Screen name="AdminOrderStatus" component={AdminOrderStatus} />
     </Stack.Navigator>
   );
 };

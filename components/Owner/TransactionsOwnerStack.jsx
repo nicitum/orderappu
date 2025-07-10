@@ -1,16 +1,22 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import TransactionsOwner from './TransactionsOwner';
-import OrderAcceptSA from './OrderAcceptSA';
+import OrderAcceptOwner from './OrderAcceptOwner';
 import InvoiceOwner from './InvoiceSA';
+import PlaceOrderOwner from './PlaceOrderOwner';
+import OwnerCartPage from './OwnerCartPage';
+import OrderHistoryOwner from './OrderHistoryOwner';
 
 const Stack = createStackNavigator();
 
 const TransactionsOwnerStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="TransactionsOwner" component={TransactionsOwner} />
-    <Stack.Screen name="OrderAcceptSA" component={OrderAcceptSA} />
+    <Stack.Screen name="OrderAcceptOwner" component={OrderAcceptOwner} />
     <Stack.Screen name="InvoiceOwner" component={InvoiceOwner} />
+    <Stack.Screen name="PlaceOrderOwner" component={PlaceOrderOwner} />
+    <Stack.Screen name="OwnerCartPage" component={OwnerCartPage} />
+    <Stack.Screen name="OrderHistoryOwner" component={OrderHistoryOwner} />
     
   </Stack.Navigator>
 );

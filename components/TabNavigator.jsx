@@ -161,6 +161,12 @@ const TabNavigator = () => {
                             headerShown: true,
                             headerTitle: 'Reports',
                         }}
+                        listeners={({ navigation }) => ({
+                            tabPress: (e) => {
+                                // Reset the Reports stack to show ReportsOwner first
+                                navigation.navigate('Reports', { screen: 'ReportsOwner' });
+                            },
+                        })}
                     />
                     <Tab.Screen
                         name="Profile"

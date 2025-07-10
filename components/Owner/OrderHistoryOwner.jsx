@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
     View,
     Text,
@@ -24,7 +24,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Toast from 'react-native-toast-message';
 
-const OrderHistoryOwner = () => {
+const OrderHistoryOwner = ({ route }) => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigation = useNavigation();
@@ -34,6 +34,15 @@ const OrderHistoryOwner = () => {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [allProductsData, setAllProductsData] = useState([]);
     const [customerNames, setCustomerNames] = useState({});
+
+    // Get navigation parameters
+    const expandedOrderId = route?.params?.expandedOrderId;
+    const selectedDateString = route?.params?.selectedDate;
+    
+    // Convert string back to Date object if present - use useMemo to prevent infinite loops
+    const initialSelectedDate = useMemo(() => {
+        return selectedDateString ? new Date(selectedDateString) : null;
+    }, [selectedDateString]);
 
     const showDatePicker = () => {
         setDatePickerVisibility(true);
@@ -79,6 +88,13 @@ const OrderHistoryOwner = () => {
             console.log("Fetched orders:", fetchedOrders);
     
             setOrders(fetchedOrders);
+
+            // If we have an expanded order ID and the order exists in the fetched orders,
+            // fetch its details automatically
+            if (expandedOrderId && fetchedOrders.some(order => order.id === expandedOrderId)) {
+                const products = await fetchOrderProducts(expandedOrderId);
+                setOrderDetails((prevDetails) => ({ ...prevDetails, [expandedOrderId]: products }));
+            }
     
         } catch (error) {
             const errorMessage = error.response?.data?.message ||
@@ -89,7 +105,7 @@ const OrderHistoryOwner = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [expandedOrderId]);
 
     const fetchAllProducts = useCallback(async () => {
         try {
@@ -171,10 +187,24 @@ const OrderHistoryOwner = () => {
 
     useFocusEffect(
         useCallback(() => {
+            console.log('useFocusEffect triggered with expandedOrderId:', expandedOrderId, 'initialSelectedDate:', initialSelectedDate);
+            
+            // Set initial date if provided from navigation
+            if (initialSelectedDate) {
+                setSelectedDate(initialSelectedDate);
+            }
+            
             fetchAllProducts();
-            fetchOrders();
+            fetchOrders(initialSelectedDate || new Date());
+            
+            // Set expanded order if provided from navigation
+            if (expandedOrderId) {
+                console.log('Setting expanded order to:', expandedOrderId);
+                setExpandedOrderDetailsId(expandedOrderId);
+            }
+            
             return () => {};
-        }, [fetchOrders, fetchAllProducts])
+        }, [fetchOrders, fetchAllProducts, expandedOrderId, initialSelectedDate])
     );
 
     useEffect(() => {
@@ -207,11 +237,14 @@ const OrderHistoryOwner = () => {
     };
 
     const handleOrderDetailsPress = async (orderId) => {
+        console.log('Toggling order details for order:', orderId, 'Current expanded:', expandedOrderDetailsId);
+        
         if (expandedOrderDetailsId === orderId) {
             setExpandedOrderDetailsId(null);
         } else {
             setExpandedOrderDetailsId(orderId);
             if (!orderDetails[orderId]) {
+                console.log('Fetching products for order:', orderId);
                 const products = await fetchOrderProducts(orderId);
                 setOrderDetails((prevDetails) => ({ ...prevDetails, [orderId]: products }));
             }
@@ -313,9 +346,12 @@ const OrderHistoryOwner = () => {
 
     const renderOrderDetails = (orderId) => {
         const products = orderDetails[orderId];
-        if (!expandedOrderDetailsId || expandedOrderDetailsId !== orderId || !products) {
+        console.log('Rendering details for order:', orderId, 'Expanded:', expandedOrderDetailsId, 'Products:', products);
+        
+        if (expandedOrderDetailsId !== orderId || !products) {
             return null;
         }
+        
         return (
             <View style={detailStyles.orderDetailsContainer}>
                 <View style={detailStyles.headerRow}>

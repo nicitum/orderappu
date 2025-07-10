@@ -118,13 +118,7 @@ const ProductsComponent = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#003366" barStyle="light-content" />
       
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Product Catalog</Text>
-      </View>
-
+      
       <View style={styles.searchContainer}>
         <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput

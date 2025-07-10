@@ -41,6 +41,10 @@ const ReportsOwner = () => {
     console.log('Sales Analytics coming soon');
   };
 
+  const handleOrderStatus = () => {
+    navigation.navigate('OwnerOrderStatus');
+  };
+
  
 
   return (
@@ -64,6 +68,21 @@ const ReportsOwner = () => {
             <Text style={styles.cardSubtitle}>View all order history and reports</Text>
             <View style={styles.cardFooter}>
               <Text style={styles.cardAction}>View history</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Order Status Card */}
+          <TouchableOpacity style={styles.card} onPress={handleOrderStatus} activeOpacity={0.8}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: '#DBEAFE' }]}>
+                <MaterialIcons name="assessment" size={24} color="#3B82F6" />
+              </View>
+            </View>
+            <Text style={styles.cardTitle}>Order Status</Text>
+            <Text style={styles.cardSubtitle}>Track order approval and delivery status</Text>
+            <View style={styles.cardFooter}>
+              <Text style={styles.cardAction}>View status</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -122,53 +141,53 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
     ...Platform.select({
       ios: {
         shadowColor: COLORS.card.shadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 4,
+        elevation: 1,
       },
     }),
   },
   cardHeader: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: COLORS.text.secondary,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 16,
+    marginBottom: 10,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },

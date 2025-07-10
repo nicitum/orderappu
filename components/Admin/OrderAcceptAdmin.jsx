@@ -9,6 +9,7 @@ import {
     ScrollView,
     RefreshControl,
     Platform,
+    Linking,
 } from "react-native";
 import { Checkbox, Card, Button, Searchbar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,6 +21,7 @@ import Toast from "react-native-toast-message";
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Animated } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 
 // Color Constants
 const COLORS = {
@@ -47,6 +49,19 @@ const COLORS = {
     },
 };
 
+// Button style for compact/small look (outside StyleSheet)
+const smallButtonStyle = {
+    minHeight: 32,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+};
+const smallLabelStyle = {
+    fontSize: 13,
+    fontWeight: '500',
+};
+
 const OrderAcceptAdmin = () => {
     const [assignedUsers, setAssignedUsers] = useState([]);
     const [adminOrders, setAdminOrders] = useState([]);
@@ -59,6 +74,9 @@ const OrderAcceptAdmin = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [filteredUsers, setFilteredUsers] = useState([]);
+    const [selectedRoute, setSelectedRoute] = useState('All');
+    // Get unique routes from assignedUsers
+    const uniqueRoutes = ['All', ...Array.from(new Set(assignedUsers.map(u => u.route)))];
     const scrollY = new Animated.Value(0);
 
     // Header animation values
@@ -95,16 +113,24 @@ const OrderAcceptAdmin = () => {
     }, [selectAllOrders, adminOrders]);
 
     useEffect(() => {
+        let filtered = assignedUsers;
         if (searchQuery) {
-            const filtered = assignedUsers.filter(user =>
+            filtered = filtered.filter(user =>
                 user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 user.route.toLowerCase().includes(searchQuery.toLowerCase())
             );
-            setFilteredUsers(filtered);
-        } else {
-            setFilteredUsers(assignedUsers);
         }
-    }, [searchQuery, assignedUsers]);
+        if (selectedRoute && selectedRoute !== 'All') {
+            filtered = filtered.filter(user => user.route === selectedRoute);
+        }
+        setFilteredUsers(filtered);
+    }, [searchQuery, assignedUsers, selectedRoute]);
+
+    // Filter assigned users to only those who have at least one order today
+    const usersWithOrdersToday = filteredUsers.filter(user =>
+        adminOrders.some(order => order.customer_id === user.cust_id)
+    );
+    const displayedUsers = usersWithOrdersToday;
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -222,59 +248,128 @@ const OrderAcceptAdmin = () => {
         });
     };
 
+    const handleOrderCardPress = (order) => {
+        // Navigate to AdminOrderHistory with the specific order expanded
+        navigation.navigate('AdminOrderHistory', {
+            expandedOrderId: order.id,
+            selectedDate: moment.unix(order.placed_on).toDate()
+        });
+    };
+
+    // Bulk approve selected orders with confirmation
     const handleBulkApprove = async () => {
         const orderIdsToApprove = Object.keys(selectedOrderIds);
         if (orderIdsToApprove.length === 0) {
             Alert.alert("No Orders Selected", "Please select orders to approve.");
             return;
         }
-
-        setLoading(true);
-        setError(null);
-        try {
-            const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-            
-            for (const orderId of orderIdsToApprove) {
-                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
-                    method: 'POST',
-                    headers: {
-                        "Authorization": `Bearer ${userAuthToken}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Accepted' })
-                });
-
-                if (!response.ok) {
-                    console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
-                    continue;
+        Alert.alert(
+            'Accept Selected Orders',
+            'Are you sure you want to accept all selected orders?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Accept',
+                    style: 'default',
+                    onPress: async () => {
+                        setLoading(true);
+                        setError(null);
+                        try {
+                            const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                            for (const orderId of orderIdsToApprove) {
+                                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                                    method: 'POST',
+                                    headers: {
+                                        "Authorization": `Bearer ${userAuthToken}`,
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Accepted' })
+                                });
+                                if (!response.ok) {
+                                    console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
+                                    continue;
+                                }
+                                const responseData = await response.json();
+                                if (responseData.success) {
+                                    updateOrderStatusInState(parseInt(orderId), 'Accepted');
+                                }
+                            }
+                            Toast.show({
+                                type: 'success',
+                                text1: 'Orders Accepted',
+                                text2: 'Selected orders accepted successfully'
+                            });
+                            setSelectedOrderIds({});
+                            setSelectAllOrders(false);
+                            await fetchAdminOrders(adminId, userAuthToken);
+                        } catch (err) {
+                            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve selected orders. Please try again.' });
+                            setError("Failed to approve selected orders. Please try again.");
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
                 }
-                const responseData = await response.json();
-                if (responseData.success) {
-                    updateOrderStatusInState(parseInt(orderId), 'Accepted');
-                }
-            }
+            ]
+        );
+    };
 
-            Toast.show({
-                type: 'success',
-                text1: 'Success',
-                text2: 'Selected orders approved successfully'
-            });
-
-            setSelectedOrderIds({});
-            setSelectAllOrders(false);
-
-            await fetchAdminOrders(adminId, userAuthToken);
-        } catch (err) {
-            console.error("Error bulk approving orders:", err);
-            Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Failed to approve selected orders. Please try again.'
-            });
-            setError("Failed to approve selected orders. Please try again.");
-        } finally {
-            setLoading(false);
+    // Bulk reject selected orders
+    const handleBulkReject = async () => {
+        const orderIdsToReject = Object.keys(selectedOrderIds);
+        if (orderIdsToReject.length === 0) {
+            Alert.alert("No Orders Selected", "Please select orders to reject.");
+            return;
         }
+        Alert.alert(
+            'Reject Selected Orders',
+            'Are you sure you want to reject all selected orders?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Reject',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setLoading(true);
+                        setError(null);
+                        try {
+                            const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                            for (const orderId of orderIdsToReject) {
+                                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                                    method: 'POST',
+                                    headers: {
+                                        "Authorization": `Bearer ${userAuthToken}`,
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Rejected' })
+                                });
+                                if (!response.ok) {
+                                    console.error(`HTTP Error rejecting order ID ${orderId}. Status: ${response.status}`);
+                                    continue;
+                                }
+                                const responseData = await response.json();
+                                if (responseData.success) {
+                                    updateOrderStatusInState(parseInt(orderId), 'Rejected');
+                                }
+                            }
+                            Toast.show({
+                                type: 'success',
+                                text1: 'Orders Rejected',
+                                text2: 'Selected orders rejected successfully'
+                            });
+                            setSelectedOrderIds({});
+                            setSelectAllOrders(false);
+                            await fetchAdminOrders(adminId, userAuthToken);
+                        } catch (err) {
+                            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject selected orders. Please try again.' });
+                            setError("Failed to reject selected orders. Please try again.");
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const renderUserOrderItem = ({ item }) => {
@@ -283,8 +378,30 @@ const OrderAcceptAdmin = () => {
             order.customer_id === item.cust_id && 
             moment.unix(order.placed_on).isSame(today, 'day')
         );
-        const userAMOrdersToday = userOrdersToday.filter(order => order.order_type === 'AM');
-        const userPMOrdersToday = userOrdersToday.filter(order => order.order_type === 'PM');
+
+        // Helper for Google Maps link
+        const openAddressInMaps = async (address) => {
+            if (!address) return;
+            if (/^https?:\/\//i.test(address)) {
+                // If address is a URL (short link or Google Maps link), open it directly
+                await Linking.openURL(address);
+            } else {
+                // Otherwise, use the address in a Google Maps search URL
+                const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+                // Try to open in Chrome if available (Android), else fallback
+                const chromeUrl = `googlechrome://navigate?url=${encodeURIComponent(url)}`;
+                try {
+                    const supported = await Linking.canOpenURL(chromeUrl);
+                    if (supported) {
+                        await Linking.openURL(chromeUrl);
+                    } else {
+                        await Linking.openURL(url);
+                    }
+                } catch (e) {
+                    await Linking.openURL(url);
+                }
+            }
+        };
 
         return (
             <Card style={styles.userCard} key={item.cust_id}>
@@ -295,26 +412,40 @@ const OrderAcceptAdmin = () => {
                         </View>
                         <View style={styles.userInfo}>
                             <Text style={styles.userName}>{item.name}</Text>
-                            <View style={styles.userMeta}>
-                                <Icon name="map-marker" size={16} color={COLORS.text.secondary} />
-                                <Text style={styles.userRoute}>{item.route}</Text>
+                            {/* Route and Phone side by side */}
+                            <View style={styles.userMetaRowHorizontal}>
+                                <Text style={styles.userMetaText}>{item.route || 'N/A'}</Text>
+                                <TouchableOpacity
+                                    style={[styles.userMetaRowSingle, { marginLeft: 60 }]}
+                                    onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}
+                                    disabled={!item.phone}
+                                >
+                                    <Icon name="phone" size={15} color={COLORS.primary} />
+                                    <Text style={styles.clickableMetaText}>{item.phone || 'N/A'}</Text>
+                                </TouchableOpacity>
                             </View>
+                            {/* Delivery Address below */}
+                            <TouchableOpacity
+                                style={styles.userMetaRowSingle}
+                                onPress={() => openAddressInMaps(item.delivery_address)}
+                                disabled={!item.delivery_address}
+                            >
+                                <Icon name="map-marker" size={15} color={COLORS.primary} />
+                                <Text style={[styles.clickableMetaText, { maxWidth: undefined }]} numberOfLines={2} ellipsizeMode="tail">{item.delivery_address || 'No address'}</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
                     <View style={styles.ordersContainer}>
-                        <View style={styles.orderTypeSection}>
-                            <View style={styles.orderTypeHeader}>
-                                <Icon name="weather-sunny" size={20} color={COLORS.accent} />
-                                <Text style={styles.orderTypeTitle}>AM Orders</Text>
-                                <View style={styles.orderCountBadge}>
-                                    <Text style={styles.orderCountText}>{userAMOrdersToday.length}</Text>
-                                </View>
-                            </View>
-                            {userAMOrdersToday.length > 0 ? (
-                                userAMOrdersToday.map(order => (
-                                    <Card key={order.id} style={styles.orderCard}>
-                                        <Card.Content>
+                        {userOrdersToday.length > 0 ? (
+                            userOrdersToday.map(order => (
+                                <Card key={order.id} style={styles.orderCard}>
+                                    <Card.Content>
+                                        <TouchableOpacity 
+                                            style={styles.orderCardTouchable}
+                                            onPress={() => handleOrderCardPress(order)}
+                                            activeOpacity={0.7}
+                                        >
                                             <View style={styles.orderRow}>
                                                 <Checkbox
                                                     status={!!selectedOrderIds[order.id] ? 'checked' : 'unchecked'}
@@ -331,8 +462,8 @@ const OrderAcceptAdmin = () => {
                                                         <Text style={styles.orderValue}>{moment.unix(order.placed_on).format('DD MMM, YYYY')}</Text>
                                                     </View>
                                                     <View style={styles.orderMeta}>
-                                                        <Text style={styles.orderLabel}>Amount:</Text>
-                                                        <Text style={styles.orderValue}>₹{order.amount || 'N/A'}</Text>
+                                                        <Text style={styles.orderLabel}>Order Value:</Text>
+                                                        <Text style={styles.orderValue}>{order.total_amount}</Text>
                                                     </View>
                                                 </View>
                                                 <View style={styles.orderStatus}>
@@ -344,104 +475,37 @@ const OrderAcceptAdmin = () => {
                                                     ) : (
                                                         <View style={[
                                                             styles.statusBadge,
-                                                            order.approve_status === 'Accepted' ? styles.acceptedBadge : styles.pendingBadge
+                                                            order.approve_status === 'Accepted' ? styles.acceptedBadge : order.approve_status === 'Rejected' ? styles.pendingBadge : styles.pendingBadge
                                                         ]}>
                                                             <Icon 
-                                                                name={order.approve_status === 'Accepted' ? 'check-circle' : 'clock-outline'} 
+                                                                name={order.approve_status === 'Accepted' ? 'check-circle' : order.approve_status === 'Rejected' ? 'close-circle' : 'clock-outline'} 
                                                                 size={14} 
-                                                                color={order.approve_status === 'Accepted' ? COLORS.success : COLORS.warning} 
+                                                                color={order.approve_status === 'Accepted' ? COLORS.success : order.approve_status === 'Rejected' ? COLORS.error : COLORS.warning} 
                                                             />
                                                             <Text style={[
                                                                 styles.statusText,
-                                                                order.approve_status === 'Accepted' ? styles.acceptedStatus : styles.pendingStatus
+                                                                order.approve_status === 'Accepted' ? styles.acceptedStatus : order.approve_status === 'Rejected' ? { color: COLORS.error } : styles.pendingStatus
                                                             ]}>
-                                                                {order.approve_status === 'Accepted' ? 'Accepted' : 'Pending'}
+                                                                {order.approve_status === 'Accepted' ? 'Accepted' : order.approve_status === 'Rejected' ? 'Rejected' : 'Pending'}
                                                             </Text>
                                                         </View>
                                                     )}
                                                 </View>
-                                            </View>
-                                        </Card.Content>
-                                    </Card>
-                                ))
-                            ) : (
-                                <Card style={styles.noOrdersCard}>
-                                    <Card.Content>
-                                        <Text style={styles.noOrdersText}>No AM orders for today</Text>
-                                    </Card.Content>
-                                </Card>
-                            )}
-                        </View>
-
-                        <View style={styles.orderTypeSection}>
-                            <View style={styles.orderTypeHeader}>
-                                <Icon name="weather-night" size={20} color={COLORS.primary} />
-                                <Text style={styles.orderTypeTitle}>PM Orders</Text>
-                                <View style={styles.orderCountBadge}>
-                                    <Text style={styles.orderCountText}>{userPMOrdersToday.length}</Text>
-                                </View>
-                            </View>
-                            {userPMOrdersToday.length > 0 ? (
-                                userPMOrdersToday.map(order => (
-                                    <Card key={order.id} style={styles.orderCard}>
-                                        <Card.Content>
-                                            <View style={styles.orderRow}>
-                                                <Checkbox
-                                                    status={!!selectedOrderIds[order.id] ? 'checked' : 'unchecked'}
-                                                    onPress={() => handleCheckboxChange(order.id, !selectedOrderIds[order.id])}
-                                                    color={COLORS.primary}
-                                                />
-                                                <View style={styles.orderDetails}>
-                                                    <View style={styles.orderMeta}>
-                                                        <Text style={styles.orderLabel}>Order ID:</Text>
-                                                        <Text style={styles.orderValue}>{order.id}</Text>
-                                                    </View>
-                                                    <View style={styles.orderMeta}>
-                                                        <Text style={styles.orderLabel}>Date:</Text>
-                                                        <Text style={styles.orderValue}>{moment.unix(order.placed_on).format('DD MMM, YYYY')}</Text>
-                                                    </View>
-                                                    <View style={styles.orderMeta}>
-                                                        <Text style={styles.orderLabel}>Amount:</Text>
-                                                        <Text style={styles.orderValue}>₹{order.amount || 'N/A'}</Text>
-                                                    </View>
-                                                </View>
-                                                <View style={styles.orderStatus}>
-                                                    {order.altered === 'Yes' ? (
-                                                        <View style={[styles.statusBadge, styles.alteredBadge]}>
-                                                            <Icon name="pencil" size={14} color={COLORS.primary} />
-                                                            <Text style={styles.alteredStatus}>Altered</Text>
-                                                        </View>
-                                                    ) : (
-                                                        <View style={[
-                                                            styles.statusBadge,
-                                                            order.approve_status === 'Accepted' ? styles.acceptedBadge : styles.pendingBadge
-                                                        ]}>
-                                                            <Icon 
-                                                                name={order.approve_status === 'Accepted' ? 'check-circle' : 'clock-outline'} 
-                                                                size={14} 
-                                                                color={order.approve_status === 'Accepted' ? COLORS.success : COLORS.warning} 
-                                                            />
-                                                            <Text style={[
-                                                                styles.statusText,
-                                                                order.approve_status === 'Accepted' ? styles.acceptedStatus : styles.pendingStatus
-                                                            ]}>
-                                                                {order.approve_status === 'Accepted' ? 'Accepted' : 'Pending'}
-                                                            </Text>
-                                                        </View>
-                                                    )}
+                                                <View style={styles.orderCardIcon}>
+                                                    <Icon name="chevron-right" size={20} color={COLORS.primary} />
                                                 </View>
                                             </View>
-                                        </Card.Content>
-                                    </Card>
-                                ))
-                            ) : (
-                                <Card style={styles.noOrdersCard}>
-                                    <Card.Content>
-                                        <Text style={styles.noOrdersText}>No PM orders for today</Text>
+                                        </TouchableOpacity>
                                     </Card.Content>
                                 </Card>
-                            )}
-                        </View>
+                            ))
+                        ) : (
+                            <Card style={styles.noOrdersCard}>
+                                <Card.Content>
+                                    <Text style={styles.noOrdersText}>No orders for today</Text>
+                                </Card.Content>
+                            </Card>
+                        )}
                     </View>
                 </Card.Content>
             </Card>
@@ -462,15 +526,29 @@ const OrderAcceptAdmin = () => {
                                 />
                                 <Text style={styles.selectAllText}>Select All Orders</Text>
                             </View>
+                        </View>
+                        <View style={styles.bulkActionsButtonRow}>
                             <Button
                                 mode="contained"
+                                compact={true}
                                 onPress={handleBulkApprove}
-                                style={styles.bulkApproveButton}
-                                labelStyle={styles.bulkApproveButtonLabel}
+                                style={[styles.bulkApproveButton, smallButtonStyle]}
+                                labelStyle={[styles.bulkApproveButtonLabel, smallLabelStyle]}
                                 disabled={Object.keys(selectedOrderIds).length === 0}
                                 icon="check-circle"
                             >
-                                Approve Selected
+                                Accept Selected
+                            </Button>
+                            <Button
+                                mode="contained"
+                                compact={true}
+                                onPress={handleBulkReject}
+                                style={[styles.bulkRejectButton, smallButtonStyle]}
+                                labelStyle={[styles.bulkRejectButtonLabel, smallLabelStyle]}
+                                disabled={Object.keys(selectedOrderIds).length === 0}
+                                icon="close-circle"
+                            >
+                                Reject Selected
                             </Button>
                         </View>
                     </Card.Content>
@@ -484,6 +562,19 @@ const OrderAcceptAdmin = () => {
                     iconColor={COLORS.primary}
                     inputStyle={styles.searchInput}
                 />
+                {/* Route Filter Dropdown */}
+                <View style={styles.routeFilterContainer}>
+                    <Picker
+                        selectedValue={selectedRoute}
+                        onValueChange={setSelectedRoute}
+                        style={styles.routePicker}
+                        dropdownIconColor={COLORS.primary}
+                    >
+                        {uniqueRoutes.map((route, idx) => (
+                            <Picker.Item key={idx} label={route} value={route} />
+                        ))}
+                    </Picker>
+                </View>
 
                 <ScrollView 
                     style={styles.usersScrollView}
@@ -501,15 +592,15 @@ const OrderAcceptAdmin = () => {
                     )}
                     scrollEventThrottle={16}
                 >
-                    {filteredUsers.length > 0 ? (
-                        filteredUsers.map(user => renderUserOrderItem({ item: user }))
+                    {displayedUsers.length > 0 ? (
+                        displayedUsers.map(user => renderUserOrderItem({ item: user }))
                     ) : (
                         <Card style={styles.emptyCard}>
                             <Card.Content style={styles.emptyContent}>
                                 <Icon name="account-question" size={48} color={COLORS.primary} />
                                 <Text style={styles.emptyText}>No users found</Text>
                                 <Text style={styles.emptySubtext}>
-                                    {searchQuery ? 'Try a different search term' : 'No users assigned to you'}
+                                    {searchQuery ? 'Try a different search term' : 'No customers with orders today'}
                                 </Text>
                             </Card.Content>
                         </Card>
@@ -586,32 +677,59 @@ const styles = StyleSheet.create({
     },
     bulkActionsCard: {
         backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        marginBottom: 16,
-        elevation: 2,
+        borderRadius: 10,
+        marginBottom: 4,
+        elevation: 1,
+        paddingVertical: 1,
+        paddingHorizontal: 4,
     },
     bulkActionsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        paddingVertical: 0,
+        paddingHorizontal: 0,
     },
     selectAllContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 0,
+        paddingVertical: 0,
     },
     selectAllText: {
-        marginLeft: 8,
-        fontSize: 16,
+        marginLeft: 4,
+        fontSize: 13,
         color: COLORS.primary,
         fontWeight: '500',
     },
     bulkApproveButton: {
         backgroundColor: COLORS.primary,
         borderRadius: 8,
+        minHeight: 26,
+        paddingVertical: 0,
+        paddingHorizontal: 6,
+        marginBottom: 2,
+        width: 130,
+        alignSelf: 'center',
     },
     bulkApproveButtonLabel: {
         color: COLORS.text.light,
         fontWeight: '500',
+        fontSize: 12,
+    },
+    bulkRejectButton: {
+        backgroundColor: COLORS.error,
+        borderRadius: 8,
+        minHeight: 26,
+        paddingVertical: 0,
+        paddingHorizontal: 6,
+        width: 130,
+        alignSelf: 'center',
+    },
+    bulkRejectButtonLabel: {
+        color: COLORS.text.light,
+        fontWeight: '500',
+        fontSize: 12,
     },
     usersScrollView: {
         flex: 1,
@@ -800,6 +918,77 @@ const styles = StyleSheet.create({
         color: COLORS.text.secondary,
         marginTop: 8,
         textAlign: 'center',
+    },
+    bulkActionsButtonRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 2,
+        marginBottom: 0,
+        justifyContent: 'center',
+    },
+    routeFilterContainer: {
+        marginTop: 2,
+        marginBottom: 6,
+        backgroundColor: COLORS.surface,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        paddingHorizontal: 0,
+        width: 120,
+        alignSelf: 'flex-start',
+        minHeight: 35,
+    },
+    routePicker: {
+        height: 50,
+        color: COLORS.text.primary,
+        fontSize: 13,
+    },
+    userMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        marginTop: 2,
+        marginBottom: 2,
+        gap: 10,
+    },
+    userMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    userMetaText: {
+        fontSize: 13,
+        color: COLORS.text.secondary,
+        marginLeft: 3,
+        maxWidth: 90,
+    },
+    userMetaRowSingle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
+        marginBottom: 2,
+    },
+    clickableMetaText: {
+        fontSize: 13,
+        color: COLORS.primary,
+        marginLeft: 3,
+        maxWidth: 90,
+        fontWeight: 'bold',
+        textDecorationLine: 'underline',
+    },
+    userMetaRowHorizontal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
+        marginBottom: 2,
+    },
+    orderCardTouchable: {
+        flex: 1,
+    },
+    orderCardIcon: {
+        marginLeft: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 
