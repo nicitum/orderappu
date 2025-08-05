@@ -212,7 +212,7 @@ const PlaceOrderAdmin = () => {
                 <View style={styles.userCardContentColumn}>
                   {/* Name and ID */}
                   <View style={styles.customerNameBlock}>
-                    <Text style={styles.userName}>{item.name}</Text>
+                    <Text style={styles.userName}>{item.username}</Text>
                     <Text style={styles.userId}>ID: {item.cust_id}</Text>
                   </View>
                   {/* Info Row */}
@@ -228,12 +228,11 @@ const PlaceOrderAdmin = () => {
                     <View style={styles.infoSectionNew}>
                       <Text style={styles.infoLabelNew}>Phone</Text>
                       <TouchableOpacity
-                        style={styles.phoneContainerNew}
+                        style={styles.phoneIconButton}
                         onPress={() => handlePhoneCall(item.phone)}
                         activeOpacity={0.7}
                       >
-                        <Icon name="phone" size={16} color="#003366" />
-                        <Text style={styles.phoneNumberNew}>{item.phone || 'N/A'}</Text>
+                        <Icon name="phone" size={18} color="#fff" />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -434,6 +433,19 @@ const styles = StyleSheet.create({
   routePickerItem: {
     fontSize: 15,
     color: '#003366',
+  },
+  phoneIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#003366', // deep blue for call
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 2,
   },
 });
 

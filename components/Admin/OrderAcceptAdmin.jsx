@@ -248,6 +248,28 @@ const OrderAcceptAdmin = () => {
         });
     };
 
+    // Check if order can be accepted
+    const canAcceptOrder = (order) => {
+        // Can accept if status is Pending or Altered
+        return !order.approve_status || order.approve_status === 'Pending' || order.approve_status === 'Altered';
+    };
+
+    // Check if order can be rejected
+    const canRejectOrder = (order) => {
+        // Can reject if status is Pending or Altered
+        return !order.approve_status || order.approve_status === 'Pending' || order.approve_status === 'Altered';
+    };
+
+    // Get orders that can be accepted
+    const getAcceptableOrders = () => {
+        return adminOrders.filter(order => canAcceptOrder(order));
+    };
+
+    // Get orders that can be rejected
+    const getRejectableOrders = () => {
+        return adminOrders.filter(order => canRejectOrder(order));
+    };
+
     const handleOrderCardPress = (order) => {
         // Navigate to AdminOrderHistory with the specific order expanded
         navigation.navigate('AdminOrderHistory', {
@@ -263,9 +285,44 @@ const OrderAcceptAdmin = () => {
             Alert.alert("No Orders Selected", "Please select orders to approve.");
             return;
         }
+
+        // Filter orders that can be accepted
+        const acceptableOrders = orderIdsToApprove.filter(orderId => {
+            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            return order && canAcceptOrder(order);
+        });
+
+        if (acceptableOrders.length === 0) {
+            Alert.alert(
+                "Cannot Accept Orders",
+                "Selected orders are already accepted or rejected and cannot be modified.",
+                [{ text: "OK", style: "default" }]
+            );
+            return;
+        }
+
+        const nonAcceptableOrders = orderIdsToApprove.filter(orderId => {
+            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            return order && !canAcceptOrder(order);
+        });
+
+        // Show alert for non-acceptable orders
+        if (nonAcceptableOrders.length > 0) {
+            Alert.alert(
+                "Some Orders Cannot Be Accepted",
+                `${nonAcceptableOrders.length} orders are already accepted/rejected and will be skipped.`,
+                [{ text: "OK", style: "default" }]
+            );
+        }
+
+        let alertMessage = 'Are you sure you want to accept the selected orders?';
+        if (nonAcceptableOrders.length > 0) {
+            alertMessage = `Some selected orders cannot be accepted (already accepted/rejected). Only ${acceptableOrders.length} orders will be accepted. Continue?`;
+        }
+
         Alert.alert(
             'Accept Selected Orders',
-            'Are you sure you want to accept all selected orders?',
+            alertMessage,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -276,7 +333,8 @@ const OrderAcceptAdmin = () => {
                         setError(null);
                         try {
                             const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-                            for (const orderId of orderIdsToApprove) {
+                            let successCount = 0;
+                            for (const orderId of acceptableOrders) {
                                 const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
                                     method: 'POST',
                                     headers: {
@@ -292,6 +350,7 @@ const OrderAcceptAdmin = () => {
                                 const responseData = await response.json();
                                 if (responseData.success) {
                                     updateOrderStatusInState(parseInt(orderId), 'Accepted');
+                                    successCount++;
                                 }
                             }
                             Toast.show({
@@ -321,9 +380,44 @@ const OrderAcceptAdmin = () => {
             Alert.alert("No Orders Selected", "Please select orders to reject.");
             return;
         }
+
+        // Filter orders that can be rejected
+        const rejectableOrders = orderIdsToReject.filter(orderId => {
+            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            return order && canRejectOrder(order);
+        });
+
+        if (rejectableOrders.length === 0) {
+            Alert.alert(
+                "Cannot Reject Orders",
+                "Selected orders are already accepted or rejected and cannot be modified.",
+                [{ text: "OK", style: "default" }]
+            );
+            return;
+        }
+
+        const nonRejectableOrders = orderIdsToReject.filter(orderId => {
+            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            return order && !canRejectOrder(order);
+        });
+
+        // Show alert for non-rejectable orders
+        if (nonRejectableOrders.length > 0) {
+            Alert.alert(
+                "Some Orders Cannot Be Rejected",
+                `${nonRejectableOrders.length} orders are already accepted/rejected and will be skipped.`,
+                [{ text: "OK", style: "default" }]
+            );
+        }
+
+        let alertMessage = 'Are you sure you want to reject the selected orders?';
+        if (nonRejectableOrders.length > 0) {
+            alertMessage = `Some selected orders cannot be rejected (already accepted/rejected). Only ${rejectableOrders.length} orders will be rejected. Continue?`;
+        }
+
         Alert.alert(
             'Reject Selected Orders',
-            'Are you sure you want to reject all selected orders?',
+            alertMessage,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -334,7 +428,8 @@ const OrderAcceptAdmin = () => {
                         setError(null);
                         try {
                             const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-                            for (const orderId of orderIdsToReject) {
+                            let successCount = 0;
+                            for (const orderId of rejectableOrders) {
                                 const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
                                     method: 'POST',
                                     headers: {
@@ -350,6 +445,7 @@ const OrderAcceptAdmin = () => {
                                 const responseData = await response.json();
                                 if (responseData.success) {
                                     updateOrderStatusInState(parseInt(orderId), 'Rejected');
+                                    successCount++;
                                 }
                             }
                             Toast.show({
@@ -411,7 +507,7 @@ const OrderAcceptAdmin = () => {
                             <Icon name="account-circle" size={32} color={COLORS.primary} />
                         </View>
                         <View style={styles.userInfo}>
-                            <Text style={styles.userName}>{item.name}</Text>
+                            <Text style={styles.userName}>{item.username}</Text>
                             {/* Route and Phone side by side */}
                             <View style={styles.userMetaRowHorizontal}>
                                 <Text style={styles.userMetaText}>{item.route || 'N/A'}</Text>
@@ -451,6 +547,7 @@ const OrderAcceptAdmin = () => {
                                                     status={!!selectedOrderIds[order.id] ? 'checked' : 'unchecked'}
                                                     onPress={() => handleCheckboxChange(order.id, !selectedOrderIds[order.id])}
                                                     color={COLORS.primary}
+                                                    disabled={!canAcceptOrder(order) && !canRejectOrder(order)}
                                                 />
                                                 <View style={styles.orderDetails}>
                                                     <View style={styles.orderMeta}>
@@ -531,7 +628,18 @@ const OrderAcceptAdmin = () => {
                             <Button
                                 mode="contained"
                                 compact={true}
-                                onPress={handleBulkApprove}
+                                onPress={() => {
+                                    const acceptableCount = getAcceptableOrders().length;
+                                    if (acceptableCount === 0) {
+                                        Alert.alert(
+                                            "Cannot Accept Orders",
+                                            "Selected orders are already accepted or rejected and cannot be modified.",
+                                            [{ text: "OK", style: "default" }]
+                                        );
+                                        return;
+                                    }
+                                    handleBulkApprove();
+                                }}
                                 style={[styles.bulkApproveButton, smallButtonStyle]}
                                 labelStyle={[styles.bulkApproveButtonLabel, smallLabelStyle]}
                                 disabled={Object.keys(selectedOrderIds).length === 0}
@@ -542,7 +650,18 @@ const OrderAcceptAdmin = () => {
                             <Button
                                 mode="contained"
                                 compact={true}
-                                onPress={handleBulkReject}
+                                onPress={() => {
+                                    const rejectableCount = getRejectableOrders().length;
+                                    if (rejectableCount === 0) {
+                                        Alert.alert(
+                                            "Cannot Reject Orders",
+                                            "Selected orders are already accepted or rejected and cannot be modified.",
+                                            [{ text: "OK", style: "default" }]
+                                        );
+                                        return;
+                                    }
+                                    handleBulkReject();
+                                }}
                                 style={[styles.bulkRejectButton, smallButtonStyle]}
                                 labelStyle={[styles.bulkRejectButtonLabel, smallLabelStyle]}
                                 disabled={Object.keys(selectedOrderIds).length === 0}
@@ -631,6 +750,9 @@ const OrderAcceptAdmin = () => {
             ) : (
                 renderContent()
             )}
+            
+            {/* Toast Component */}
+            <Toast />
         </View>
     );
 };

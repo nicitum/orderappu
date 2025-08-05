@@ -51,7 +51,10 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         },
       });
 
-      const fetchedProducts = response.data.map((product) => ({
+      // Filter by enable_product - only show products with enable_product = "Yes"
+      const enabledProducts = response.data.filter(p => p.enable_product === "Yes");
+      
+      const fetchedProducts = enabledProducts.map((product) => ({
         ...product,
         imageUrl: product.image ? `${imageBaseUrl}${product.image}` : null, // Construct image URL
       }));
@@ -96,22 +99,13 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
       );
     }
 
-    // Apply GST calculations with safety checks
-    return filtered.map((product) => {
-      const basePrice = Number(product.discountPrice || product.price || 0);
-      const gstRate = Number(product.gst_rate || 0);
-      const gstAmount = (basePrice * gstRate) / 100;
-      const finalPrice = basePrice + gstAmount;
-
-      return {
-        ...product,
-        effectivePrice: Number(finalPrice) || 0,
-        price: Number(basePrice) || 0,
-        gstRate: Number(gstRate) || 0,
-        gstAmount: Number(gstAmount) || 0,
-        finalPrice: Number(finalPrice) || 0,
-      };
-    });
+    // Use discountPrice if available, else price
+    return filtered.map((product) => ({
+      ...product,
+      price: Number(product.discountPrice ?? product.price ?? 0),
+      gstRate: Number(product.gst_rate || 0),
+      discountPrice: Number(product.discountPrice ?? product.price ?? 0),
+    }));
   }, [searchQuery, selectedCategory, selectedBrand, allProducts]);
 
   useEffect(() => {
@@ -142,15 +136,14 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
   const handleStartEditProduct = (item) => {
     if (allowProductEdit) {
       setEditProduct(item);
-      setEditPrice((item.finalPrice || item.price || 0).toString());
+      setEditPrice((item.discountPrice ?? item.price ?? 0).toString());
       setEditQty('1');
       setEditModalVisible(true);
     } else {
       // Directly add with default price/qty
       onAddProduct({
         ...item,
-        price: item.finalPrice || item.price || 0,
-        finalPrice: item.finalPrice || item.price || 0,
+        price: item.discountPrice ?? item.price ?? 0,
         quantity: 1,
         min_selling_price: item.min_selling_price ?? item.minSellingPrice ?? 0,
         discountPrice: item.discountPrice ?? item.selling_price ?? item.price ?? 0,
@@ -179,7 +172,6 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
     onAddProduct({
       ...editProduct,
       price: priceNum,
-      finalPrice: priceNum,
       quantity: qtyNum,
       min_selling_price: minPrice,
       discountPrice: maxPrice,
@@ -224,7 +216,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
             )}
           </View>
           <Text style={styles.priceText}>
-            ₹{typeof item.finalPrice === 'number' ? item.finalPrice.toFixed(2) : "N/A"}
+            ₹{typeof item.price === 'number' ? item.price.toFixed(2) : "N/A"}
           </Text>
           <Text style={styles.priceText}>
             GST {item.gstRate || 0}%

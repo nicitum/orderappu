@@ -3,20 +3,20 @@ import { createStackNavigator } from '@react-navigation/stack';
 import ProfilePage from './profile';
 import OrdersPage from './OrdersPage';
 import DeliveryStatusUpdate from './DeliveryStatusUpdate';
-import UpdateOrderScreen from './UpdateOrders';
+
 
 import PlaceOrderAdmin from './PlaceOrderAdmin';
-import LoadingSlip from './LoadingSlip';
+
 
 import DailyOrdersReport from './DailyOrdersReport';
 import Remarks from './Remarks';
 
 import AutoOrderUpdate from './AutoOrderUpdate';
 
-import UpdateOrdersSA from './UpdateOrdersSA';
+
 
 import AutoOrderPage from './AutoOrderPage';
-import LoadingSlipSA from './LoadingSlipSA';
+
 
 import OrderTrackingScreen from './OrderTrackingScreen';
 
@@ -43,11 +43,7 @@ const ProfileStack = () => {
         options={{ title: 'Update Delivery Status' }} 
       />
 
-      <Stack.Screen 
-        name="UpdateOrders" 
-        component={UpdateOrderScreen} 
-        options={{ title: 'Edit/Update Orders' }} 
-      />
+     
 
      
 
@@ -60,12 +56,6 @@ const ProfileStack = () => {
       />
       
 
-      <Stack.Screen 
-        name="LoadingSlip" 
-        component={LoadingSlip} 
-        options={{ title: '' }} 
-        
-      />
 
 
 
@@ -95,12 +85,6 @@ const ProfileStack = () => {
 
     
 
-      <Stack.Screen 
-        name="UpdateOrdersSA" 
-        component={UpdateOrdersSA} 
-        options={{ title: 'Update Orders' }} 
-      />
-
 
     
 
@@ -113,14 +97,7 @@ const ProfileStack = () => {
       />
 
 
-      <Stack.Screen 
-        name="LoadingSlipSA"
-        component={LoadingSlipSA}
-        options={{ title: ' ' }} 
-      />
-
-
-
+      
       
       <Stack.Screen 
         name="AutoOrderUpdate"

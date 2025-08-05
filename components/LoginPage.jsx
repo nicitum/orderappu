@@ -37,6 +37,7 @@ const LoginPage = () => {
   const [clientImage, setClientImage] = useState(null);
   const [error, setError] = useState("");
   const passwordInput = useRef();
+  const [checkingSession, setCheckingSession] = useState(true);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -51,6 +52,8 @@ const LoginPage = () => {
         }
       } catch (e) {
         console.error('Error checking session:', e);
+      } finally {
+        setCheckingSession(false);
       }
     };
     checkSession();
@@ -199,8 +202,8 @@ const LoginPage = () => {
     }
   };
 
-  if (isLoading) {
-    return <LoadingIndicator />;
+  if (checkingSession) {
+    return <LoadingIndicator />; // Or any loading spinner
   }
 
   return (

@@ -7,7 +7,7 @@ const Stack = createStackNavigator();
 
 const CatalogueStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="Catalogue" component={Catalogue} />
+    <Stack.Screen name="CatalogueMain" component={Catalogue} />
     <Stack.Screen name="CartCustomer" component={CartCustomer} />
   </Stack.Navigator>
 );

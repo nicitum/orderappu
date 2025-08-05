@@ -45,7 +45,6 @@ const ReportsOwner = () => {
     navigation.navigate('OwnerOrderStatus');
   };
 
- 
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -87,20 +86,7 @@ const ReportsOwner = () => {
             </View>
           </TouchableOpacity>
 
-          {/* Sales Analytics Card */}
-          <TouchableOpacity style={styles.card} onPress={handleSalesAnalytics} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
-                <MaterialIcons name="analytics" size={24} color="#8B5CF6" />
-              </View>
-            </View>
-            <Text style={styles.cardTitle}>Sales Analytics</Text>
-            <Text style={styles.cardSubtitle}>Detailed sales reports and insights</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Coming soon</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
+       
 
         </View>
       </ScrollView>

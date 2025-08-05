@@ -79,30 +79,13 @@ const ProfilePage = ({ setIsLoggedIn }) => {
             onPress: () => navigation.navigate("OrderTrackingScreen")
         },
         
-        {
-            text: "Auto Order",
-            icon: <MaterialIcons name="autorenew" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("PlaceOrderAdmin")
-        },
-        {
-            text: "Collect Cash",
-            icon: <MaterialIcons name="attach-money" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("CollectCash")
-        },
         
-        {
-            text: "Loading Slip",
-            icon: <MaterialIcons name="insert-chart" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("LoadingSlip")
-        }
+        
+       
     ];
 
     const userItems = [
-        {
-            text: "Order History",
-            icon: <MaterialIcons name="history" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("Orders")
-        },
+       
         {
             text: "Shopping Cart",
             icon: <MaterialIcons name="shopping-cart" size={24} color="#003366" />,
@@ -122,57 +105,14 @@ const ProfilePage = ({ setIsLoggedIn }) => {
     ];
 
     const superAdminItems = [
-        {
-            text: "Order Acceptance",
-            icon: <MaterialIcons name="check-circle" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("OrderAcceptSA")
-        },
-        {
-            text: "Update/Edit Orders",
-            icon: <MaterialIcons name="edit-note" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("UpdateOrdersSA")
-        },
-        {
-            text: "Loading Slip",
-            icon: <MaterialIcons name="receipt-long" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("LoadingSlipSA")
-        },
-        {
-            text: "Invoice",
-            icon: <MaterialIcons name="receipt-long" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("InvoiceSA")
-        },
-        {
-            text: "Credit Limit",
-            icon: <MaterialIcons name="account-balance-wallet" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("CreditLimit")
-        },
+       
+    
         {
             text: "Remarks",
             icon: <MaterialIcons name="rate-review" size={24} color="#003366" />,
             onPress: () => navigation.navigate("Remarks")
         },
-        {
-            text: "Cash Collection",
-            icon: <MaterialIcons name="point-of-sale" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("CollectCashSA")
-        },
-        
-        {
-            text: "Outstanding Report",
-            icon: <MaterialIcons name="pending-actions" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("AmountDueReport")
-        },
-        {
-            text: "Auto Order",
-            icon: <MaterialIcons name="schedule" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("AutoOrderPage")
-        },
-        {
-            text: "Auto Order Update",
-            icon: <MaterialIcons name="update" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("AutoOrderUpdate")
-        }
+       
     ];
 
     return (

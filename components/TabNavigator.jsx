@@ -44,13 +44,19 @@ const TabNavigator = () => {
             
             const clientStatusData = await clientStatusResponse.json();
             
-            if (!clientStatusResponse.ok || !clientStatusData.success || !clientStatusData.data.length || clientStatusData.data[0].status !== "Active") {
-                await AsyncStorage.removeItem("userAuthToken");
-                navigation.replace("Login");
+            if (clientStatusResponse.ok && clientStatusData.success && clientStatusData.data.length) {
+                if (clientStatusData.data[0].status !== "Active") {
+                    await AsyncStorage.removeItem("userAuthToken");
+                    navigation.replace("Login");
+                }
+            } else {
+                // API error: do NOT log out, maybe show a warning/toast
+                // Optionally: set a state to show a warning in the UI
+                console.warn("Could not verify client status, but not logging out.");
             }
         } catch (error) {
-            await AsyncStorage.removeItem("userAuthToken");
-            navigation.replace("Login");
+            // Network or other error: do NOT log out
+            console.warn("Error checking client status, but not logging out:", error);
         }
     };
 

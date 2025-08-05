@@ -211,6 +211,10 @@ const Catalogue = () => {
 
   useEffect(() => {
     let filtered = products;
+    
+    // Filter by enable_product - only show products with enable_product = "Yes"
+    filtered = filtered.filter(p => p.enable_product === "Yes");
+    
     if (selectedCategoryId !== 'All') {
       filtered = filtered.filter(p => p.category === selectedCategoryId);
     }
@@ -347,7 +351,9 @@ const Catalogue = () => {
   const renderProduct = ({ item }) => {
     const quantityInCart = cart[item.id] || 0;
     const imageUri = `http://${ipAddress}:8091/images/products/${item.image}`;
-
+    // Remove GST calculation: just use discountPrice and price as-is
+    const discountPrice = Number(item.discountPrice) || 0;
+    const price = Number(item.price) || 0;
     return (
       <View style={styles.productCardContainer}>
         <TouchableOpacity
@@ -376,48 +382,11 @@ const Catalogue = () => {
           <Text style={styles.productNameLarge} numberOfLines={2}>{item.name}</Text>
           {item.size ? <Text style={styles.productVolume}>{item.size}</Text> : null}
           <View style={styles.priceContainer}>
-            {priceModeLoading ? (
-              <ActivityIndicator size="small" color="#003366" />
-            ) : (
-              (() => {
-                // Normalize priceMode for robust matching
-                const mode = (priceMode || '').toLowerCase().replace(/\s|_/g, '');
-                if (mode === 'mrp' && item.price) {
-                  return <Text style={styles.currentPrice}>{formatCurrency(item.price)}</Text>;
-                } else if ((mode === 'sellingprice' || mode === 'discountprice') && item.discountPrice) {
-                  return <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>;
-                } else if (
-                  mode === 'both' ||
-                  mode === 'mrpandsellingprice' ||
-                  mode === 'mrpanddiscountprice' ||
-                  mode === 'mrpandselling' ||
-                  mode === 'mrpanddiscount' ||
-                  mode === 'mrpandsellingpriceboth' ||
-                  mode === 'mrpanddiscountpriceboth'
-                ) {
-                  return <>
-                    {item.price && (
-                      <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
-                    )}
-                    {item.discountPrice && (
-                      <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
-                    )}
-                  </>;
-                } else if (item.price && item.discountPrice) {
-                  // Fallback: if both prices exist and mode is not strictly MRP or sellingprice, show both
-                  return <>
-                    <Text style={styles.originalPrice}>{formatCurrency(item.price)}</Text>
-                    <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>
-                  </>;
-                } else if (item.discountPrice) {
-                  return <Text style={styles.currentPrice}>{formatCurrency(item.discountPrice)}</Text>;
-                } else if (item.price) {
-                  return <Text style={styles.currentPrice}>{formatCurrency(item.price)}</Text>;
-                } else {
-                  return null;
-                }
-              })()
-            )}
+            {/* Show MRP scratched, then Selling Price, no GST calculation */}
+            {item.price ? (
+              <Text style={styles.originalPrice}>{formatCurrency(price)}</Text>
+            ) : null}
+            <Text style={styles.currentPrice}>{formatCurrency(discountPrice)}</Text>
           </View>
           {quantityInCart === 0 ? (
             <TouchableOpacity
@@ -485,6 +454,9 @@ const Catalogue = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <View style={{padding: 8, backgroundColor: '#eafaf1', alignItems: 'center'}}>
+        <Text style={{color: '#059669', fontSize: 13, fontWeight: 'bold'}}>All prices include GST</Text>
+      </View>
      
 
       <View style={styles.mainContainer}>

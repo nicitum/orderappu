@@ -118,12 +118,16 @@ const CartCustomer = ({ hideHeader = false }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setProducts(data);
-        setFilteredProducts(data);
         
-        // Extract unique brands and categories
-        const uniqueBrands = ['All', ...new Set(data.map(p => p.brand))];
-        const uniqueCategories = ['All', ...new Set(data.map(p => p.category))];
+        // Filter by enable_product - only show products with enable_product = "Yes"
+        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        
+        setProducts(enabledProducts);
+        setFilteredProducts(enabledProducts);
+        
+        // Extract unique brands and categories from enabled products only
+        const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
+        const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
         setBrands(uniqueBrands);
         setCategories(uniqueCategories);
       }
@@ -198,11 +202,13 @@ const CartCustomer = ({ hideHeader = false }) => {
     }
   };
 
+  // Update total calculation to use only discountPrice
   const calculateTotalAmount = () => {
     return Object.entries(cart).reduce((sum, [productId, quantity]) => {
       const item = cartProducts.find(i => i.id === parseInt(productId));
       if (!item || !item.discountPrice) return sum;
-      return sum + item.discountPrice * quantity;
+      const discountPrice = Number(item.discountPrice) || 0;
+      return sum + discountPrice * quantity;
     }, 0);
   };
 
@@ -223,10 +229,11 @@ const CartCustomer = ({ hideHeader = false }) => {
 
       const orderItems = Object.entries(cart).map(([productId, quantity]) => {
         const item = cartProducts.find(i => i.id === parseInt(productId));
+        const discountPrice = Number(item.discountPrice) || 0;
         return {
           product_id: parseInt(productId),
           quantity: quantity,
-          price: item && item.discountPrice ? item.discountPrice : 0
+          price: discountPrice
         };
       });
 
@@ -250,6 +257,9 @@ const CartCustomer = ({ hideHeader = false }) => {
       const data = await response.json();
 
       if (response.ok) {
+        // Clear cart before navigating
+        setCart({});
+        await AsyncStorage.removeItem('catalogueCart');
         Alert.alert(
           'Success',
           'Order placed successfully!',
@@ -280,7 +290,10 @@ const CartCustomer = ({ hideHeader = false }) => {
     if (!quantity) return null; // Only skip rendering if quantity is explicitly unset, not if it's 0
     
     const imageUrl = item.image ? { uri: `http://${ipAddress}:8091/images/products/${item.image}` } : null;
-    const totalPrice = item.discountPrice ? item.discountPrice * quantity : 0;
+    // Remove GST calculation: just use discountPrice and price as-is
+    const discountPrice = Number(item.discountPrice) || 0;
+    const price = Number(item.price) || 0;
+    const totalPrice = discountPrice * quantity;
 
     return (
       <View style={styles.cartItemContainer}>
@@ -301,10 +314,13 @@ const CartCustomer = ({ hideHeader = false }) => {
         
         <View style={styles.cartItemDetails}>
           <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
+          {/* Show MRP scratched, then Selling Price, no GST calculation */}
+          {item.price ? (
+            <Text style={styles.originalPrice}>{formatCurrency(price)}</Text>
+          ) : null}
           <Text style={styles.cartItemPrice}>
-            {formatCurrency(item.discountPrice || 0)} x {quantity} = {formatCurrency(totalPrice)}
+            {formatCurrency(discountPrice)} x {quantity} = {formatCurrency(totalPrice)}
           </Text>
-          
           <View style={styles.quantityContainer}>
             <TouchableOpacity 
               style={styles.quantityButton} 
@@ -313,7 +329,6 @@ const CartCustomer = ({ hideHeader = false }) => {
             >
               <Icon name="remove" size={18} color={COLORS.text.light} />
             </TouchableOpacity>
-            
             <TextInput
               style={styles.quantityInput}
               value={quantity.toString()}
@@ -321,9 +336,8 @@ const CartCustomer = ({ hideHeader = false }) => {
               onBlur={() => handleQuantityBlur(item.id, quantity.toString())}
               keyboardType="numeric"
               selectTextOnFocus={true}
-              maxLength={3} // Ensure the quantity input field is always fully highlighted when touched for editing
+              maxLength={3}
             />
-            
             <TouchableOpacity 
               style={styles.quantityButton} 
               onPress={() => handleIncreaseQuantity(item.id)}
@@ -512,7 +526,7 @@ const CartCustomer = ({ hideHeader = false }) => {
             
             <View style={styles.footerContainer}>
               <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total Amount:</Text>
+                <Text style={styles.totalLabel}>Total Amount (incl. GST):</Text>
                 <Text style={styles.totalAmount}>{formatCurrency(totalAmount)}</Text>
               </View>
               
@@ -777,6 +791,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text.secondary,
     marginBottom: 8,
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: COLORS.text.tertiary,
+    textDecorationLine: 'line-through',
+    marginBottom: 4,
   },
   quantityContainer: {
     flexDirection: 'row',

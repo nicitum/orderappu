@@ -379,7 +379,7 @@ const OrderAcceptOwner = () => {
               <Icon name="account-circle" size={32} color={COLORS.primary} />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{item.name}</Text>
+              <Text style={styles.userName}>{item.username}</Text>
               {/* Route and Phone side by side */}
               <View style={styles.userMetaRowHorizontal}>
                 <Text style={styles.userMetaText}>{item.route || 'N/A'}</Text>

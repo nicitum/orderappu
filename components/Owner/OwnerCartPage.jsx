@@ -104,39 +104,48 @@ const OwnerCartPage = () => {
         customer_id: route.params.customer.customer_id || route.params.customer.cust_id,
         name: route.params.customer.name || route.params.customer.customer_name || ''
       });
+      // Save to AsyncStorage as well
+      AsyncStorage.setItem('ownerCartCustomer', JSON.stringify({
+        customer_id: route.params.customer.customer_id || route.params.customer.cust_id,
+        name: route.params.customer.name || route.params.customer.customer_name || ''
+      }));
+    } else {
+      // Try to load from AsyncStorage if not in params
+      AsyncStorage.getItem('ownerCartCustomer').then(savedCustomer => {
+        if (savedCustomer) {
+          setSelectedCustomer(JSON.parse(savedCustomer));
+        }
+      });
     }
     if (route.params?.products) {
-      route.params.products.forEach(product => {
-        addToCart({
-          product_id: product.product_id,
-          id: product.product_id,
-          name: product.name,
-          price: product.price,
-          quantity: product.quantity,
-          image: product.image || null,
-          category: product.category || '',
-          gst_rate: product.gst_rate || 0
-        });
-      });
+      // Replace the cart with these products (for Edit and Reorder)
+      const newCart = route.params.products.map(product => ({
+        ...product,
+        product_id: product.product_id || product.id,
+        quantity: product.quantity || 1
+      }));
+      setCartItems(newCart);
+      // Save to AsyncStorage as well
+      AsyncStorage.setItem('ownerCart', JSON.stringify(newCart));
     }
   }, [route.params]);
 
   const loadCartFromStorage = async () => {
     try {
-      const savedCart = await AsyncStorage.getItem('adminCart');
+      const savedCart = await AsyncStorage.getItem('ownerCart');
       if (savedCart) {
         setCartItems(JSON.parse(savedCart));
       }
     } catch (error) {
-      console.error('Error loading admin cart:', error);
+      console.error('Error loading owner cart:', error);
     }
   };
 
   const saveCartToStorage = async () => {
     try {
-      await AsyncStorage.setItem('adminCart', JSON.stringify(cartItems));
+      await AsyncStorage.setItem('ownerCart', JSON.stringify(cartItems));
     } catch (error) {
-      console.error('Error saving admin cart:', error);
+      console.error('Error saving owner cart:', error);
     }
   };
 
@@ -287,12 +296,16 @@ const OwnerCartPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setProducts(data);
-        setFilteredProducts(data);
         
-        // Extract unique brands and categories
-        const uniqueBrands = ['All', ...new Set(data.map(p => p.brand))];
-        const uniqueCategories = ['All', ...new Set(data.map(p => p.category))];
+        // Filter by enable_product - only show products with enable_product = "Yes"
+        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        
+        setProducts(enabledProducts);
+        setFilteredProducts(enabledProducts);
+        
+        // Extract unique brands and categories from enabled products only
+        const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
+        const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
         setBrands(uniqueBrands);
         setCategories(uniqueCategories);
       }
@@ -311,13 +324,8 @@ const OwnerCartPage = () => {
   };
 
   const placeOrder = async () => {
-    Toast.show({ type: 'info', text1: 'DEBUG', text2: 'PlaceOrder called' });
-    console.log('DEBUG: placeOrder called', { cartItems, selectedCustomer, params: route.params });
-    if (!selectedCustomer && route.params?.customer) {
-      setSelectedCustomer(route.params.customer);
-      Toast.show({ type: 'info', text1: 'DEBUG', text2: 'selectedCustomer set from params' });
-      return; // Let the next button press work
-    }
+    
+ 
     if (cartItems.length === 0) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Please add products to the order' });
       return;
@@ -391,6 +399,8 @@ const OwnerCartPage = () => {
     const productData = products.find(p => p.id === item.product_id || p.id === item.id);
     const imageUri = (productData?.image || item.image) ? 
       `http://${ipAddress}:8091/images/products/${productData?.image || item.image}` : null;
+    // Use discountPrice if available, else price
+    const displayPrice = item.discountPrice ?? item.price ?? 0;
 
     return (
       <View style={styles.cartItemCard}>
@@ -411,13 +421,14 @@ const OwnerCartPage = () => {
           
           <View style={styles.cartItemDetails}>
             <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.cartItemPrice}>₹{item.price}</Text>
+            <Text style={styles.cartItemTotalLineBold}>₹{item.price} x {item.quantity || 1} = ₹{(item.quantity || 1) * item.price}</Text>
+            <Text style={styles.cartItemPrice}>GST {item.gst_rate || 0}%</Text>
             {item.size && <Text style={styles.cartItemVolume}>{item.size}</Text>}
             <TouchableOpacity 
               style={styles.editButton}
               onPress={() => {
                 setEditCartProduct(item);
-                setEditCartPrice(item.price.toString());
+                setEditCartPrice((item.discountPrice ?? item.price ?? 0).toString());
                 setEditCartQty(item.quantity.toString());
                 setEditCartModalVisible(true);
               }}
@@ -459,6 +470,7 @@ const OwnerCartPage = () => {
   const renderProductItem = ({ item }) => {
     const imageUri = item.image ? `http://${ipAddress}:8091/images/products/${item.image}` : null;
     const isInCart = cartItems.some(cartItem => cartItem.product_id === item.id);
+    const displayPrice = item.discountPrice ?? item.price ?? 0;
 
     return (
       <TouchableOpacity
@@ -479,10 +491,10 @@ const OwnerCartPage = () => {
             </View>
           )}
         </View>
-        
         <View style={styles.productDetails}>
           <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productPrice}>₹{item.price}</Text>
+          <Text style={styles.productPrice}>₹{displayPrice}</Text>
+          <Text style={styles.productPrice}>GST {item.gst_rate || 0}%</Text>
           {item.size && <Text style={styles.productVolume}>{item.size}</Text>}
           {isInCart && (
             <View style={styles.inCartIndicator}>
@@ -569,7 +581,7 @@ const OwnerCartPage = () => {
         >
           <Icon name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin Cart</Text>
+        <Text style={styles.headerTitle}>Owner Cart</Text>
         <TouchableOpacity
           style={styles.clearButton}
           onPress={clearCartHandler}
@@ -863,6 +875,17 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text.primary,
     marginBottom: 4,
+  },
+  cartItemTotalLine: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    marginBottom: 2,
+  },
+  cartItemTotalLineBold: {
+    fontSize: 15,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   cartItemPrice: {
     fontSize: 14,

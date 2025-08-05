@@ -36,6 +36,8 @@ const TransactionsAdmin = () => {
   const navigation = useNavigation();
   const [allowPlaceOrder, setAllowPlaceOrder] = useState(false);
   const [allowInvoicing, setAllowInvoicing] = useState(false);
+  const [allowOrderAcceptance, setAllowOrderAcceptance] = useState(false);
+  const [allowEditOrder, setAllowEditOrder] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -63,15 +65,23 @@ const TransactionsAdmin = () => {
         setAllowPlaceOrder(user.allow_place_order === 'Yes');
         // Set allowInvoicing based on userDetails API response
         setAllowInvoicing(user.allow_invoicing === 'Yes');
+        // Set allowOrderAcceptance based on userDetails API response
+        setAllowOrderAcceptance(user.allow_order_acceptance === 'Yes');
+        // Set allowEditOrder based on userDetails API response
+        setAllowEditOrder(user.allow_edit_order === 'Yes');
       } else {
         setAllowPlaceOrder(false);
         setAllowInvoicing(false);
+        setAllowOrderAcceptance(false);
+        setAllowEditOrder(false);
       }
     } catch (error) {
       console.error('Error fetching user details:', error);
       // Default to false if API fails
       setAllowPlaceOrder(false);
       setAllowInvoicing(false);
+      setAllowOrderAcceptance(false);
+      setAllowEditOrder(false);
     }
   };
 
@@ -87,6 +97,10 @@ const TransactionsAdmin = () => {
     navigation.navigate('OrderAcceptAdmin');
   };
 
+  const handleOrderUpdate = () => {
+    navigation.navigate('AdminOrderUpdate');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
@@ -97,20 +111,48 @@ const TransactionsAdmin = () => {
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           
+          {/* Check if any transaction options are enabled */}
+          {!allowOrderAcceptance && !allowEditOrder && !allowPlaceOrder && !allowInvoicing ? (
+            <View style={styles.noOptionsContainer}>
+              <MaterialIcons name="block" size={60} color={COLORS.text.secondary} />
+              <Text style={styles.noOptionsTitle}>No Transaction Options Available</Text>
+              <Text style={styles.noOptionsSubtitle}>Please contact your Owner to get access to transaction features.</Text>
+            </View>
+          ) : (
+            <>
           {/* Order Acceptance Card */}
-          <TouchableOpacity style={styles.card} onPress={handleOrderAcceptance} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#DBEAFE' }]}>
-                <MaterialIcons name="assignment-turned-in" size={24} color="#2563EB" />
+          {allowOrderAcceptance && (
+            <TouchableOpacity style={styles.card} onPress={handleOrderAcceptance} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#DBEAFE' }]}>
+                  <MaterialIcons name="assignment-turned-in" size={24} color="#2563EB" />
+                </View>
               </View>
-            </View>
-            <Text style={styles.cardTitle}>Order Acceptance</Text>
-            <Text style={styles.cardSubtitle}>View and manage order acceptance</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Go to status</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
+              <Text style={styles.cardTitle}>Order Acceptance</Text>
+              <Text style={styles.cardSubtitle}>View and manage order acceptance</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardAction}>Go to status</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Order Update Card */}
+          {allowEditOrder && (
+            <TouchableOpacity style={styles.card} onPress={handleOrderUpdate} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                  <MaterialIcons name="edit" size={24} color="#F59E0B" />
+                </View>
+              </View>
+              <Text style={styles.cardTitle}>Update Orders</Text>
+              <Text style={styles.cardSubtitle}>Edit and modify existing orders</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardAction}>Manage orders</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Place Order Card - Only show if user has permission */}
           {allowPlaceOrder && (
@@ -144,6 +186,8 @@ const TransactionsAdmin = () => {
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
+          )}
+            </>
           )}
 
         </View>
@@ -235,6 +279,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
+  },
+  noOptionsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  noOptionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noOptionsSubtitle: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
   },
 });
 

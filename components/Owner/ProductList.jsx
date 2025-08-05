@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { ipAddress } from "../../services/urls";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
 
 const ProductsComponent = () => {
@@ -30,9 +30,12 @@ const ProductsComponent = () => {
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // Always refresh products when focused (like Catalogue.jsx)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchProducts();
+    }, [])
+  );
 
   const fetchProducts = async () => {
     try {
@@ -40,10 +43,15 @@ const ProductsComponent = () => {
       const response = await fetch(`http://${ipAddress}:8091/products`);
       const data = await response.json();
       if (response.ok) {
-        setProducts(data);
-        setFilteredProducts(data);
-        setBrands(["All", ...new Set(data.map((product) => product.brand))]);
-        setCategories(["All", ...new Set(data.map((product) => product.category))]);
+        // Filter by enable_product - only show products with enable_product = "Yes"
+        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        
+        setProducts(enabledProducts);
+        setFilteredProducts(enabledProducts);
+        
+        // Extract unique brands and categories from enabled products only
+        setBrands(["All", ...new Set(enabledProducts.map((product) => product.brand))]);
+        setCategories(["All", ...new Set(enabledProducts.map((product) => product.category))]);
       } else {
         Alert.alert("Error", "Failed to fetch products");
       }
@@ -55,8 +63,9 @@ const ProductsComponent = () => {
     }
   };
 
-  const filterProducts = () => {
+  useEffect(() => {
     let filtered = products;
+    
     if (searchTerm) {
       filtered = filtered.filter((product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -69,11 +78,7 @@ const ProductsComponent = () => {
       filtered = filtered.filter((product) => product.brand === selectedBrand);
     }
     setFilteredProducts(filtered);
-  };
-
-  useEffect(() => {
-    filterProducts();
-  }, [searchTerm, selectedCategory, selectedBrand]);
+  }, [searchTerm, selectedCategory, selectedBrand, products]);
 
   const renderProduct = ({ item }) => {
     const imageUri = `http://${ipAddress}:8091/images/products/${item.image}`;

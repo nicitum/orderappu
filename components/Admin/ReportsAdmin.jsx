@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform, ScrollView } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ipAddress } from '../../services/urls';
 
 const COLORS = {
   primary: "#003366",
@@ -31,6 +34,46 @@ const COLORS = {
 
 const ReportsAdmin = () => {
   const navigation = useNavigation();
+  const [allowOrderSummary, setAllowOrderSummary] = useState(false);
+  const [allowOrderStatus, setAllowOrderStatus] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserPermissions();
+    }, [])
+  );
+
+  const fetchUserPermissions = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userAuthToken');
+      if (!token) return;
+
+      const response = await fetch(`http://${ipAddress}:8091/userDetails`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const user = data.user;
+        
+        // Set allowOrderSummary based on userDetails API response
+        setAllowOrderSummary(user.allow_order_summary === 'Yes');
+        // Set allowOrderStatus based on userDetails API response
+        setAllowOrderStatus(user.allow_order_status === 'Yes');
+      } else {
+        setAllowOrderSummary(false);
+        setAllowOrderStatus(false);
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      // Default to false if API fails
+      setAllowOrderSummary(false);
+      setAllowOrderStatus(false);
+    }
+  };
 
   const handleOrderHistory = () => {
     navigation.navigate('AdminOrderHistory');
@@ -40,11 +83,9 @@ const ReportsAdmin = () => {
     navigation.navigate('AdminOrderStatus');
   };
 
-  const handleSalesAnalytics = () => {
-    // TODO: Implement Sales Analytics
-    console.log('Sales Analytics coming soon');
-  };
+  
 
+  
  
 
   return (
@@ -57,50 +98,50 @@ const ReportsAdmin = () => {
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           
+          {/* Check if any reporting options are enabled */}
+          {!allowOrderSummary && !allowOrderStatus ? (
+            <View style={styles.noOptionsContainer}>
+              <MaterialIcons name="report-problem" size={60} color={COLORS.text.secondary} />
+              <Text style={styles.noOptionsTitle}>No Reporting Options Available</Text>
+              <Text style={styles.noOptionsSubtitle}>Please contact your Owner to get access to reporting features.</Text>
+            </View>
+          ) : (
+            <>
           {/* Order History Card */}
-          <TouchableOpacity style={styles.card} onPress={handleOrderHistory} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
-                <MaterialIcons name="history" size={24} color="#F59E0B" />
-              </View>  
-            </View>
-            <Text style={styles.cardTitle}>Order Summary</Text>
-            <Text style={styles.cardSubtitle}>View all order history and reports</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View history</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
+          {allowOrderSummary && (
+            <TouchableOpacity style={styles.card} onPress={handleOrderHistory} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                  <MaterialIcons name="history" size={24} color="#F59E0B" />
+                </View>  
+              </View>
+              <Text style={styles.cardTitle}>Order Summary</Text>
+              <Text style={styles.cardSubtitle}>View all order history and reports</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardAction}>View history</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Order Status Card */}
-          <TouchableOpacity style={styles.card} onPress={handleOrderStatus} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
-                <MaterialIcons name="assignment" size={24} color="#0288D1" />
+          {allowOrderStatus && (
+            <TouchableOpacity style={styles.card} onPress={handleOrderStatus} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
+                  <MaterialIcons name="assignment" size={24} color="#0288D1" />
+                </View>
               </View>
-            </View>
-            <Text style={styles.cardTitle}>Order Status</Text>
-            <Text style={styles.cardSubtitle}>Track order status and delivery information</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View status</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Sales Analytics Card */}
-          <TouchableOpacity style={styles.card} onPress={handleSalesAnalytics} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
-                <MaterialIcons name="analytics" size={24} color="#8B5CF6" />
+              <Text style={styles.cardTitle}>Order Status</Text>
+              <Text style={styles.cardSubtitle}>Track order status and delivery information</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardAction}>View status</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
-            </View>
-            <Text style={styles.cardTitle}>Sales Analytics</Text>
-            <Text style={styles.cardSubtitle}>Detailed sales reports and insights</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Coming soon</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+            </>
+          )}
 
         </View>
       </ScrollView>
@@ -190,6 +231,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
+  },
+  noOptionsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  noOptionsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noOptionsSubtitle: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
   },
 });
 

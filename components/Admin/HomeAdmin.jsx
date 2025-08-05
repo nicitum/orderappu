@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   carouselContainer: {
     marginBottom: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
     ...Platform.select({
@@ -306,15 +306,20 @@ const styles = StyleSheet.create({
     }),
   },
   scrollViewContent: {
+    flexGrow: 1,
     alignItems: 'center',
   },
   carouselItem: {
     width: '100%',
-    aspectRatio: 16/9,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
   },
   carouselImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'contain',
     backgroundColor: COLORS.background,
   },
   refreshButton: {

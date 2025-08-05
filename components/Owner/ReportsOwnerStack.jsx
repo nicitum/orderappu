@@ -19,6 +19,7 @@ const ReportsOwnerStack = () => (
     <Stack.Screen name="OrderHistoryOwner" component={OrderHistoryOwner} />
     <Stack.Screen name="OwnerCartPage" component={OwnerCartPage} />
     <Stack.Screen name="OwnerOrderStatus" component={OwnerOrderStatus} />
+
   </Stack.Navigator>
 );
 

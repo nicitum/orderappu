@@ -44,37 +44,36 @@ const ReportsCustomer = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
-      
       {/* Content */}
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {/* Order History Card */}
-          <TouchableOpacity style={styles.card} onPress={handleOrderHistory} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
-                <MaterialIcons name="history" size={24} color="#8B5CF6" />
+          <TouchableOpacity style={styles.smallCard} onPress={handleOrderHistory} activeOpacity={0.8}>
+            <View style={styles.cardHeaderSmall}>
+              <View style={[styles.iconContainerSmall, { backgroundColor: '#F3E8FF' }]}> 
+                <MaterialIcons name="history" size={20} color="#8B5CF6" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Order History</Text>
-            <Text style={styles.cardSubtitle}>View all your past orders</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View history</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            <Text style={styles.cardTitleSmall}>Order History</Text>
+            <Text style={styles.cardSubtitleSmall}>View all your past orders</Text>
+            <View style={styles.cardFooterSmall}>
+              <Text style={styles.cardActionSmall}>View history</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
 
           {/* Invoice Display Card */}
-          <TouchableOpacity style={styles.card} onPress={handleInvoiceDisplay} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
-                <MaterialIcons name="receipt" size={24} color="#F59E0B" />
+          <TouchableOpacity style={styles.smallCard} onPress={handleInvoiceDisplay} activeOpacity={0.8}>
+            <View style={styles.cardHeaderSmall}>
+              <View style={[styles.iconContainerSmall, { backgroundColor: '#FEF3C7' }]}> 
+                <MaterialIcons name="receipt" size={20} color="#F59E0B" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Invoice Display</Text>
-            <Text style={styles.cardSubtitle}>View all your invoices</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View invoices</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            <Text style={styles.cardTitleSmall}>Invoice Display</Text>
+            <Text style={styles.cardSubtitleSmall}>View all your invoices</Text>
+            <View style={styles.cardFooterSmall}>
+              <Text style={styles.cardActionSmall}>View invoices</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -166,6 +165,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
+  smallCard: { backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, marginBottom: 12, ...Platform.select({ ios: { shadowColor: COLORS.card.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, }, android: { elevation: 2, }, }), },
+  cardHeaderSmall: { marginBottom: 8, },
+  iconContainerSmall: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', },
+  cardTitleSmall: { fontSize: 15, fontWeight: '600', color: COLORS.text.primary, marginBottom: 2, },
+  cardSubtitleSmall: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 16, marginBottom: 8, },
+  cardFooterSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.border, },
+  cardActionSmall: { fontSize: 12, fontWeight: '500', color: COLORS.text.secondary, },
 });
 
 export default ReportsCustomer; 

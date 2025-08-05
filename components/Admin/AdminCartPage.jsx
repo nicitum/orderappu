@@ -299,12 +299,16 @@ const AdminCartPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setProducts(data);
-        setFilteredProducts(data);
         
-        // Extract unique brands and categories
-        const uniqueBrands = ['All', ...new Set(data.map(p => p.brand))];
-        const uniqueCategories = ['All', ...new Set(data.map(p => p.category))];
+        // Filter by enable_product - only show products with enable_product = "Yes"
+        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        
+        setProducts(enabledProducts);
+        setFilteredProducts(enabledProducts);
+        
+        // Extract unique brands and categories from enabled products only
+        const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
+        const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
         setBrands(uniqueBrands);
         setCategories(uniqueCategories);
       }
@@ -323,13 +327,8 @@ const AdminCartPage = () => {
   };
 
   const placeOrder = async () => {
-    Toast.show({ type: 'info', text1: 'DEBUG', text2: 'PlaceOrder called' });
-    console.log('DEBUG: placeOrder called', { cartItems, selectedCustomer, params: route.params });
-    if (!selectedCustomer && route.params?.customer) {
-      setSelectedCustomer(route.params.customer);
-      Toast.show({ type: 'info', text1: 'DEBUG', text2: 'selectedCustomer set from params' });
-      return; // Let the next button press work
-    }
+   
+  
     if (cartItems.length === 0) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Please add products to the order' });
       return;
@@ -670,7 +669,8 @@ const AdminCartPage = () => {
         isVisible={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         onAddProduct={(product) => {
-          addToCart({ ...product, product_id: product.id, quantity: 1 });
+          // Use the quantity provided by the modal, fallback to 1 if not present
+          addToCart({ ...product, product_id: product.id, quantity: product.quantity ?? 1 });
           setShowSearchModal(false);
           Toast.show({
             type: 'success',

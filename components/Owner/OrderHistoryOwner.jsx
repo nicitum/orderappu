@@ -10,6 +10,7 @@ import {
     Platform,
     ToastAndroid,
     Image,
+    Modal,
 } from "react-native";
 import axios from "axios";
 import { ipAddress } from "../../services/urls";
@@ -34,6 +35,12 @@ const OrderHistoryOwner = ({ route }) => {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [allProductsData, setAllProductsData] = useState([]);
     const [customerNames, setCustomerNames] = useState({});
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [selectedFilters, setSelectedFilters] = useState({
+      delivery: 'All',
+      cancelled: 'All',
+      acceptance: 'All'
+    });
 
     // Get navigation parameters
     const expandedOrderId = route?.params?.expandedOrderId;
@@ -56,6 +63,60 @@ const OrderHistoryOwner = ({ route }) => {
         hideDatePicker();
         setSelectedDate(date);
         fetchOrders(date);
+    };
+
+    const getFilteredOrders = () => {
+      return orders.filter(order => {
+        // Delivery filter
+        if (selectedFilters.delivery !== 'All' && order.delivery_status !== selectedFilters.delivery) {
+          return false;
+        }
+        
+        // Cancelled filter
+        if (selectedFilters.cancelled !== 'All') {
+          const isCancelled = order.cancelled === 'Yes';
+          if (selectedFilters.cancelled === 'Cancelled' && !isCancelled) {
+            return false;
+          }
+          if (selectedFilters.cancelled === 'Active' && isCancelled) {
+            return false;
+          }
+        }
+        
+        // Acceptance filter
+        if (selectedFilters.acceptance !== 'All') {
+          if (selectedFilters.acceptance === 'Accepted' && order.approve_status !== 'Accepted') {
+            return false;
+          }
+          if (selectedFilters.acceptance === 'Rejected' && order.approve_status !== 'Rejected') {
+            return false;
+          }
+          if (selectedFilters.acceptance === 'Pending' && order.approve_status !== 'Pending' && order.approve_status !== null && order.approve_status !== undefined) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
+    };
+
+    const handleFilterChange = (filterType, value) => {
+      setSelectedFilters(prev => ({
+        ...prev,
+        [filterType]: value
+      }));
+    };
+
+    const clearAllFilters = () => {
+      setSelectedFilters({
+        delivery: 'All',
+        cancelled: 'All',
+        acceptance: 'All'
+      });
+    };
+
+    const getActiveFiltersCount = () => {
+      return Object.values(selectedFilters).filter(value => value !== 'All').length;
     };
 
     const fetchOrders = useCallback(async (dateFilter) => {
@@ -125,6 +186,7 @@ const OrderHistoryOwner = ({ route }) => {
     // Function to fetch customer name by customer ID (fallback)
     const fetchCustomerName = async (customerId) => {
         try {
+            console.log(`Fetching customer name for ID: ${customerId}`);
             const token = await AsyncStorage.getItem("userAuthToken");
             const response = await fetch(`http://${ipAddress}:8091/fetch-names?customer_id=${customerId}`, {
                 headers: {
@@ -133,56 +195,33 @@ const OrderHistoryOwner = ({ route }) => {
                 },
             });
             if (!response.ok) {
-                console.error(`Failed to fetch customer name for ID ${customerId}`);
+                console.error(`Failed to fetch customer name for ID ${customerId}, Status: ${response.status}`);
                 return null;
             }
             const data = await response.json();
-            return data.name;
+            console.log(`Customer name response for ID ${customerId}:`, data);
+            
+            // Check different possible response formats
+            const customerName = data.username || data.name || data.customer_name || data.customerName || data.Name || data.NAME;
+            console.log(`Extracted customer name for ID ${customerId}:`, customerName);
+            return customerName;
         } catch (error) {
             console.error(`Error fetching customer name for ID ${customerId}:`, error);
             return null;
         }
     };
 
-    // Fetch customer names for all orders
-    const fetchCustomerNamesForOrders = async (ordersList) => {
-        try {
-            // Get unique customer IDs
-            const uniqueCustomerIds = [...new Set(
-                ordersList
-                    .map(order => order.customer_id)
-                    .filter(id => id)
-            )];
-            if (uniqueCustomerIds.length === 0) return;
-            const token = await AsyncStorage.getItem("userAuthToken");
-            if (!token) return;
-            // Try bulk API first
-            const customerIdsParam = uniqueCustomerIds.join(',');
-            const response = await fetch(`http://${ipAddress}:8091/fetch-names-bulk?customer_ids=${customerIdsParam}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.names) {
-                    setCustomerNames(prev => ({ ...prev, ...data.names }));
-                }
-            } else {
-                // Fallback to individual calls
-                const names = {};
-                for (const customerId of uniqueCustomerIds) {
-                    const name = await fetchCustomerName(customerId);
-                    if (name) {
-                        names[customerId] = name;
-                    }
-                }
-                setCustomerNames(prev => ({ ...prev, ...names }));
-            }
-        } catch (error) {
-            console.error('Error fetching customer names:', error);
+    // Simple function to get customer name and cache it
+    const getCustomerName = async (customerId) => {
+        if (customerNames[customerId]) {
+            return customerNames[customerId];
         }
+        
+        const name = await fetchCustomerName(customerId);
+        if (name) {
+            setCustomerNames(prev => ({ ...prev, [customerId]: name }));
+        }
+        return name;
     };
 
     useFocusEffect(
@@ -207,10 +246,25 @@ const OrderHistoryOwner = ({ route }) => {
         }, [fetchOrders, fetchAllProducts, expandedOrderId, initialSelectedDate])
     );
 
+    // Fetch customer names when orders change
     useEffect(() => {
-        if (orders && orders.length > 0) {
-            fetchCustomerNamesForOrders(orders);
-        }
+        const fetchCustomerNames = async () => {
+            console.log('=== FETCHING CUSTOMER NAMES ===');
+            console.log('Orders:', orders.length);
+            console.log('Current customerNames:', customerNames);
+            if (orders.length > 0) {
+                for (const order of orders) {
+                    console.log(`Processing order ${order.id}, customer_id: ${order.customer_id}`);
+                    if (order.customer_id && !customerNames[order.customer_id]) {
+                        console.log(`Fetching name for customer_id: ${order.customer_id}`);
+                        await getCustomerName(order.customer_id);
+                    }
+                }
+            }
+            console.log('=== CUSTOMER NAMES FETCH COMPLETE ===');
+        };
+        
+        fetchCustomerNames();
     }, [orders]);
 
     const allProductsMap = React.useMemo(() => {
@@ -415,17 +469,41 @@ const OrderHistoryOwner = ({ route }) => {
         );
     };
 
+    const getAcceptanceStatusColor = (status) => {
+      switch (status?.toLowerCase()) {
+        case 'approved': return '#10B981';
+        case 'pending': return '#F59E0B';
+        case 'rejected': return '#DC2626';
+        default: return '#6B7280';
+      }
+    };
+
+    const getCancellationStatusColor = (cancelled) => {
+      return cancelled === 'Yes' ? '#DC2626' : '#10B981';
+    };
+
     const getStatusColor = (status) => {
-        if (!status) return '#9E9E9E'; // Default color for null/undefined status
-        
-        switch (status.toLowerCase()) {
-            case 'approved': return '#4CAF50';
-            case 'pending': return '#FF9800';
-            case 'rejected': return '#F44336';
-            case 'delivered': return '#2196F3';
-            case 'cancelled': return '#9E9E9E';
-            default: return '#003366';
+        switch (status?.toLowerCase()) {
+          case "delivered":
+            return "#4CAF50";
+          case "shipped":
+            return "#2196F3";
+          case "processing":
+            return "#FF9800";
+          case "cancelled":
+            return "#F44336";
+          default:
+            return "#9E9E9E";
         }
+    };
+
+    const getAcceptanceStatusText = (status) => {
+      if (!status) return 'PENDING';
+      return status.toUpperCase();
+    };
+
+    const getCancellationStatusText = (cancelled) => {
+      return cancelled === 'Yes' ? 'CANCELLED' : 'ACTIVE';
     };
 
     if (loading) {
@@ -439,18 +517,32 @@ const OrderHistoryOwner = ({ route }) => {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Order History</Text>
-                <View style={styles.headerActions}>
+                <View style={styles.headerLeft}>
                     <TouchableOpacity 
                         style={styles.dateFilterButton} 
                         onPress={showDatePicker}
                         activeOpacity={0.7}
                     >
-                        <MaterialIcons name="calendar-today" size={18} color="#fff" />
+                        <Ionicons name="calendar" size={18} color="#fff" />
                         <Text style={styles.dateFilterText}>
                             {moment(selectedDate).format('MMM D, YYYY')}
                         </Text>
                     </TouchableOpacity>
+                </View>
+
+                <View style={styles.headerRight}>
+                  <TouchableOpacity
+                    style={styles.filterButton}
+                    onPress={() => setShowFilterModal(true)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="filter-list" size={20} color="#fff" />
+                    {getActiveFiltersCount() > 0 && (
+                      <View style={styles.filterBadge}>
+                        <Text style={styles.filterBadgeText}>{getActiveFiltersCount()}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
             </View>
 
@@ -462,6 +554,115 @@ const OrderHistoryOwner = ({ route }) => {
                 date={selectedDate}
             />
 
+            {/* Filter Modal */}
+            <Modal
+              visible={showFilterModal}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setShowFilterModal(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.filterModal}>
+                  <View style={styles.filterModalHeader}>
+                    <Text style={styles.filterModalTitle}>Filter Orders</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowFilterModal(false)}
+                      style={styles.closeButton}
+                    >
+                      <MaterialIcons name="close" size={24} color="#003366" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView 
+                    style={styles.filterContent}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                  >
+                    {/* Delivery Filter */}
+                    <View style={styles.filterSection}>
+                      <Text style={styles.filterSectionTitle}>Delivery Status</Text>
+                      {['All', 'pending', 'delivered', 'out for delivery', 'processing', 'objection'].map(status => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.filterOption,
+                            selectedFilters.delivery === status && styles.filterOptionSelected
+                          ]}
+                          onPress={() => handleFilterChange('delivery', status)}
+                        >
+                          <Text style={[
+                            styles.filterOptionText,
+                            selectedFilters.delivery === status && styles.filterOptionTextSelected
+                          ]}>
+                            {status.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Acceptance Filter */}
+                    <View style={styles.filterSection}>
+                      <Text style={styles.filterSectionTitle}>Acceptance Status</Text>
+                      {['All', 'Accepted', 'Rejected', 'Pending'].map(status => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.filterOption,
+                            selectedFilters.acceptance === status && styles.filterOptionSelected
+                          ]}
+                          onPress={() => handleFilterChange('acceptance', status)}
+                        >
+                          <Text style={[
+                            styles.filterOptionText,
+                            selectedFilters.acceptance === status && styles.filterOptionTextSelected
+                          ]}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Cancelled Filter */}
+                    <View style={styles.filterSection}>
+                      <Text style={styles.filterSectionTitle}>Order Status</Text>
+                      {['All', 'Active', 'Cancelled'].map(status => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.filterOption,
+                            selectedFilters.cancelled === status && styles.filterOptionSelected
+                          ]}
+                          onPress={() => handleFilterChange('cancelled', status)}
+                        >
+                          <Text style={[
+                            styles.filterOptionText,
+                            selectedFilters.cancelled === status && styles.filterOptionTextSelected
+                          ]}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+
+                  <View style={styles.filterModalFooter}>
+                    <TouchableOpacity
+                      style={styles.clearFiltersButton}
+                      onPress={clearAllFilters}
+                    >
+                      <Text style={styles.clearFiltersText}>Clear All Filters</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.applyFiltersButton}
+                      onPress={() => setShowFilterModal(false)}
+                    >
+                      <Text style={styles.applyFiltersText}>Apply Filters</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 {orders.length === 0 ? (
                     <View style={styles.emptyState}>
@@ -469,41 +670,63 @@ const OrderHistoryOwner = ({ route }) => {
                         <Text style={styles.emptyStateText}>No orders found for selected date</Text>
                     </View>
                 ) : (
-                    orders.map((order) => (
+                    getFilteredOrders().map((order) => (
                         <View key={order.id} style={styles.orderCard}>
                             <View style={styles.orderHeader}>
                                 <View>
                                     <Text style={styles.orderId}>Order #{order.id}</Text>
-                                    <Text style={styles.orderCustomer}>Customer: {customerNames[order.customer_id] || `ID: ${order.customer_id}`}</Text>
+                                    <Text style={styles.orderCustomer}>
+                                        {customerNames[order.customer_id] ? 
+                                            customerNames[order.customer_id] : 
+                                            `Loading... (ID: ${order.customer_id})`
+                                        }
+                                    </Text>
                                     <Text style={styles.orderDate}>
                                         {moment.unix(order.placed_on).format('MMM D, YYYY [at] h:mm A')}
                                     </Text>
                                 </View>
-                                <Text style={[styles.orderStatus, { backgroundColor: getStatusColor(order.approve_status) }]}> 
-                                    {(order.approve_status || 'pending').toUpperCase()}
-                                </Text>
+                                <View style={styles.statusContainer}>
+                                  {/* Order Acceptance Status */}
+                                  <View style={styles.statusRow}>
+                                    <Text style={styles.statusLabel}>Acceptance:</Text>
+                                    <Text style={[styles.statusValue, { color: getAcceptanceStatusColor(order.approve_status) }]}>
+                                      {getAcceptanceStatusText(order.approve_status)}
+                                    </Text>
+                                  </View>
+                                  
+                                  {/* Cancellation Status */}
+                                  <View style={styles.statusRow}>
+                                    <Text style={styles.statusLabel}>Status:</Text>
+                                    <Text style={[styles.statusValue, { color: getCancellationStatusColor(order.cancelled) }]}>
+                                      {getCancellationStatusText(order.cancelled)}
+                                    </Text>
+                                  </View>
+                                </View>
                             </View>
 
                             <View style={styles.orderSummary}>
                                 <Text style={styles.orderTotal}>₹{order.total_amount}</Text>
-                                <Text style={styles.orderType}>{order.order_type}</Text>
+                                <View style={styles.deliveryStatusContainer}>
+                                  <Text style={styles.deliveryStatusLabel}>Delivery:</Text>
+                                  <Text style={[styles.deliveryStatusValue, { color: getStatusColor(order.delivery_status) }]}>
+                                    {(order.delivery_status || 'pending').toUpperCase()}
+                                  </Text>
+                                </View>
                             </View>
 
                             <View style={styles.orderFooter}>
-                                <Text style={styles.deliveryStatus}>
-                                    Delivery: <Text style={{ color: getStatusColor(order.delivery_status) }}>
-                                        {(order.delivery_status || 'pending').toUpperCase()}
-                                    </Text>
-                                </Text>
-                                <View style={styles.orderActions}>
-                                    <TouchableOpacity 
-                                        onPress={() => handleReorder(order.id)}
-                                        style={styles.reorderButton}
-                                        activeOpacity={0.7}
-                                    >
-                                        <MaterialIcons name="replay" size={16} color="#10B981" />
-                                        <Text style={styles.reorderButtonText}>Reorder</Text>
-                                    </TouchableOpacity>
+                                {/* Left side - Reorder Button */}
+                                <TouchableOpacity
+                                    style={styles.reorderButton}
+                                    onPress={() => handleReorder(order.id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <MaterialIcons name="replay" size={16} color="#10B981" />
+                                    <Text style={styles.reorderButtonText}>Reorder</Text>
+                                </TouchableOpacity>
+
+                                {/* Right side - Details button */}
+                                <View style={styles.rightButtonsContainer}>
                                     <TouchableOpacity 
                                         onPress={() => handleOrderDetailsPress(order.id)}
                                         style={styles.detailsButton}
@@ -512,10 +735,10 @@ const OrderHistoryOwner = ({ route }) => {
                                         <Text style={styles.detailsButtonText}>
                                             {expandedOrderDetailsId === order.id ? 'HIDE DETAILS' : 'VIEW DETAILS'}
                                         </Text>
-                                        <MaterialIcons 
-                                            name={expandedOrderDetailsId === order.id ? "expand-less" : "expand-more"} 
-                                            size={16} 
-                                            color="#003366" 
+                                        <Ionicons
+                                            name={expandedOrderDetailsId === order.id ? 'chevron-up' : 'chevron-down'}
+                                            size={16}
+                                            color="#003366"
                                         />
                                     </TouchableOpacity>
                                 </View>
@@ -537,36 +760,151 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#003366',
-        padding: 20,
-        paddingBottom: 15,
+        padding: 5,
+        paddingBottom: 5,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
     },
-    headerTitle: {
-        color: '#fff',
-        fontSize: 22,
-        fontWeight: '600',
-        marginBottom: 15,
+    headerLeft: {
+      flex: 1,
     },
-    headerActions: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    headerRight: {
+      alignItems: 'flex-end',
     },
     dateFilterButton: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 20,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        borderRadius: 16,
+        maxWidth: 120,
     },
     dateFilterText: {
         color: '#fff',
-        marginLeft: 8,
-        fontSize: 14,
+        marginLeft: 4,
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    filterButton: {
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      padding: 8,
+      borderRadius: 20,
+      position: 'relative',
+    },
+    filterBadge: {
+      position: 'absolute',
+      top: -5,
+      right: -5,
+      backgroundColor: '#DC2626',
+      borderRadius: 10,
+      width: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    filterBadgeText: {
+      color: '#fff',
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    filterModal: {
+      backgroundColor: '#fff',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      maxHeight: '80%',
+      minHeight: 500,
+    },
+    filterModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: '#E5E7EB',
+    },
+    filterModalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: '#003366',
+    },
+    closeButton: {
+      padding: 5,
+    },
+    filterContent: {
+      padding: 20,
+      paddingBottom: 120,
+      maxHeight: 400,
+    },
+    filterSection: {
+      marginBottom: 25,
+    },
+    filterSectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#003366',
+      marginBottom: 12,
+    },
+    filterOption: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      marginBottom: 8,
+      backgroundColor: '#F9FAFB',
+    },
+    filterOptionSelected: {
+      backgroundColor: '#003366',
+    },
+    filterOptionText: {
+      fontSize: 14,
+      color: '#374151',
+    },
+    filterOptionTextSelected: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+    filterModalFooter: {
+      flexDirection: 'row',
+      padding: 20,
+      borderTopWidth: 1,
+      borderTopColor: '#E5E7EB',
+      gap: 12,
+    },
+    clearFiltersButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#DC2626',
+      alignItems: 'center',
+    },
+    clearFiltersText: {
+      color: '#DC2626',
+      fontWeight: '600',
+    },
+    applyFiltersButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      backgroundColor: '#003366',
+      alignItems: 'center',
+    },
+    applyFiltersText: {
+      color: '#fff',
+      fontWeight: '600',
     },
     loadingContainer: {
         flex: 1,
@@ -623,42 +961,57 @@ const styles = StyleSheet.create({
         color: '#666',
         marginTop: 3,
     },
-    orderStatus: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
-        alignSelf: 'flex-start',
-    },
     orderSummary: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 15,
-        paddingBottom: 10,
     },
     orderTotal: {
         fontSize: 18,
         fontWeight: '700',
         color: '#003366',
     },
-    orderType: {
-        fontSize: 14,
-        color: '#666',
-        fontStyle: 'italic',
-    },
     orderFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 15,
-        paddingTop: 0,
+        paddingHorizontal: 15,
+        paddingBottom: 12,
     },
-    deliveryStatus: {
-        fontSize: 13,
-        color: '#666',
+    rightButtonsContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    statusContainer: {
+      alignItems: 'flex-end',
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 2,
+    },
+    statusLabel: {
+      fontSize: 10,
+      color: '#666',
+      marginRight: 4,
+    },
+    statusValue: {
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    deliveryStatusContainer: {
+      alignItems: 'flex-end',
+    },
+    deliveryStatusLabel: {
+      fontSize: 12,
+      color: '#666',
+      marginBottom: 2,
+    },
+    deliveryStatusValue: {
+      fontSize: 12,
+      fontWeight: '600',
     },
     detailsButton: {
         flexDirection: 'row',
@@ -669,11 +1022,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginRight: 5,
         fontSize: 14,
-    },
-    orderActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
     },
     reorderButton: {
         flexDirection: 'row',

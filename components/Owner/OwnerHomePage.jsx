@@ -33,7 +33,7 @@ const COLORS = {
   error: '#f44336',
 };
 
-const AdminHomePage = () => {
+const OwnerHomePage = () => {
   const [userDetails, setUserDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -225,29 +225,7 @@ const AdminHomePage = () => {
           </Button>
         </View>
       ) : (
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Professional Quick Actions Section */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <View style={styles.actionsContainer}>
-              <ActionButton
-                icon="file-document-outline"
-                label="Order History"
-                onPress={() => navigation.navigate('Home', { screen: 'OrderHistorySA' })}
-                color={COLORS.primary}
-              />
-              <ActionButton
-                icon="file-document-outline"
-                label="Invoice Display"
-                onPress={() => navigation.navigate('Home', { screen: 'InvoiceDisplay' })}
-                color={COLORS.primary}
-              />
-            </View>
-          </View>
-        </ScrollView>
+        <View style={styles.scrollContent} />
       )}
     </View>
   );
@@ -434,4 +412,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdminHomePage;
+export default OwnerHomePage;

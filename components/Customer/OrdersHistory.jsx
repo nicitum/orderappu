@@ -8,11 +8,12 @@ import {
   ScrollView,
   Alert,
   Image,
+  Modal,
 } from "react-native";
 import axios from "axios";
 import { ipAddress } from "../../services/urls";
 import { checkTokenAndRedirect } from "../../services/auth";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import moment from "moment";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -30,6 +31,14 @@ const OrdersHistory = () => {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [allProductsData, setAllProductsData] = useState([]);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelLoadingId, setCancelLoadingId] = useState(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({
+    delivery: 'All',
+    cancelled: 'All',
+    acceptance: 'All'
+  });
 
   const showDatePicker = () => {
     setDatePickerVisibility(true);
@@ -42,6 +51,153 @@ const OrdersHistory = () => {
   const handleConfirm = (date) => {
     hideDatePicker();
     setSelectedDate(date);
+  };
+
+  const getFilteredOrders = () => {
+    return orders.filter(order => {
+      // Delivery filter
+      if (selectedFilters.delivery !== 'All' && order.delivery_status !== selectedFilters.delivery) {
+        return false;
+      }
+      
+      // Cancelled filter
+      if (selectedFilters.cancelled !== 'All') {
+        const isCancelled = order.cancelled === 'Yes';
+        if (selectedFilters.cancelled === 'Cancelled' && !isCancelled) {
+          return false;
+        }
+        if (selectedFilters.cancelled === 'Active' && isCancelled) {
+          return false;
+        }
+      }
+      
+      // Acceptance filter
+      if (selectedFilters.acceptance !== 'All') {
+        if (selectedFilters.acceptance === 'Accepted' && order.approve_status !== 'Accepted') {
+          return false;
+        }
+        if (selectedFilters.acceptance === 'Rejected' && order.approve_status !== 'Rejected') {
+          return false;
+        }
+        if (selectedFilters.acceptance === 'Pending' && order.approve_status !== 'Pending' && order.approve_status !== null && order.approve_status !== undefined) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+
+  const handleFilterChange = (filterType, value) => {
+    setSelectedFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setSelectedFilters({
+      delivery: 'All',
+      cancelled: 'All',
+      acceptance: 'All'
+    });
+  };
+
+  const getActiveFiltersCount = () => {
+    return Object.values(selectedFilters).filter(value => value !== 'All').length;
+  };
+
+  const handleCancelOrder = async (order) => {
+    // Check if order can be cancelled
+    if (order.delivery_status === 'delivered' || order.delivery_status === 'shipped') {
+      Toast.show({
+        type: 'error',
+        text1: 'Cannot Cancel',
+        text2: 'This order cannot be cancelled as it has already been shipped or delivered.'
+      });
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Order',
+      `Are you sure you want to cancel Order #${order.id}? This action cannot be undone.`,
+      [
+        {
+          text: 'No, Keep Order',
+          style: 'cancel'
+        },
+        {
+          text: 'Yes, Cancel Order',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelLoading(true);
+            setCancelLoadingId(order.id);
+            
+            try {
+              const token = await AsyncStorage.getItem("userAuthToken");
+              if (!token) throw new Error('No authentication token found');
+
+              const response = await fetch(
+                `http://${ipAddress}:8091/cancel_order/${order.id}`,
+                {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  }
+                }
+              );
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to cancel order. Status: ${response.status}, Text: ${errorText}`);
+              }
+
+              const data = await response.json();
+              if (!data.success) {
+                throw new Error(data.message || "Failed to cancel the order.");
+              }
+
+              Toast.show({
+                type: 'success',
+                text1: 'Order Cancelled',
+                text2: data.message || `Order #${order.id} has been cancelled successfully.`
+              });
+
+              // Refresh orders list
+              await fetchOrders();
+            } catch (error) {
+              console.error('Error cancelling order:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Cancel Failed',
+                text2: error.message || 'Failed to cancel the order.'
+              });
+            } finally {
+              setCancelLoading(false);
+              setCancelLoadingId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const canCancelOrder = (order) => {
+    // Don't allow cancellation if order is already cancelled
+    if (order.cancelled === 'Yes') {
+      return false;
+    }
+    // Don't allow cancellation if order is delivered or shipped
+    if (order.delivery_status === 'delivered' || order.delivery_status === 'shipped') {
+      return false;
+    }
+    // Only allow cancellation if acceptance status is Pending (not Accepted or Rejected)
+    if (order.approve_status === 'Accepted' || order.approve_status === 'Rejected') {
+      return false;
+    }
+    // Allow cancellation only when acceptance status is Pending or null/undefined
+    return true;
   };
 
   const fetchAllProducts = useCallback(async () => {
@@ -103,10 +259,12 @@ const OrdersHistory = () => {
     }
   }, [navigation, selectedDate]);
 
-  useEffect(() => {
-    fetchAllProducts();
-    fetchOrders();
-  }, [fetchOrders]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchAllProducts();
+      fetchOrders();
+    }, [fetchOrders, fetchAllProducts])
+  );
 
   const fetchOrderProducts = async (orderId) => {
     try {
@@ -160,8 +318,8 @@ const OrdersHistory = () => {
         <View style={detailStyles.headerRow}>
           <Text style={[detailStyles.headerCell, detailStyles.imageHeader]}></Text>
           <Text style={[detailStyles.headerCell, detailStyles.productNameHeader]}>Product</Text>
-          <Text style={detailStyles.headerCell}>Qty</Text>
-          <Text style={detailStyles.headerCell}>Price</Text>
+          <Text style={[detailStyles.headerCell, detailStyles.qtyHeaderFixed]}>Qty</Text>
+          <Text style={[detailStyles.headerCell, detailStyles.priceHeaderFixed]}>Price</Text>
         </View>
         {products.length > 0 ? (
           products.map((product, index) => {
@@ -187,8 +345,8 @@ const OrdersHistory = () => {
                   )}
                 </View>
                 <Text style={[detailStyles.productCell, detailStyles.productNameCell]}>{product.name || (prodData?.name || 'Product Name')}</Text>
-                <Text style={detailStyles.productCell}>{product.quantity || 0}</Text>
-                <Text style={detailStyles.productCell}>₹{product.price !== undefined ? product.price : 0}</Text>
+                <Text style={[detailStyles.productCell, detailStyles.qtyCellFixed]}>{product.quantity || 0}</Text>
+                <Text style={[detailStyles.productCell, detailStyles.priceCellFixed]}>₹{product.price !== undefined ? product.price : 0}</Text>
               </View>
             );
           })
@@ -197,6 +355,19 @@ const OrdersHistory = () => {
         )}
       </View>
     );
+  };
+
+  const getAcceptanceStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'approved': return '#10B981';
+      case 'pending': return '#F59E0B';
+      case 'rejected': return '#DC2626';
+      default: return '#6B7280';
+    }
+  };
+
+  const getCancellationStatusColor = (cancelled) => {
+    return cancelled === 'Yes' ? '#DC2626' : '#10B981';
   };
 
   const getStatusColor = (status) => {
@@ -212,6 +383,15 @@ const OrdersHistory = () => {
       default:
         return "#9E9E9E";
     }
+  };
+
+  const getAcceptanceStatusText = (status) => {
+    if (!status) return 'PENDING';
+    return status.toUpperCase();
+  };
+
+  const getCancellationStatusText = (cancelled) => {
+    return cancelled === 'Yes' ? 'CANCELLED' : 'ACTIVE';
   };
 
   const handleReorder = async (order) => {
@@ -232,31 +412,35 @@ const OrdersHistory = () => {
               // Prepare products payload
               const products = await fetchOrderProducts(order.id);
               if (!products || products.length === 0) throw new Error('No products found in this order');
-              const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
-              const payload = {
-                customer_id: order.customer_id,
-                products: products.map(p => ({
-                  product_id: p.product_id,
-                  quantity: p.quantity,
-                  price: p.price,
-                  name: p.name,
-                  category: p.category || '',
-                  gst_rate: p.gst_rate || 0
-                })),
+              // Build products array for /place
+              const orderItems = products.map(p => ({
+                product_id: p.product_id,
+                quantity: p.quantity,
+                price: Number(p.price) || 0
+              }));
+              // Get orderType (AM/PM)
+              const getOrderType = () => {
+                const currentHour = new Date().getHours();
+                return currentHour < 12 ? 'AM' : 'PM';
               };
-              console.log('REORDER /place payload:', payload);
+              // Calculate total_amount
+              const total_amount = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+              const orderData = {
+                products: orderItems,
+                orderType: getOrderType(),
+                orderDate: new Date().toISOString(),
+                total_amount
+              };
               const response = await fetch(`http://${ipAddress}:8091/place`, {
                 method: 'POST',
                 headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(orderData),
               });
               const data = await response.json();
-              console.log('REORDER /place response:', data);
               if (!response.ok) {
-                console.error('Reorder API error:', data);
                 throw new Error(data.message || 'Failed to place reorder');
               }
               Toast.show({ type: 'success', text1: 'Reorder Placed', text2: 'Order placed successfully!' });
@@ -273,20 +457,23 @@ const OrdersHistory = () => {
               const products = await fetchOrderProducts(order.id);
               if (!products || products.length === 0) throw new Error('No products found in this order');
               const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
-              await AsyncStorage.setItem('cartItems', JSON.stringify(
-                products.reduce((acc, p) => {
-                  const fullProduct = allProductsMap.get(p.product_id);
-                  if (fullProduct) {
-                    acc[p.product_id] = {
-                      ...fullProduct,
-                      id: p.product_id,
-                      quantity: p.quantity,
-                    };
-                  }
-                  return acc;
-                }, {})
-              ));
-              navigation.navigate('Cart');
+              // Build cartItems and catalogueCart
+              const cartItems = {};
+              const catalogueCart = {};
+              products.forEach(p => {
+                const fullProduct = allProductsMap.get(p.product_id);
+                if (fullProduct) {
+                  cartItems[p.product_id] = {
+                    ...fullProduct,
+                    id: p.product_id,
+                    quantity: p.quantity,
+                  };
+                  catalogueCart[p.product_id] = p.quantity;
+                }
+              });
+              await AsyncStorage.setItem('cartItems', JSON.stringify(cartItems));
+              await AsyncStorage.setItem('catalogueCart', JSON.stringify(catalogueCart));
+              navigation.navigate('CartCustomer');
             } catch (error) {
               Toast.show({ type: 'error', text1: 'Edit & Reorder Failed', text2: error.message });
             }
@@ -307,16 +494,33 @@ const OrdersHistory = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.dateFilterButton}
-          onPress={showDatePicker}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="calendar" size={18} color="#fff" />
-          <Text style={styles.dateFilterText}>
-            {moment(selectedDate).format("MMM D, YYYY")}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.dateFilterButton}
+            onPress={showDatePicker}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="calendar" size={18} color="#fff" />
+            <Text style={styles.dateFilterText}>
+              {moment(selectedDate).format("MMM D, YYYY")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowFilterModal(true)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="filter-list" size={20} color="#fff" />
+            {getActiveFiltersCount() > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{getActiveFiltersCount()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <DateTimePickerModal
@@ -327,6 +531,115 @@ const OrdersHistory = () => {
         date={selectedDate}
       />
 
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModal}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filter Orders</Text>
+              <TouchableOpacity
+                onPress={() => setShowFilterModal(false)}
+                style={styles.closeButton}
+              >
+                <MaterialIcons name="close" size={24} color="#003366" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              style={styles.filterContent}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
+              {/* Delivery Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Delivery Status</Text>
+                {['All', 'pending', 'delivered', 'out for delivery', 'processing', 'objection'].map(status => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.filterOption,
+                      selectedFilters.delivery === status && styles.filterOptionSelected
+                    ]}
+                    onPress={() => handleFilterChange('delivery', status)}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      selectedFilters.delivery === status && styles.filterOptionTextSelected
+                    ]}>
+                      {status.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Acceptance Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Acceptance Status</Text>
+                {['All', 'Accepted', 'Rejected', 'Pending'].map(status => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.filterOption,
+                      selectedFilters.acceptance === status && styles.filterOptionSelected
+                    ]}
+                    onPress={() => handleFilterChange('acceptance', status)}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      selectedFilters.acceptance === status && styles.filterOptionTextSelected
+                    ]}>
+                      {status}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Cancelled Filter */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Order Status</Text>
+                {['All', 'Active', 'Cancelled'].map(status => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.filterOption,
+                      selectedFilters.cancelled === status && styles.filterOptionSelected
+                    ]}
+                    onPress={() => handleFilterChange('cancelled', status)}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      selectedFilters.cancelled === status && styles.filterOptionTextSelected
+                    ]}>
+                      {status}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.filterModalFooter}>
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={clearAllFilters}
+              >
+                <Text style={styles.clearFiltersText}>Clear All Filters</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyFiltersButton}
+                onPress={() => setShowFilterModal(false)}
+              >
+                <Text style={styles.applyFiltersText}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {orders.length === 0 ? (
           <View style={styles.emptyState}>
@@ -336,52 +649,46 @@ const OrdersHistory = () => {
             </Text>
           </View>
         ) : (
-          orders.map((order) => (
+          getFilteredOrders().map((order) => (
             <View key={order.id} style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <View>
                   <Text style={styles.orderId}>Order #{order.id}</Text>
                   <Text style={styles.orderDate}>{moment.unix(order.placed_on).format('MMM D, YYYY [at] h:mm A')}</Text>
                 </View>
-                <Text style={[styles.orderStatus, { backgroundColor: getStatusColor(order.delivery_status) }]}>
-                  {(order.delivery_status || 'pending').toUpperCase()}
-                </Text>
+                <View style={styles.statusContainer}>
+                  {/* Order Acceptance Status */}
+                  <View style={styles.statusRow}>
+                    <Text style={styles.statusLabel}>Acceptance:</Text>
+                    <Text style={[styles.statusValue, { color: getAcceptanceStatusColor(order.approve_status) }]}>
+                      {getAcceptanceStatusText(order.approve_status)}
+                    </Text>
+                  </View>
+                  
+                  {/* Cancellation Status */}
+                  <View style={styles.statusRow}>
+                    <Text style={styles.statusLabel}>Status:</Text>
+                    <Text style={[styles.statusValue, { color: getCancellationStatusColor(order.cancelled) }]}>
+                      {getCancellationStatusText(order.cancelled)}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <View style={styles.orderSummary}>
                 <Text style={styles.orderTotal}>₹{order.total_amount}</Text>
-                <Text style={styles.orderType}>{order.order_type || ''}</Text>
+                <View style={styles.deliveryStatusContainer}>
+                  <Text style={styles.deliveryStatusLabel}>Delivery:</Text>
+                  <Text style={[styles.deliveryStatusValue, { color: getStatusColor(order.delivery_status) }]}>
+                    {(order.delivery_status || 'pending').toUpperCase()}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.productPreviewRow}>
-                {orderDetails[order.id] && orderDetails[order.id].length > 0 ? (
-                  <>
-                    {orderDetails[order.id].slice(0, 2).map((product, idx) => {
-                      const prodData = allProductsData.find(p => p.id === product.product_id);
-                      const imageUrl = prodData && prodData.image ? `http://${ipAddress}:8091/images/products/${prodData.image}` : null;
-                      return (
-                        <View key={product.product_id || idx} style={styles.productPreviewItem}>
-                          {imageUrl ? (
-                            <Image source={{ uri: imageUrl }} style={styles.productPreviewImage} resizeMode="contain" />
-                          ) : (
-                            <View style={styles.productPreviewImagePlaceholder}>
-                              <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
-                            </View>
-                          )}
-                          <Text style={styles.productPreviewName} numberOfLines={1}>{product.name || prodData?.name || 'Product'}</Text>
-                        </View>
-                      );
-                    })}
-                    {orderDetails[order.id].length > 2 && (
-                      <Text style={styles.productPreviewMore}>+{orderDetails[order.id].length - 2} more</Text>
-                    )}
-                  </>
-                ) : (
-                  <Text style={styles.productPreviewEmpty}>No products</Text>
-                )}
-              </View>
+              {/* Product preview images removed. Only show images in expanded details. */}
 
               <View style={styles.orderFooter}>
+                {/* Left side - Reorder Button */}
                 <TouchableOpacity
                   style={styles.reorderButton}
                   onPress={() => handleReorder(order)}
@@ -390,6 +697,28 @@ const OrdersHistory = () => {
                   <MaterialIcons name="replay" size={16} color="#10B981" />
                   <Text style={styles.reorderButtonText}>Reorder</Text>
                 </TouchableOpacity>
+
+                {/* Right side - Cancel and Details buttons */}
+                <View style={styles.rightButtonsContainer}>
+                  {/* Cancel Order Button - Only show if order can be cancelled */}
+                  {canCancelOrder(order) && (
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => handleCancelOrder(order)}
+                      activeOpacity={0.7}
+                      disabled={cancelLoading && cancelLoadingId === order.id}
+                    >
+                      {cancelLoading && cancelLoadingId === order.id ? (
+                        <ActivityIndicator size="small" color="#DC2626" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="cancel" size={16} color="#DC2626" />
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+
                 <TouchableOpacity
                   onPress={() => handleOrderDetailsPress(order.id)}
                   style={styles.detailsButton}
@@ -404,6 +733,7 @@ const OrdersHistory = () => {
                     color="#003366"
                   />
                 </TouchableOpacity>
+                </View>
               </View>
 
               {renderOrderDetails(order.id)}
@@ -433,19 +763,140 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
   dateFilterButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.2)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    trackColor: "#fff",
-    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    maxWidth: 120,
   },
   dateFilterText: {
     color: "#fff",
-    marginLeft: 8,
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  filterButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 8,
+    borderRadius: 20,
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  filterModal: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    minHeight: 500,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  filterModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#003366',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  filterContent: {
+    padding: 20,
+    paddingBottom: 120,
+    maxHeight: 400,
+  },
+  filterSection: {
+    marginBottom: 25,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#003366',
+    marginBottom: 12,
+  },
+  filterOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#F9FAFB',
+  },
+  filterOptionSelected: {
+    backgroundColor: '#003366',
+  },
+  filterOptionText: {
     fontSize: 14,
+    color: '#374151',
+  },
+  filterOptionTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  filterModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  clearFiltersButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    alignItems: 'center',
+  },
+  clearFiltersText: {
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  applyFiltersButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#003366',
+    alignItems: 'center',
+  },
+  applyFiltersText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -540,8 +991,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#10B981',
-    marginTop: 12,
-    alignSelf: 'flex-end',
   },
   reorderButtonText: {
     color: '#10B981',
@@ -593,11 +1042,60 @@ const styles = StyleSheet.create({
   },
   orderFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingBottom: 12,
+  },
+  rightButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 16,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+  },
+  cancelButtonText: {
+    color: '#DC2626',
+    fontWeight: '600',
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  statusLabel: {
+    fontSize: 10,
+    color: '#666',
+    marginRight: 4,
+  },
+  statusValue: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  deliveryStatusContainer: {
+    alignItems: 'flex-end',
+  },
+  deliveryStatusLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  deliveryStatusValue: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 
@@ -634,7 +1132,7 @@ const detailStyles = StyleSheet.create({
     flexBasis: 62,
   },
   productNameHeader: {
-    flex: 2,
+    flex: 2.2,
   },
   productRow: {
     flexDirection: "row",
@@ -656,9 +1154,17 @@ const detailStyles = StyleSheet.create({
     color: "#777",
   },
   productNameCell: {
-    flex: 2,
+    flex: 2.2,
     fontWeight: '500',
   },
+  qtyHeader: { flex: 0.8, textAlign: 'right' },
+  priceHeader: { flex: 1, textAlign: 'right' },
+  qtyCell: { flex: 0.8, textAlign: 'right' },
+  priceCell: { flex: 1, textAlign: 'right' },
+  qtyHeaderFixed: { flex: 0.8, textAlign: 'right' },
+  priceHeaderFixed: { flex: 1, textAlign: 'right' },
+  qtyCellFixed: { flex: 0.8, textAlign: 'right' },
+  priceCellFixed: { flex: 1, textAlign: 'right' },
 });
 
 export default OrdersHistory;

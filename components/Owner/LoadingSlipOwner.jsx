@@ -8,10 +8,8 @@ import {
     ActivityIndicator,
     Platform,
     TouchableOpacity,
-    PermissionsAndroid,
-    Linking
+    ToastAndroid,
 } from "react-native";
-import { ToastAndroid } from "react-native";
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
@@ -22,12 +20,39 @@ import moment from 'moment';
 import * as XLSX from 'xlsx';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import axios from 'axios';
+import Toast from "react-native-toast-message";
+import { useFocusEffect } from '@react-navigation/native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const LOADING_SLIP_DIR_URI_KEY = 'loadingSlipDirectoryUri';
 
-const LoadingSlipPage = () => {
-    const [assignedUsers, setAssignedUsers] = useState([]);
+const COLORS = {
+    primary: '#003366',
+    secondary: '#004d99',
+    accent: '#0066cc',
+    background: '#f5f7fa',
+    surface: '#ffffff',
+    text: {
+        primary: '#1a1a1a',
+        secondary: '#666666',
+        light: '#ffffff',
+    },
+    success: '#4caf50',
+    warning: '#ff9800',
+    error: '#f44336',
+    status: {
+        pending: '#ff9800',
+        accepted: '#4caf50',
+        altered: '#2196f3',
+    }
+};
+
+const LoadingSlipOwner = () => {
+    const [users, setUsers] = useState([]);
+    const [amOrders, setAmOrders] = useState([]);
+    const [pmOrders, setPmOrders] = useState([]);
     const [adminOrders, setAdminOrders] = useState([]);
     const [adminUsersWithOrdersToday, setAdminUsersWithOrdersToday] = useState([]);
     const [adminId, setAdminId] = useState(null);
@@ -35,17 +60,27 @@ const LoadingSlipPage = () => {
     const [loading, setLoading] = useState(true);
     const [orderTypeFilter, setOrderTypeFilter] = useState('AM');
     const navigation = useNavigation();
-    const [products, setProducts] = useState([]);
-    const [selectedOrderId, setSelectedOrderId] = useState(null);
-    const [isOrderUpdated, setIsOrderUpdated] = useState(false);
-    const [savedDirectoryUri, setSavedDirectoryUri] = useState(null);
+    const [selectedDate, setSelectedDate] = useState(moment().format("YYYY-MM-DD"));
+    const [isDatePickerVisible, setDatePickerVisible] = useState(false);
+
+    const showDatePicker = () => {
+        setDatePickerVisible(true);
+    };
+
+    const hideDatePicker = () => {
+        setDatePickerVisible(false);
+    };
+
+    const handleConfirm = (date) => {
+        setSelectedDate(moment(date).format("YYYY-MM-DD"));
+        hideDatePicker();
+    };
 
     useEffect(() => {
         const loadSavedState = async () => {
             try {
                 const storedUri = await AsyncStorage.getItem(LOADING_SLIP_DIR_URI_KEY);
                 if (storedUri) {
-                    setSavedDirectoryUri(storedUri);
                     console.log("Loaded savedDirectoryUri from AsyncStorage:", storedUri);
                 }
             } catch (e) {
@@ -55,77 +90,182 @@ const LoadingSlipPage = () => {
         loadSavedState();
     }, []);
 
-    const fetchAssignedUsers = useCallback(async (currentAdminId, userAuthToken) => {
-        try {
-            const response = await fetch(`http://${ipAddress}:8091/assigned-users/${currentAdminId}`, {
-                headers: {
-                    "Authorization": `Bearer ${userAuthToken}`,
-                    "Content-Type": "application/json",
-                },
-            });
-
-            if (!response.ok) throw new Error(`Failed to fetch assigned users. Status: ${response.status}`);
-
-            const responseData = await response.json();
-            if (responseData.success) {
-                setAssignedUsers(responseData.assignedUsers);
-                setError(null);
-            } else {
-                setError("Failed to fetch assigned users.");
-            }
-        } catch (err) {
-            setError("Error fetching assigned users. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    const fetchAdminOrders = useCallback(async () => {
+    const fetchAllUsers = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const token = await AsyncStorage.getItem("userAuthToken");
-            if (!token) throw new Error("User authentication token not found.");
+            if (!token) {
+                throw new Error("Authentication token not found. Please log in.");
+            }
 
-            const decodedToken = jwtDecode(token);
-            const adminId = decodedToken.id1;
-            setAdminId(adminId);
-
-            // Format today's date for the query parameter
-            const todayFormatted = moment().format("YYYY-MM-DD");
-
-            // Fetch orders with date filter
-            const response = await fetch(`http://${ipAddress}:8091/get-admin-orders/${adminId}?date=${todayFormatted}`, {
+            const url = `http://${ipAddress}:8091/allUsers/`;
+            const response = await fetch(url, {
                 headers: {
                     "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                }
+                    "Content-Type": "application/json",
+                },
             });
-            console.log("response", response);
 
-            // Check response status
-            if (!response.ok) throw new Error(`Failed to fetch orders. Status: ${response.status}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch users: ${response.status} - ${errorText}`);
+            }
 
-    
-
-            const ordersData = await response.json();
-            console.log("ordersData", ordersData.orders);
-
-            const nonCancelledOrders = ordersData.orders
-                .filter(order => order.cancelled !== 'Yes' && order.approve_status === 'Accepted')
-                .map(order => ({
-                    ...order,
-                    amount: order.amount ? parseFloat(order.amount) : 0
-                }));
-            setAdminOrders(nonCancelledOrders);
-            console.log("Fetched admin orders:", nonCancelledOrders);
-        } catch (err) {
-            setError(err.message || "Failed to fetch admin orders.");
-            Alert.alert("Error", "Failed to fetch admin orders. Please try again.");
+            const responseJson = await response.json();
+            if (responseJson && responseJson.data && Array.isArray(responseJson.data)) {
+                // Filter users to only include those with role === 'user'
+                const filteredUsers = responseJson.data.filter(user => user.role === 'user');
+                setUsers(filteredUsers);
+            } else {
+                setUsers([]);
+                setError("No customers found.");
+            }
+        } catch (fetchError) {
+            setError(fetchError.message || "Failed to fetch users.");
+            Toast.show({ type: 'error', text1: 'Fetch Error', text2: fetchError.message });
         } finally {
             setLoading(false);
         }
     }, []);
+
+    const fetchAllOrders = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const token = await AsyncStorage.getItem("userAuthToken");
+            if (!token) throw new Error("No authentication token found");
+
+            const response = await axios.get(`http://${ipAddress}:8091/get-orders-sa?date=${selectedDate}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+            console.log("Response from get-orders-sa:", response.data);
+
+            if (!response.data || !response.data.status) {
+                throw new Error(response.data?.message || "No valid data received from server");
+            }
+
+            const orders = response.data.orders;
+            console.log("Fetched orders:", orders);
+
+            setAdminOrders(orders); // Store all orders
+            const amOrdersToday = orders.filter(order => order.order_type === 'AM');
+            const pmOrdersToday = orders.filter(order => order.order_type === 'PM');
+
+            setAmOrders(amOrdersToday);
+            setPmOrders(pmOrdersToday);
+
+        } catch (error) {
+            const errorMessage = error.response?.data?.message ||
+                error.message ||
+                "Failed to fetch orders";
+            setError(errorMessage);
+            Toast.show({
+                type: 'error',
+                text1: 'Fetch Error',
+                text2: errorMessage
+            });
+            console.error("Error fetching orders:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedDate]);
+
+    useFocusEffect(
+        useCallback(() => {
+            const fetchData = async () => {
+                try {
+                    const userAuthToken = await checkTokenAndRedirect(navigation);
+                    if (!userAuthToken) {
+                        setError("User authentication token not found.");
+                        setLoading(false);
+                        return;
+                    }
+
+                    const decodedToken = jwtDecode(userAuthToken);
+                    const currentAdminId = decodedToken.id1;
+                    setAdminId(currentAdminId);
+
+                    await Promise.all([fetchAllUsers(), fetchAllOrders()]);
+                } catch (err) {
+                    setError("Failed to load data. Please try again.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchData();
+
+            return () => {
+                setAmOrders([]);
+                setPmOrders([]);
+                setUsers([]);
+                setAdminOrders([]);
+            };
+        }, [fetchAllUsers, fetchAllOrders, navigation])
+    );
+
+    useEffect(() => {
+        if (users.length && (amOrders.length || pmOrders.length)) {
+            const ordersToUse = orderTypeFilter === 'AM' ? amOrders : pmOrders;
+            const usersWithOrders = users.filter(user =>
+                ordersToUse.some(order => order.customer_id === user.customer_id)
+            );
+            setAdminUsersWithOrdersToday(usersWithOrders);
+            console.log("adminUsersWithOrdersToday:", usersWithOrders);
+        }
+    }, [users, amOrders, pmOrders, orderTypeFilter]);
+
+    const renderItem = ({ item }) => {
+        const orderForUser = adminOrders.find(order =>
+            order.customer_id === item.customer_id && order.order_type === orderTypeFilter
+        );
+        console.log("orderForUser for", item.customer_id, ":", orderForUser);
+
+        const formattedAmount = (() => {
+            const amount = orderForUser?.total_amount;
+            if (typeof amount === 'number') {
+                return amount.toFixed(2);
+            } else if (typeof amount === 'string') {
+                const parsed = parseFloat(amount);
+                return isNaN(parsed) ? '0.00' : parsed.toFixed(2);
+            }
+            return '0.00';
+        })();
+
+        return (
+            <View style={styles.dataRow}>
+                <Text style={[styles.dataCell, { flex: 1.1 }]}>{item?.name || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.6 }]}>{item?.route || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.id || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 2.1 }]}>₹ {formattedAmount}</Text>
+                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.approve_status || 'N/A'}</Text>
+            </View>
+        );
+    };
+
+    const shareAsync = async (uri, reportType) => {
+        try {
+            await Share.open({
+                url: uri,
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                title: `${reportType} Report`
+            });
+            if (Platform.OS !== 'android') {
+                Alert.alert('Success', `${reportType} Generated and Shared Successfully!`);
+            }
+        } catch (shareError) {
+            console.error("Sharing Error:", shareError);
+            if (Platform.OS === 'android') {
+                ToastAndroid.show(`Sharing ${reportType} Failed.`, ToastAndroid.SHORT);
+            } else {
+                Alert.alert("Sharing Failed", `Error occurred while trying to share the ${reportType.toLowerCase()}.`);
+            }
+            setError("Error sharing file.");
+        }
+    };
 
     const save = async (uri, filename, mimetype, reportType) => {
         if (Platform.OS === "android") {
@@ -179,26 +319,21 @@ const LoadingSlipPage = () => {
             Alert.alert("No Products", "No products to include in the loading slip.");
             return;
         }
-
         setLoading(true);
         try {
             const wb = XLSX.utils.book_new();
-    
             let wsData;
             let filename;
-
             if (reportType === 'Loading Slip') {
                 const { productList, brandTotals } = productsData;
                 let totalQuantity = 0;
                 let totalBaseUnitQuantity = 0;
                 let totalCrates = 0;
-
                 productList.forEach(product => {
                     totalQuantity += product.quantity;
                     totalBaseUnitQuantity += parseFloat(product.baseUnitQuantity);
                     totalCrates += product.crates;
                 });
-
                 wsData = [
                     [`${reportType} - Route ${routeName}`],
                     [],
@@ -210,23 +345,20 @@ const LoadingSlipPage = () => {
                         product.crates
                     ]),
                     ["Totals", totalQuantity.toFixed(2), totalBaseUnitQuantity.toFixed(2), totalCrates],
-                    [], // Add some space
+                    [],
                     ["Brand", "Total Crates"],
                     ...brandTotals.map(brandTotal => [brandTotal.brand, brandTotal.totalCrates])
                 ];
                 filename = `${reportType.replace(/\s/g, '')}-Route-${routeName}.xlsx`;
             } else {
-                // Keep the existing logic for other report types if needed
                 let totalQuantity = 0;
                 let totalBaseUnitQuantity = 0;
                 let totalCrates = 0;
-
                 productsData.forEach(product => {
                     totalQuantity += product.quantity;
                     totalBaseUnitQuantity += parseFloat(product.baseUnitQuantity);
                     totalCrates += product.crates;
                 });
-
                 wsData = [
                     [`${reportType} - Route ${routeName}`],
                     [],
@@ -241,15 +373,11 @@ const LoadingSlipPage = () => {
                 ];
                 filename = `${reportType.replace(/\s/g, '')}-Route-${routeName}.xlsx`;
             }
-
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             XLSX.utils.book_append_sheet(wb, ws, `${reportType} Data`);
-
             const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
             const base64Workbook = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-
             const mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
             if (Platform.OS === 'web') {
                 const blob = new Blob([wbout], { type: mimetype });
                 const url = URL.createObjectURL(blob);
@@ -266,7 +394,6 @@ const LoadingSlipPage = () => {
             } else {
                 const fileDir = RNFS.CachesDirectoryPath;
                 const fileUri = `${fileDir}/${filename}`;
-
                 await RNFS.writeFile(fileUri, base64Workbook, 'base64');
 
                 if (Platform.OS === 'android') {
@@ -311,7 +438,7 @@ const LoadingSlipPage = () => {
         try {
             const wb = XLSX.utils.book_new();
             const deliverySlipData = await createDeliverySlipDataForExcelForRoute(usersForRoute);
-
+    
             // Modify headers to include newline characters (assuming headers are in deliverySlipData[3])
             deliverySlipData[3] = deliverySlipData[3].map(header => {
                 if (typeof header === 'string' && header.includes(' ')) {
@@ -320,9 +447,9 @@ const LoadingSlipPage = () => {
                 }
                 return header;
             });
-
+    
             const ws = XLSX.utils.aoa_to_sheet(deliverySlipData);
-
+    
             // Set column widths
             if (!ws['!cols']) ws['!cols'] = [];
             ws['!cols'][0] = { wch: 30 }; // First column width
@@ -342,7 +469,7 @@ const LoadingSlipPage = () => {
                     }
                 };
             }
-
+    
             // Style the first header cell (Items header)
             const itemsHeaderRef = XLSX.utils.encode_cell({ r: 3, c: 0 });
             if (ws[itemsHeaderRef]) {
@@ -357,18 +484,15 @@ const LoadingSlipPage = () => {
                     }
                 };
             }
-
+    
             // Adjust row height for the header row to fit wrapped text
             if (!ws['!rows']) ws['!rows'] = [];
             ws['!rows'][3] = { hpt: 60 };
             XLSX.utils.book_append_sheet(wb, ws, `${reportType}`);
-
             const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
             const base64Workbook = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-
             const filename = `${reportType.replace(/\s/g, '')}-Route-${routeName}.xlsx`;
             const mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
             if (Platform.OS === 'web') {
                 const blob = new Blob([wbout], { type: mimetype });
                 const url = URL.createObjectURL(blob);
@@ -385,7 +509,6 @@ const LoadingSlipPage = () => {
             } else {
                 const fileDir = RNFS.CachesDirectoryPath;
                 const fileUri = `${fileDir}/${filename}`;
-
                 await RNFS.writeFile(fileUri, base64Workbook, 'base64');
 
                 console.log(`${reportType} File written to documentDirectory:`, fileUri);
@@ -432,7 +555,7 @@ const LoadingSlipPage = () => {
         const unitRegex = /(\d+\.?\d*)\s*(ML|LTR|KG|GRMS|G|GM|ML)/i;
 
         usersForRoute.forEach(user => {
-            const order = adminOrders.find(ord => ord.customer_id === user.cust_id && ord.order_type === orderTypeFilter);
+            const order = adminOrders.find(ord => ord.customer_id === user.customer_id && ord.order_type === orderTypeFilter);
             if (order) {
                 orderMap.set(user.customer_id, { 
                     name: user.name, 
@@ -482,7 +605,6 @@ const LoadingSlipPage = () => {
         }
 
         const productList = Array.from(allProducts);
-        console.log("Product List:", productList);
         
         const formatVerticalHeader = (text) => {
            return text
@@ -500,7 +622,7 @@ const LoadingSlipPage = () => {
             let totalCratesForProduct = 0;
             
             usersForRoute.forEach(user => {
-                const orderData = orderMap.get(user.cust_id);
+                const orderData = orderMap.get(user.customer_id);
                 const quantity = orderData?.products?.find(p => p.name === productName)?.quantity || 0;
                 productRow.push(quantity);
                 
@@ -530,7 +652,7 @@ const LoadingSlipPage = () => {
         totalsRow.push(grandTotalCrates);
         excelData.push(totalsRow);
 
-        const customerIdRow = ["Customer ID", ...usersForRoute.map(u => u.cust_id || ""), ""];
+        const customerIdRow = ["Customer ID", ...usersForRoute.map(u => u.customer_id || ""), ""];
         excelData.push(customerIdRow);
 
         return excelData;
@@ -540,9 +662,8 @@ const LoadingSlipPage = () => {
         const consolidatedProducts = new Map();
         const unitRegex = /(\d+\.?\d*)\s*(ML|LTR|KG|GRMS|G|GM|ML)/i;
     
-        // Process each user's orders
         for (const user of usersForRoute) {
-            const order = adminOrders.find(ord => ord.customer_id === user.cust_id && ord.order_type === orderTypeFilter);
+            const order = adminOrders.find(ord => ord.customer_id === user.customer_id && ord.order_type === orderTypeFilter);
             if (order) {
                 try {
                     const token = await AsyncStorage.getItem("userAuthToken");
@@ -555,7 +676,6 @@ const LoadingSlipPage = () => {
                     }
                     const productsData = await productsResponse.json();
                     productsData.forEach(product => {
-                        // Extract quantity and unit
                         const match = product.name.match(unitRegex);
                         let quantityValue = 0;
                         let unit = '';
@@ -572,7 +692,6 @@ const LoadingSlipPage = () => {
                             unit = 'unit';
                         }
     
-                        // Calculate base unit quantity
                         let baseUnitQuantity = 0;
                         if (unit === 'ml') baseUnitQuantity = (quantityValue * product.quantity) / 1000;
                         else if (unit === 'gm') baseUnitQuantity = (quantityValue * product.quantity) / 1000;
@@ -580,10 +699,8 @@ const LoadingSlipPage = () => {
                         else if (unit === 'kg') baseUnitQuantity = quantityValue * product.quantity;
                         else baseUnitQuantity = product.quantity;
     
-                        // Calculate crates
                         const crates = Math.floor(baseUnitQuantity / 12);
     
-                        // Consolidate product data
                         const currentProductInfo = consolidatedProducts.get(product.name);
                         if (currentProductInfo) {
                             consolidatedProducts.set(product.name, {
@@ -607,7 +724,6 @@ const LoadingSlipPage = () => {
             }
         }
     
-        // Prepare product list for Excel
         const productListForExcel = Array.from(consolidatedProducts.entries()).map(([productName, productInfo]) => ({
             name: productName,
             quantity: productInfo.totalQuantity,
@@ -616,16 +732,14 @@ const LoadingSlipPage = () => {
             crates: productInfo.totalCrates
         }));
     
-        // Calculate brand-wise total crates
         const brandTotalsMap = new Map();
         for (const [productName, productInfo] of consolidatedProducts.entries()) {
-            const brand = productName.split(' ')[0].toUpperCase(); // Extract brand as first word
+            const brand = productName.split(' ')[0].toUpperCase();
             const currentTotal = brandTotalsMap.get(brand) || 0;
             brandTotalsMap.set(brand, currentTotal + productInfo.totalCrates);
         }
         const brandTotals = Array.from(brandTotalsMap, ([brand, totalCrates]) => ({ brand, totalCrates }));
     
-        // Return both product list and brand totals
         return {
             productList: productListForExcel,
             brandTotals: brandTotals
@@ -645,47 +759,6 @@ const LoadingSlipPage = () => {
     };
 
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const userAuthToken = await checkTokenAndRedirect(navigation);
-                if (!userAuthToken) {
-                    setError("User authentication token not found.");
-                    setLoading(false);
-                    return;
-                }
-
-                const decodedToken = jwtDecode(userAuthToken);
-                const currentAdminId = decodedToken.id1;
-                setAdminId(currentAdminId);
-
-                await Promise.all([
-                    fetchAssignedUsers(currentAdminId, userAuthToken),
-                    fetchAdminOrders()
-                ]);
-            } catch (err) {
-                setError("Failed to load data. Please try again.");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadData();
-    }, [navigation, fetchAssignedUsers, fetchAdminOrders]);
-
-    useEffect(() => {
-        if (assignedUsers.length && adminOrders.length) {
-            const usersWithOrders = assignedUsers.filter(user =>
-                adminOrders.some(order =>
-                    order.customer_id === user.cust_id && order.order_type === orderTypeFilter
-                )
-            );
-            setAdminUsersWithOrdersToday(usersWithOrders);
-        }
-    }, [assignedUsers, adminOrders, orderTypeFilter]);
-
-    useEffect(() => {
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row' }}>
@@ -702,10 +775,8 @@ const LoadingSlipPage = () => {
                                 for (const [routeName, usersForRoute] of routesMap.entries()) {
                                     const loadingSlipDataForRoute = await createLoadingSlipDataForExcelForRoute(usersForRoute);
                                     await generateExcelReport(loadingSlipDataForRoute, 'Loading Slip', routeName);
-
-                                    // Update loading slip status for each order in the route
                                     for (const user of usersForRoute) {
-                                        const order = adminOrders.find(ord => ord.customer_id === user.cust_id && ord.order_type === orderTypeFilter);
+                                        const order = adminOrders.find(ord => ord.customer_id === user.customer_id && ord.order_type === orderTypeFilter);
                                         if (order) {
                                             try {
                                                 const token = await AsyncStorage.getItem("userAuthToken");
@@ -717,13 +788,11 @@ const LoadingSlipPage = () => {
                                                     },
                                                     body: JSON.stringify({ orderId: order.id })
                                                 });
-
                                                 if (!response.ok) {
                                                     console.error(`Failed to update loading slip status for order ${order.id}. Status: ${response.status}`);
                                                     Alert.alert("Error", `Failed to update loading slip status for order ${order.id}`);
                                                     continue;
                                                 }
-
                                                 const responseData = await response.json();
                                                 console.log(`Loading slip status updated for order ${order.id}:`, responseData.message);
                                             } catch (error) {
@@ -766,226 +835,268 @@ const LoadingSlipPage = () => {
             ),
         });
     }, [navigation, adminOrders, adminUsersWithOrdersToday, orderTypeFilter]);
-   
-    // Render individual order row
-  const RenderOrderItem = ({ item, index }) => {
-   
-    const orderForUser = adminOrders.find(order => order.customer_id === item.cust_id);
-    const amount = typeof orderForUser?.amount === 'number' ? orderForUser.amount.toFixed(2) : '0.00';
 
-    return (
-      <View style={[styles.dataRow, { backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#F9FAFB' }]}>
-        <Text style={[styles.dataCell, { flex: 1.1 }]} accessibilityLabel={`Name: ${item?.name || 'N/A'}`}>
-          {item?.name || 'N/A'}
-        </Text>
-        <Text style={[styles.dataCell, { flex: 1.6 }]} accessibilityLabel={`Route: ${item?.route || 'N/A'}`}>
-          {item?.route || 'N/A'}
-        </Text>
-        <Text style={[styles.dataCell, { flex: 1.5 }]} accessibilityLabel={`Order ID: ${orderForUser?.id || 'N/A'}`}>
-          {orderForUser?.id || 'N/A'}
-        </Text>
-        <Text
-          style={[styles.dataCell, { flex: 2.1 }]}
-          accessibilityLabel={`Amount: ₹${amount}`}
-        >
-          ₹{amount}
-        </Text>
-        <Text
-          style={[styles.dataCell, { flex: 1.5 }]}
-          accessibilityLabel={`Approval: ${orderForUser?.approve_status || 'N/A'}`}
-        >
-          {orderForUser?.approve_status || 'N/A'}
-        </Text>
-      </View>
-    );
-  };
 
-  // Toggle order type (AM/PM)
+   
   const toggleOrderType = (type) => {
     setOrderTypeFilter(type);
   };
-
-  return (
-    <View style={styles.container}>
-      {/* Filter Toggle Buttons */}
-      <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>Filter Order Type:</Text>
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[styles.toggleButton, orderTypeFilter === 'AM' && styles.toggleButtonActive]}
-            onPress={() => toggleOrderType('AM')}
-            accessible
-            accessibilityLabel="Filter by AM orders"
-          >
-            <Text style={[styles.toggleText, orderTypeFilter === 'AM' && styles.toggleTextActive]}>AM</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleButton, orderTypeFilter === 'PM' && styles.toggleButtonActive]}
-            onPress={() => toggleOrderType('PM')}
-            accessible
-            accessibilityLabel="Filter by PM orders"
-          >
-            <Text style={[styles.toggleText, orderTypeFilter === 'PM' && styles.toggleTextActive]}>PM</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Column Headers */}
-      <View style={styles.columnHeader}>
-        <Text style={[styles.columnHeaderText, { flex: 1.1 }]}>Name</Text>
-        <Text style={[styles.columnHeaderText, { flex: 1.6 }]}>Route</Text>
-        <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Order ID</Text>
-        <Text style={[styles.columnHeaderText, { flex: 2.1 }]}>Amount</Text>
-        <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Approval</Text>
-      </View>
-
-      {/* Order List */}
-      {loading && !adminUsersWithOrdersToday.length ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.loadingText}>Loading orders...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={adminUsersWithOrdersToday}
-          renderItem={({ item, index }) => <RenderOrderItem item={item} index={index} />}
-          keyExtractor={(item) => item.cust_id.toString()}
-          ListEmptyComponent={() => (
-            <View style={styles.emptyListContainer}>
-              <Ionicons name="alert-circle-outline" size={40} color="#6B7280" />
-              <Text style={styles.emptyListText}>No {orderTypeFilter} orders today.</Text>
+    return (
+        <View style={styles.container}>
+            <View style={styles.header}>
+                <View style={styles.headerContent}>
+                    <MaterialCommunityIcons name="truck-delivery" size={28} color={COLORS.text.light} />
+                    <Text style={styles.headerTitle}>Loading Slips</Text>
+                    <TouchableOpacity 
+                        style={styles.datePickerButton}
+                        onPress={showDatePicker}
+                    >
+                        <MaterialCommunityIcons name="calendar" size={24} color={COLORS.text.light} />
+                    </TouchableOpacity>
+                </View>
             </View>
-          )}
-        />
-      )}
 
-      {/* Loading Overlay for Generating Slip */}
-      {loading && adminUsersWithOrdersToday.length > 0 && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.loadingText}>Generating Slip...</Text>
+            <View style={styles.contentContainer}>
+                <View style={styles.filterContainer}>
+                    <Text style={styles.filterLabel}>Filter Order Type:</Text>
+                    <View style={styles.toggleContainer}>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, orderTypeFilter === 'AM' && styles.toggleButtonActive]}
+                            onPress={() => toggleOrderType('AM')}
+                            accessible
+                            accessibilityLabel="Filter by AM orders"
+                        >
+                            <MaterialCommunityIcons 
+                                name="weather-sunny" 
+                                size={20} 
+                                color={orderTypeFilter === 'AM' ? COLORS.text.light : COLORS.primary} 
+                            />
+                            <Text style={[styles.toggleText, orderTypeFilter === 'AM' && styles.toggleTextActive]}>AM</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, orderTypeFilter === 'PM' && styles.toggleButtonActive]}
+                            onPress={() => toggleOrderType('PM')}
+                            accessible
+                            accessibilityLabel="Filter by PM orders"
+                        >
+                            <MaterialCommunityIcons 
+                                name="weather-night" 
+                                size={20} 
+                                color={orderTypeFilter === 'PM' ? COLORS.text.light : COLORS.primary} 
+                            />
+                            <Text style={[styles.toggleText, orderTypeFilter === 'PM' && styles.toggleTextActive]}>PM</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                <View style={styles.columnHeader}>
+                    <Text style={[styles.columnHeaderText, { flex: 1.1 }]}>Name</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.6 }]}>Route</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Order ID</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 2.1 }]}>Amount</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Status</Text>
+                </View>
+
+                {loading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={COLORS.primary} />
+                        <Text style={styles.loadingText}>Loading orders...</Text>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={adminUsersWithOrdersToday}
+                        renderItem={renderItem}
+                        keyExtractor={(item, index) => item?.customer_id?.toString() || index.toString()}
+                        ListEmptyComponent={() => (
+                            <View style={styles.emptyListContainer}>
+                                <MaterialCommunityIcons name="file-document-outline" size={48} color={COLORS.text.secondary} />
+                                <Text style={styles.emptyListText}>No {orderTypeFilter} orders on {selectedDate}.</Text>
+                            </View>
+                        )}
+                        contentContainerStyle={styles.listContent}
+                    />
+                )}
+
+                {loading && (
+                    <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="large" color={COLORS.text.light} />
+                        <Text style={styles.loadingText}>Generating Slip...</Text>
+                    </View>
+                )}
+            </View>
+
+            <DateTimePickerModal
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={handleConfirm}
+                onCancel={hideDatePicker}
+                date={moment(selectedDate).toDate()}
+            />
         </View>
-      )}
-    </View>
-  );
+    );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#E6E9EF', // Light blue-gray background
-    padding: 16,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#003366', // Deep blue
-    marginRight: 16,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    flex: 0.4,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#004d99', // Accent blue
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleButtonActive: {
-    backgroundColor: '#003366', // Deep blue when active
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#003366',
-  },
-  toggleTextActive: {
-    color: '#FFFFFF',
-  },
-  columnHeader: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#003366', // Deep blue header
-    borderRadius: 8,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  columnHeaderText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF', // White text on deep blue
-    textAlign: 'center',
-  },
-  dataRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D6DEEB', // Light blue-gray border
-  },
-  dataCell: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937', // Dark gray for readability
-    textAlign: 'center',
-  },
-  emptyListContainer: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  emptyListText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6B7280', // Muted gray
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF', // White on overlay
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 51, 102, 0.7)', // Deep blue tint
-  },
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+    },
+    header: {
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        paddingTop: 40,
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    headerContent: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    headerTitle: {
+        fontSize: 22,
+        fontWeight: "600",
+        color: COLORS.text.light,
+        flex: 1,
+        marginLeft: 10,
+    },
+    datePickerButton: {
+        padding: 8,
+    },
+    contentContainer: {
+        flex: 1,
+        padding: 16,
+    },
+    filterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    filterLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.primary,
+        marginRight: 16,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        flex: 0.4,
+        borderRadius: 8,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: COLORS.secondary,
+    },
+    toggleButton: {
+        flex: 1,
+        paddingVertical: 10,
+        backgroundColor: COLORS.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+    },
+    toggleButtonActive: {
+        backgroundColor: COLORS.primary,
+    },
+    toggleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.primary,
+        marginLeft: 4,
+    },
+    toggleTextActive: {
+        color: COLORS.text.light,
+    },
+    columnHeader: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: COLORS.primary,
+        borderRadius: 12,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    columnHeaderText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: COLORS.text.light,
+        textAlign: 'center',
+    },
+    dataRow: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: COLORS.surface,
+        borderRadius: 8,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    dataCell: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: COLORS.text.primary,
+        textAlign: 'center',
+    },
+    listContent: {
+        paddingBottom: 16,
+    },
+    emptyListContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        marginTop: 16,
+    },
+    emptyListText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: COLORS.text.secondary,
+        textAlign: 'center',
+        marginTop: 16,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: `${COLORS.primary}90`,
+    },
 });
-export default LoadingSlipPage;
+export default LoadingSlipOwner;

@@ -465,14 +465,7 @@ const HomeCustomer = () => {
                 {lastOrderDetails ? (
                   <View style={styles.orderCard}>
                     <View style={styles.orderHeader}>
-                      <View style={styles.orderType}>
-                        <MaterialIcons 
-                          name={lastOrderType === "AM" ? "wb-sunny" : "nights-stay"} 
-                          size={20} 
-                          color={COLORS.text.light} 
-                        />
-                        <Text style={styles.orderTypeText}>{lastOrderType} Shift</Text>
-                      </View>
+                      
                       <Text style={styles.orderDate}>{formatDate(lastIndentDate)}</Text>
                     </View>
                     <View style={styles.orderBody}>

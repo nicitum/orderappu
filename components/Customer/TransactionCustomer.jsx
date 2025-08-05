@@ -44,17 +44,17 @@ const TransactionCustomer = () => {
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {/* Place Order Card */}
-          <TouchableOpacity style={styles.card} onPress={handlePlaceOrder} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
-                <MaterialIcons name="playlist-add" size={24} color="#3B82F6" />
+          <TouchableOpacity style={styles.smallCard} onPress={handlePlaceOrder} activeOpacity={0.8}>
+            <View style={styles.cardHeaderSmall}>
+              <View style={[styles.iconContainerSmall, { backgroundColor: '#EFF6FF' }]}> 
+                <MaterialIcons name="playlist-add" size={20} color="#3B82F6" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Place Order</Text>
-            <Text style={styles.cardSubtitle}>Create a new order</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Tap to start</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            <Text style={styles.cardTitleSmall}>Place Order</Text>
+            <Text style={styles.cardSubtitleSmall}>Create a new order</Text>
+            <View style={styles.cardFooterSmall}>
+              <Text style={styles.cardActionSmall}>Tap to start</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -146,6 +146,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
+  smallCard: { backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, marginBottom: 12, ...Platform.select({ ios: { shadowColor: COLORS.card.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, }, android: { elevation: 2, }, }), },
+  cardHeaderSmall: { marginBottom: 8, },
+  iconContainerSmall: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', },
+  cardTitleSmall: { fontSize: 15, fontWeight: '600', color: COLORS.text.primary, marginBottom: 2, },
+  cardSubtitleSmall: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 16, marginBottom: 8, },
+  cardFooterSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.border, },
+  cardActionSmall: { fontSize: 12, fontWeight: '500', color: COLORS.text.secondary, },
 });
 
 export default TransactionCustomer; 

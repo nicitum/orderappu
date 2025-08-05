@@ -44,6 +44,10 @@ const TransactionsOwner = () => {
     navigation.navigate('OrderAcceptOwner');
   };
 
+  const handleOrderUpdate = () => {
+    navigation.navigate('OwnerOrderUpdate');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
@@ -80,6 +84,22 @@ const TransactionsOwner = () => {
             <Text style={styles.cardSubtitle}>Create new orders for customers</Text>
             <View style={styles.cardFooter}>
               <Text style={styles.cardAction}>Tap to start</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            </View>
+          </TouchableOpacity>
+
+
+
+          <TouchableOpacity style={styles.card} onPress={handleOrderUpdate} activeOpacity={0.8}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                <MaterialIcons name="edit" size={24} color="#F59E0B" />
+              </View>
+            </View>
+            <Text style={styles.cardTitle}>Update Orders</Text>
+            <Text style={styles.cardSubtitle}>Edit and modify existing orders</Text>
+            <View style={styles.cardFooter}>
+              <Text style={styles.cardAction}>Manage orders</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>

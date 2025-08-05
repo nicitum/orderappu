@@ -6,6 +6,7 @@ import InvoiceOwner from './InvoiceSA';
 import PlaceOrderOwner from './PlaceOrderOwner';
 import OwnerCartPage from './OwnerCartPage';
 import OrderHistoryOwner from './OrderHistoryOwner';
+import OwnerOrderUpdate from './OwnerOrderUpdate.jsx';
 
 const Stack = createStackNavigator();
 
@@ -17,7 +18,7 @@ const TransactionsOwnerStack = () => (
     <Stack.Screen name="PlaceOrderOwner" component={PlaceOrderOwner} />
     <Stack.Screen name="OwnerCartPage" component={OwnerCartPage} />
     <Stack.Screen name="OrderHistoryOwner" component={OrderHistoryOwner} />
-    
+    <Stack.Screen name="OwnerOrderUpdate" component={OwnerOrderUpdate} />
   </Stack.Navigator>
 );
 
