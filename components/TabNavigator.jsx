@@ -76,11 +76,12 @@ const TabNavigator = () => {
             if (userAuthToken) {
                 try {
                     const decodedToken = jwtDecode(userAuthToken);
+                    console.log("User role detected:", decodedToken.role);
                     if (decodedToken.role === "admin") {
                         setIsAdmin(true);
                         setIsSuperAdmin(false);
                         setIsUser(false);
-                    } else if (decodedToken.role === "superadmin") {
+                    } else if (decodedToken.role === "superadmin" || decodedToken.role === "owner") {
                         setIsAdmin(true);
                         setIsSuperAdmin(true);
                         setIsUser(false);

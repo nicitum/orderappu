@@ -437,6 +437,7 @@ const PlaceOrderPage = ({ route }) => {
           products: transformedData,
           orderType: "AM", // Default value for database compatibility
           orderDate,
+          entered_by: jwtDecode(userAuthToken).username,
         },
         headers: {
           Authorization: `Bearer ${userAuthToken}`,

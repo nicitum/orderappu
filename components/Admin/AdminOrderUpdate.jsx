@@ -288,106 +288,109 @@ const AdminOrderUpdate = () => {
     setEditModalVisible(true);
   };
 
-  const saveEditProduct = async () => {
+  const saveEditProduct = () => {
     if (!editProduct) return;
-    
-    const newPrice = parseFloat(editPrice);
+
     const newQty = parseInt(editQty);
-    
-    if (isNaN(newPrice) || newPrice <= 0) {
-      setEditError('Please enter a valid price');
-      return;
-    }
-    
     if (isNaN(newQty) || newQty <= 0) {
       setEditError('Please enter a valid quantity');
       return;
     }
 
+    let finalPrice = editProduct.price;
+    if (allowProductEdit) {
+      const parsedPrice = parseFloat(editPrice);
+      const minPrice = editProduct.min_selling_price !== undefined ? editProduct.min_selling_price : 0;
+      const maxPrice = editProduct.discountPrice !== undefined ? editProduct.discountPrice : (editProduct.price !== undefined ? editProduct.price : 0);
+
+      if (isNaN(parsedPrice) || parsedPrice < minPrice || parsedPrice > maxPrice) {
+        setEditError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
+        return;
+      }
+      finalPrice = parsedPrice;
+    }
+
+    // Update local state only
+    setProducts(prevProducts =>
+      prevProducts.map(product =>
+        product.product_id === editProduct.product_id
+          ? { ...product, price: finalPrice, quantity: newQty }
+          : product
+      )
+    );
+
+    // Close modal and reset state
+    setEditModalVisible(false);
+    setEditProduct(null);
+    setEditPrice('');
+    setEditQty('1');
+    setEditError(null);
+
+    Toast.show({
+      type: 'success',
+      text1: 'Product Updated Locally',
+      text2: 'Press "Update Order" to save changes.',
+    });
+  };
+
+  const handleUpdateOrder = async () => {
+    if (!selectedOrderId || products.length === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Cannot Update',
+        text2: 'No order or products to update.',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      
-      const url = `http://${ipAddress}:8091/order_update`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      
-      const productsToUpdate = products.map(product => {
-        if (product.product_id === editProduct.product_id) {
-          return {
-            order_id: selectedOrderId,
-            product_id: product.product_id,
-            name: product.name,
-            category: product.category,
-            price: newPrice,
-            quantity: newQty,
-            gst_rate: product.gst_rate
-          };
-        }
-        return {
-          order_id: selectedOrderId,
-          product_id: product.product_id,
-          name: product.name,
-          category: product.category,
-          price: product.price,
-          quantity: product.quantity,
-          gst_rate: product.gst_rate
-        };
-      });
+      const token = await AsyncStorage.getItem('userAuthToken');
+      if (!token) throw new Error('Authentication token not found.');
 
-      const calculatedTotalAmount = productsToUpdate.reduce((sum, product) => {
-        return sum + (product.quantity * product.price);
-      }, 0);
+      const decodedToken = jwtDecode(token);
+      const alteredBy = decodedToken.username;
 
-      const requestBody = {
+      const productsToUpdate = products.map(p => ({
+        order_id: selectedOrderId,
+        product_id: p.product_id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        quantity: p.quantity,
+        gst_rate: p.gst_rate,
+      }));
+
+      const totalAmount = productsToUpdate.reduce((sum, p) => sum + p.price * p.quantity, 0);
+
+      const response = await axios.post(`http://${ipAddress}:8091/order_update`, {
         orderId: selectedOrderId,
         products: productsToUpdate,
-        totalAmount: calculatedTotalAmount,
-        total_amount: calculatedTotalAmount
-      };
-
-      const updateResponse = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
+        total_amount: totalAmount,
+        totalAmount: totalAmount,
+        altered_by: alteredBy,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        throw new Error(`Failed to update product. Status: ${updateResponse.status}, Text: ${errorText}`);
+      if (response.data.success) {
+        Toast.show({
+          type: 'success',
+          text1: 'Order Updated Successfully',
+          text2: `Order #${selectedOrderId} has been updated.`,
+        });
+        // Optionally, refresh data
+        fetchOrderProducts(selectedOrderId);
+        fetchAdminOrders(); // To update total amount in the list
+      } else {
+        throw new Error(response.data.message || 'Failed to update order.');
       }
-
-      const updateData = await updateResponse.json();
-
-      // Update local state
-      setProducts(prevProducts => 
-        prevProducts.map(product => 
-          product.product_id === editProduct.product_id 
-            ? { ...product, price: newPrice, quantity: newQty }
-            : product
-        )
-      );
-
-      setEditModalVisible(false);
-      setEditProduct(null);
-      setEditPrice('');
-      setEditQty('1');
-      setEditError(null);
-
-      Toast.show({
-        type: 'success',
-        text1: 'Product Updated',
-        text2: 'Product has been updated successfully'
-      });
-
     } catch (error) {
-      setEditError(error.message || "Failed to update product.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message || "Failed to update product." 
+      console.error('Error updating order:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: error.response?.data?.message || error.message || 'An unknown error occurred.',
       });
     } finally {
       setLoading(false);
@@ -453,78 +456,7 @@ const AdminOrderUpdate = () => {
     }
   };
 
-  const handleUpdateOrder = async () => {
-    if (!selectedOrderId) {
-      Alert.alert("Error", "Please select an order to update.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
 
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-
-      let calculatedTotalAmount = 0;
-      const productsToUpdate = products.map(product => ({
-        order_id: selectedOrderId,
-        product_id: product.product_id,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-        quantity: product.quantity,
-        gst_rate: product.gst_rate
-      }));
-
-      productsToUpdate.forEach(product => {
-        calculatedTotalAmount += product.quantity * product.price;
-      });
-
-      const url = `http://${ipAddress}:8091/order_update`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      const requestBody = {
-        orderId: selectedOrderId,
-        products: productsToUpdate,
-        totalAmount: calculatedTotalAmount,
-        total_amount: calculatedTotalAmount
-      };
-
-      const updateResponse = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        throw new Error(`Failed to update order. Status: ${updateResponse.status}, Text: ${errorText}`);
-      }
-
-      const updateData = await updateResponse.json();
-
-      Toast.show({
-        type: 'success',
-        text1: 'Order Updated',
-        text2: updateData.message || "Order updated successfully!"
-      });
-
-      await fetchAdminOrders();
-      setSelectedOrderId(null);
-      setProducts([]);
-
-    } catch (error) {
-      setError(error.message || "Failed to update order.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message || "Failed to update order." 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDeleteOrder = async (orderIdToDelete) => {
     setOrderDeleteLoading(true);
@@ -573,6 +505,29 @@ const AdminOrderUpdate = () => {
       setOrderDeleteLoading(false);
       setOrderDeleteLoadingId(null);
     }
+  };
+
+  const confirmCancelOrder = (orderId) => {
+    Alert.alert(
+      'Cancel Order',
+      'Do you really want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          style: 'default',
+          onPress: () =>
+            Alert.alert(
+              'Confirm Cancel',
+              'This action cannot be undone. Proceed?',
+              [
+                { text: 'No', style: 'cancel' },
+                { text: 'Yes', style: 'destructive', onPress: () => handleDeleteOrder(orderId) },
+              ]
+            ),
+        },
+      ]
+    );
   };
 
   const handleAddProductToOrder = async (productToAdd) => {
@@ -746,79 +701,93 @@ const AdminOrderUpdate = () => {
             {item.loading_slip === "Yes" && (
               <Text style={styles.processedStatusText}>Processed</Text>
             )}
-            {item.approve_status === 'Rejected' && (
-              <Text style={styles.rejectedStatusText}>Rejected</Text>
+            {/* Show approval status prominently */}
+            {item.approve_status && item.approve_status !== 'null' && item.approve_status !== 'Null' && item.approve_status !== 'NULL' && (
+              <Text style={[
+                styles.approvalStatusText,
+                { color: getApprovalStatusColor(item.approve_status) }
+              ]}>
+                {getApprovalStatusText(item.approve_status)}
+              </Text>
+            )}
+            {(!item.approve_status || item.approve_status === 'null' || item.approve_status === 'Null' || item.approve_status === 'NULL') && (
+              <Text style={[styles.approvalStatusText, { color: COLORS.warning }]}>
+                PENDING
+              </Text>
             )}
           </View>
         </View>
-        {allowCancelOrder && (
-          <TouchableOpacity
-            style={[
-              styles.cancelOrderButton,
-              (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected") && styles.disabledCancelButton
-            ]}
-            onPress={() => handleDeleteOrder(item.id)}
-            disabled={orderDeleteLoading || item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected"}
-          >
-            {orderDeleteLoading && orderDeleteLoadingId === item.id ? (
-              <ActivityIndicator size="small" color={COLORS.text.light} />
-            ) : (
-              <Icon name="cancel" size={16} color={COLORS.text.light} />
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[
+            styles.cancelOrderButton,
+            (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected" || !allowCancelOrder) && styles.disabledCancelButton
+          ]}
+          onPress={() => confirmCancelOrder(item.id)}
+          disabled={
+            orderDeleteLoading ||
+            item.loading_slip === "Yes" ||
+            item.cancelled === "Yes" ||
+            item.approve_status === "Rejected" ||
+            !allowCancelOrder
+          }
+        >
+          {orderDeleteLoading && orderDeleteLoadingId === item.id ? (
+            <ActivityIndicator size="small" color={COLORS.text.light} />
+          ) : (
+            <Icon name="cancel" size={16} color={COLORS.text.light} />
+          )}
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
   const renderProductItem = ({ item, index }) => {
-    // Try to get image from item.image, or from allProducts (by product_id), fallback to placeholder
-    let imageName = item.image;
-    if (!imageName) {
-      const prod = allProducts.find(p => p.id === item.product_id || p.id === item.id);
-      imageName = prod?.image;
-    }
+    const prodMeta = allProducts.find(p => p.id === item.product_id || p.id === item.id);
+    const imageName = item.image || prodMeta?.image;
     const imageUri = imageName ? `http://${ipAddress}:8091/images/products/${imageName}` : null;
     const itemTotal = (item.price || 0) * (item.quantity || 1);
 
+    const canEditThisOrder = isOrderEditable && allowProductEdit;
+    const isOrderRestricted = selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered');
+
     return (
-      <View style={styles.productCard}>
+      <View style={[styles.productCard, isOrderRestricted && styles.restrictedProductCard]}>
         <View style={styles.productContent}>
           <View style={styles.productImageContainer}>
             {imageUri ? (
               <Image
                 source={{ uri: imageUri }}
-                style={styles.productImage}
+                style={[styles.productImage, isOrderRestricted && styles.restrictedProductImage]}
                 resizeMode="cover"
                 onError={() => console.warn(`Failed to load image for ${item.name}`)}
               />
             ) : (
-              <View style={[styles.productImage, styles.noImageContainer]}>
-                <Icon name="image-not-supported" size={24} color="#CCC" />
+              <View style={[styles.productImage, styles.noImageContainer, isOrderRestricted && styles.restrictedNoImageContainer]}>
+                <Icon name="image-not-supported" size={24} color={isOrderRestricted ? "#999" : "#CCC"} />
               </View>
             )}
           </View>
           <View style={styles.productDetails}>
-            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.productPrice}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
-            {item.category && <Text style={styles.productCategory}>{item.category}</Text>}
+            <Text style={[styles.productName, isOrderRestricted && styles.restrictedProductText]} numberOfLines={2}>{item.name}</Text>
+            <Text style={[styles.productPrice, isOrderRestricted && styles.restrictedProductText]}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
+            {item.category && <Text style={[styles.productCategory, isOrderRestricted && styles.restrictedProductText]}>{item.category}</Text>}
             <TouchableOpacity 
-              style={[styles.editButton, !isOrderEditable && styles.disabledEditButton]}
+              style={[styles.editButton, (!canEditThisOrder || isOrderRestricted) && styles.disabledEditButton]}
               onPress={() => handleEditProduct(item)}
-              disabled={!isOrderEditable}
+              disabled={!canEditThisOrder || isOrderRestricted}
             >
-              <Icon name="edit" size={16} color={isOrderEditable ? COLORS.primary : COLORS.text.tertiary} />
-              <Text style={[styles.editButtonText, !isOrderEditable && styles.disabledEditButtonText]}>Edit</Text>
+              <Icon name="edit" size={16} color={canEditThisOrder && !isOrderRestricted ? COLORS.primary : COLORS.text.tertiary} />
+              <Text style={[styles.editButtonText, (!canEditThisOrder || isOrderRestricted) && styles.disabledEditButtonText]}>Edit</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.productActions}>
             <TouchableOpacity
               style={[
                 styles.deleteButton,
-                !isOrderEditable && styles.disabledDeleteButton
+                (!isOrderEditable || isOrderRestricted) && styles.disabledDeleteButton
               ]}
               onPress={() => handleDeleteProductItem(index)}
-              disabled={deleteLoading || !isOrderEditable}
+              disabled={deleteLoading || !isOrderEditable || isOrderRestricted}
             >
               {deleteLoading && deleteLoadingIndex === index ? (
                 <ActivityIndicator size="small" color={COLORS.error} />
@@ -826,7 +795,7 @@ const AdminOrderUpdate = () => {
                 <Icon
                   name="delete"
                   size={20}
-                  color={!isOrderEditable ? COLORS.text.tertiary : COLORS.error}
+                  color={(!isOrderEditable || isOrderRestricted) ? COLORS.text.tertiary : COLORS.error}
                 />
               )}
             </TouchableOpacity>
@@ -845,6 +814,8 @@ const AdminOrderUpdate = () => {
   const isOrderEditable = selectedOrder && 
     selectedOrder.cancelled !== 'Yes' && 
     selectedOrder.approve_status !== 'Rejected' &&
+    selectedOrder.approve_status !== 'Accepted' &&  // Don't allow editing if accepted
+    selectedOrder.approve_status !== 'Altered' &&   // Don't allow editing if altered
     selectedOrder.loading_slip !== "Yes";
 
   const getAcceptanceStatusColor = (status) => {
@@ -914,6 +885,34 @@ const AdminOrderUpdate = () => {
     if (order.approve_status === 'Altered' || order.delivery_status === 'Processing') return 'pending';
     if (order.approve_status === 'Pending' || order.delivery_status === 'Pending') return 'schedule';
     return 'info';
+  };
+
+  // Helper functions for approval status display
+  const getApprovalStatusIcon = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'schedule';
+    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'check-circle';
+    if (approveStatus === 'Rejected') return 'block';
+    if (approveStatus === 'Altered') return 'edit';
+    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'schedule';
+    return 'info';
+  };
+
+  const getApprovalStatusColor = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return COLORS.warning;
+    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return COLORS.success;
+    if (approveStatus === 'Rejected') return COLORS.error;
+    if (approveStatus === 'Altered') return COLORS.primary;
+    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return COLORS.warning;
+    return COLORS.text.secondary;
+  };
+
+  const getApprovalStatusText = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'PENDING';
+    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'ACCEPTED';
+    if (approveStatus === 'Rejected') return 'REJECTED';
+    if (approveStatus === 'Altered') return 'ALTERED';
+    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'PENDING';
+    return 'UNKNOWN';
   };
 
   // Filtered orders based on cancelled state
@@ -1014,14 +1013,14 @@ const AdminOrderUpdate = () => {
           <View style={styles.editContainer}>
             {/* Order Status Banner */}
             {!isOrderEditable && (
-              <View style={[styles.orderStatusBanner, { backgroundColor: getOrderStatusColor(selectedOrder) + '15' }]}>
+              <View style={[styles.orderStatusBanner, { backgroundColor: COLORS.success + '15' }]}>
                 <Icon 
-                  name={getOrderStatusIcon(selectedOrder)} 
+                  name="lock" 
                   size={16} 
-                  color={getOrderStatusColor(selectedOrder)} 
+                  color={COLORS.success} 
                 />
-                <Text style={[styles.orderStatusBannerText, { color: getOrderStatusColor(selectedOrder) }]}>
-                  {getOrderStatusMessage(selectedOrder)}
+                <Text style={[styles.orderStatusBannerText, { color: COLORS.success }]}>
+                  Order cannot be edited
                 </Text>
               </View>
             )}
@@ -1035,19 +1034,6 @@ const AdminOrderUpdate = () => {
                   </Text>
                 </View>
               </View>
-              <View style={styles.orderStatusContainer}>
-                <Icon 
-                  name={selectedOrder.loading_slip === "Yes" ? "check-circle" : "pending"} 
-                  size={16} 
-                  color={selectedOrder.loading_slip === "Yes" ? COLORS.success : COLORS.warning} 
-                />
-                <Text style={[
-                  styles.orderStatusText,
-                  { color: selectedOrder.loading_slip === "Yes" ? COLORS.success : COLORS.warning }
-                ]}>
-                  {selectedOrder.loading_slip === "Yes" ? "Processed" : "Pending"}
-                </Text>
-              </View>
             </View>
 
             <View style={styles.editHeader}>
@@ -1055,10 +1041,10 @@ const AdminOrderUpdate = () => {
               <TouchableOpacity
                 style={[
                   styles.addProductButton,
-                  (!isOrderEditable) && styles.disabledButton
+                  (!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
                 ]}
                 onPress={() => setShowSearchModal(true)}
-                disabled={!isOrderEditable}
+                disabled={!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
               >
                 <Icon name="add" size={20} color={COLORS.text.light} />
                 <Text style={styles.addProductButtonText}>Add Product</Text>
@@ -1111,13 +1097,13 @@ const AdminOrderUpdate = () => {
               <TouchableOpacity
                 style={[
                   styles.updateButton,
-                  (!isOrderEditable) && styles.disabledButton
+                  (!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
                 ]}
                 onPress={handleUpdateOrder}
-                disabled={loading || !isOrderEditable}
+                disabled={loading || !isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
               >
                 <Text style={styles.updateButtonText}>
-                  {getOrderStatusMessage(selectedOrder)}
+                  Update Order
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1360,6 +1346,11 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     fontWeight: "500",
   },
+  approvalStatusText: {
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   orderInfo: {
     flex: 1,
     marginRight: 16,
@@ -1506,6 +1497,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 8,
+  },
+  approvalStatusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   orderStatusText: {
     fontSize: 14,
@@ -1889,6 +1891,26 @@ const styles = StyleSheet.create({
     width: 100,
     height: 28,
     marginLeft: 8,
+  },
+  // Restricted order styles
+  restrictedProductCard: {
+    opacity: 0.6,
+    backgroundColor: COLORS.divider,
+  },
+  restrictedProductImage: {
+    opacity: 0.7,
+  },
+  restrictedNoImageContainer: {
+    backgroundColor: COLORS.divider,
+  },
+  restrictedProductText: {
+    color: COLORS.text.tertiary,
+  },
+  restrictionText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });
 

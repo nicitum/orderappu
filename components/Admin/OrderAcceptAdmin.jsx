@@ -94,6 +94,7 @@ const OrderAcceptAdmin = () => {
 
     useFocusEffect(
         React.useCallback(() => {
+            console.log('Admin page focused - refreshing data...');
             fetchInitialData();
             return () => {
                 setAdminOrders([]);
@@ -101,6 +102,20 @@ const OrderAcceptAdmin = () => {
             };
         }, [])
     );
+
+    // Additional refresh when adminId changes
+    useEffect(() => {
+        if (adminId) {
+            console.log('Admin ID changed - refreshing orders...');
+            const refreshOrders = async () => {
+                const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                if (userAuthToken) {
+                    await fetchAdminOrders(adminId, userAuthToken);
+                }
+            };
+            refreshOrders();
+        }
+    }, [adminId]);
 
     useEffect(() => {
         if (selectAllOrders) {
@@ -203,6 +218,7 @@ const OrderAcceptAdmin = () => {
         const apiUrl = `http://${ipAddress}:8091/get-admin-orders/${currentAdminId}?date=${today}`;
 
         try {
+            console.log(`Fetching admin orders for date: ${today}, admin ID: ${currentAdminId}`);
             const response = await fetch(apiUrl, {
                 headers: {
                     "Authorization": `Bearer ${userAuthToken}`,
@@ -216,7 +232,9 @@ const OrderAcceptAdmin = () => {
 
             const responseData = await response.json();
             if (responseData.success) {
-                setAdminOrders(responseData.orders);
+                console.log(`Received ${responseData.orders?.length || 0} orders from backend`);
+                console.log('Order statuses:', responseData.orders?.map(o => ({ id: o.id, status: o.approve_status })));
+                setAdminOrders(responseData.orders || []);
             } else {
                 setError(responseData.message || "Failed to fetch admin orders.");
             }
@@ -250,14 +268,22 @@ const OrderAcceptAdmin = () => {
 
     // Check if order can be accepted
     const canAcceptOrder = (order) => {
-        // Can accept if status is Pending or Altered
-        return !order.approve_status || order.approve_status === 'Pending' || order.approve_status === 'Altered';
+        // Can accept if status is Pending, null, or Altered
+        const status = order.approve_status;
+        console.log(`Order ${order.id} status: "${status}" (type: ${typeof status})`);
+        const canAccept = status === 'Pending' || status === null || status === 'null' || status === 'Altered';
+        console.log(`Can accept order ${order.id}: ${canAccept}`);
+        return canAccept;
     };
 
     // Check if order can be rejected
     const canRejectOrder = (order) => {
-        // Can reject if status is Pending or Altered
-        return !order.approve_status || order.approve_status === 'Pending' || order.approve_status === 'Altered';
+        // Can reject if status is Pending, null, or Altered
+        const status = order.approve_status;
+        console.log(`Order ${order.id} status: "${status}" (type: ${typeof status})`);
+        const canReject = status === 'Pending' || status === null || status === 'null' || status === 'Altered';
+        console.log(`Can reject order ${order.id}: ${canReject}`);
+        return canReject;
     };
 
     // Get orders that can be accepted
@@ -288,7 +314,7 @@ const OrderAcceptAdmin = () => {
 
         // Filter orders that can be accepted
         const acceptableOrders = orderIdsToApprove.filter(orderId => {
-            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            const order = adminOrders.find(o => o.id === orderId);
             return order && canAcceptOrder(order);
         });
 
@@ -302,7 +328,7 @@ const OrderAcceptAdmin = () => {
         }
 
         const nonAcceptableOrders = orderIdsToApprove.filter(orderId => {
-            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            const order = adminOrders.find(o => o.id === orderId);
             return order && !canAcceptOrder(order);
         });
 
@@ -328,46 +354,54 @@ const OrderAcceptAdmin = () => {
                 {
                     text: 'Accept',
                     style: 'default',
-                    onPress: async () => {
-                        setLoading(true);
-                        setError(null);
-                        try {
-                            const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-                            let successCount = 0;
-                            for (const orderId of acceptableOrders) {
-                                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
-                                    method: 'POST',
-                                    headers: {
-                                        "Authorization": `Bearer ${userAuthToken}`,
-                                        "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Accepted' })
-                                });
-                                if (!response.ok) {
-                                    console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
-                                    continue;
-                                }
-                                const responseData = await response.json();
-                                if (responseData.success) {
-                                    updateOrderStatusInState(parseInt(orderId), 'Accepted');
-                                    successCount++;
-                                }
-                            }
-                            Toast.show({
-                                type: 'success',
-                                text1: 'Orders Accepted',
-                                text2: 'Selected orders accepted successfully'
-                            });
-                            setSelectedOrderIds({});
-                            setSelectAllOrders(false);
-                            await fetchAdminOrders(adminId, userAuthToken);
-                        } catch (err) {
-                            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve selected orders. Please try again.' });
-                            setError("Failed to approve selected orders. Please try again.");
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
+                    onPress: () =>
+                        Alert.alert(
+                            'Confirm Accept',
+                            'Do you really want to accept these orders?',
+                            [
+                                { text: 'No', style: 'cancel' },
+                                { text: 'Yes', style: 'default', onPress: async () => {
+                                    setLoading(true);
+                                    setError(null);
+                                    try {
+                                        const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                                        let successCount = 0;
+                                        for (const orderId of acceptableOrders) {
+                                            const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    "Authorization": `Bearer ${userAuthToken}`,
+                                                    "Content-Type": "application/json",
+                                                },
+                                                body: JSON.stringify({ id: orderId, approve_status: 'Accepted' })
+                                            });
+                                            if (!response.ok) {
+                                                console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
+                                                continue;
+                                            }
+                                            const responseData = await response.json();
+                                            if (responseData.success) {
+                                                updateOrderStatusInState(orderId, 'Accepted');
+                                                successCount++;
+                                            }
+                                        }
+                                        Toast.show({
+                                            type: 'success',
+                                            text1: 'Orders Accepted',
+                                            text2: 'Selected orders accepted successfully'
+                                        });
+                                        setSelectedOrderIds({});
+                                        setSelectAllOrders(false);
+                                        await fetchAdminOrders(adminId, userAuthToken);
+                                    } catch (err) {
+                                        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve selected orders. Please try again.' });
+                                        setError("Failed to approve selected orders. Please try again.");
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                } }
+                            ]
+                        ),
                 }
             ]
         );
@@ -383,7 +417,7 @@ const OrderAcceptAdmin = () => {
 
         // Filter orders that can be rejected
         const rejectableOrders = orderIdsToReject.filter(orderId => {
-            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            const order = adminOrders.find(o => o.id === orderId);
             return order && canRejectOrder(order);
         });
 
@@ -397,7 +431,7 @@ const OrderAcceptAdmin = () => {
         }
 
         const nonRejectableOrders = orderIdsToReject.filter(orderId => {
-            const order = adminOrders.find(o => o.id === parseInt(orderId));
+            const order = adminOrders.find(o => o.id === orderId);
             return order && !canRejectOrder(order);
         });
 
@@ -423,46 +457,54 @@ const OrderAcceptAdmin = () => {
                 {
                     text: 'Reject',
                     style: 'destructive',
-                    onPress: async () => {
-                        setLoading(true);
-                        setError(null);
-                        try {
-                            const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-                            let successCount = 0;
-                            for (const orderId of rejectableOrders) {
-                                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
-                                    method: 'POST',
-                                    headers: {
-                                        "Authorization": `Bearer ${userAuthToken}`,
-                                        "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Rejected' })
-                                });
-                                if (!response.ok) {
-                                    console.error(`HTTP Error rejecting order ID ${orderId}. Status: ${response.status}`);
-                                    continue;
-                                }
-                                const responseData = await response.json();
-                                if (responseData.success) {
-                                    updateOrderStatusInState(parseInt(orderId), 'Rejected');
-                                    successCount++;
-                                }
-                            }
-                            Toast.show({
-                                type: 'success',
-                                text1: 'Orders Rejected',
-                                text2: 'Selected orders rejected successfully'
-                            });
-                            setSelectedOrderIds({});
-                            setSelectAllOrders(false);
-                            await fetchAdminOrders(adminId, userAuthToken);
-                        } catch (err) {
-                            Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject selected orders. Please try again.' });
-                            setError("Failed to reject selected orders. Please try again.");
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
+                    onPress: () =>
+                        Alert.alert(
+                            'Confirm Reject',
+                            'Do you really want to reject these orders?',
+                            [
+                                { text: 'No', style: 'cancel' },
+                                { text: 'Yes', style: 'destructive', onPress: async () => {
+                                    setLoading(true);
+                                    setError(null);
+                                    try {
+                                        const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                                        let successCount = 0;
+                                        for (const orderId of rejectableOrders) {
+                                            const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    "Authorization": `Bearer ${userAuthToken}`,
+                                                    "Content-Type": "application/json",
+                                                },
+                                                body: JSON.stringify({ id: orderId, approve_status: 'Rejected' })
+                                            });
+                                            if (!response.ok) {
+                                                console.error(`HTTP Error rejecting order ID ${orderId}. Status: ${response.status}`);
+                                                continue;
+                                            }
+                                            const responseData = await response.json();
+                                            if (responseData.success) {
+                                                updateOrderStatusInState(orderId, 'Rejected');
+                                                successCount++;
+                                            }
+                                        }
+                                        Toast.show({
+                                            type: 'success',
+                                            text1: 'Orders Rejected',
+                                            text2: 'Selected orders rejected successfully'
+                                        });
+                                        setSelectedOrderIds({});
+                                        setSelectAllOrders(false);
+                                        await fetchAdminOrders(adminId, userAuthToken);
+                                    } catch (err) {
+                                        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject selected orders. Please try again.' });
+                                        setError("Failed to reject selected orders. Please try again.");
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                } }
+                            ]
+                        ),
                 }
             ]
         );
@@ -565,6 +607,11 @@ const OrderAcceptAdmin = () => {
                                                 </View>
                                                 <View style={styles.orderStatus}>
                                                     {order.altered === 'Yes' ? (
+                                                        <View style={[styles.statusBadge, styles.alteredBadge]}>
+                                                            <Icon name="pencil" size={14} color={COLORS.primary} />
+                                                            <Text style={styles.alteredStatus}>Altered</Text>
+                                                        </View>
+                                                    ) : order.approve_status === 'Altered' ? (
                                                         <View style={[styles.statusBadge, styles.alteredBadge]}>
                                                             <Icon name="pencil" size={14} color={COLORS.primary} />
                                                             <Text style={styles.alteredStatus}>Altered</Text>
@@ -681,6 +728,24 @@ const OrderAcceptAdmin = () => {
                     iconColor={COLORS.primary}
                     inputStyle={styles.searchInput}
                 />
+                
+                {/* Manual Refresh Button */}
+                <View style={styles.refreshButtonContainer}>
+                    <Button
+                        mode="outlined"
+                        compact={true}
+                        onPress={() => {
+                            console.log('Manual refresh triggered');
+                            fetchInitialData();
+                        }}
+                        style={styles.refreshButton}
+                        labelStyle={styles.refreshButtonLabel}
+                        icon="refresh"
+                    >
+                        Refresh Orders
+                    </Button>
+                </View>
+                
                 {/* Route Filter Dropdown */}
                 <View style={styles.routeFilterContainer}>
                     <Picker
@@ -1111,6 +1176,22 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    refreshButtonContainer: {
+        marginBottom: 16,
+        alignItems: 'center',
+    },
+    refreshButton: {
+        borderColor: COLORS.primary,
+        borderWidth: 1,
+        borderRadius: 8,
+        minHeight: 36,
+        paddingHorizontal: 16,
+    },
+    refreshButtonLabel: {
+        color: COLORS.primary,
+        fontSize: 14,
+        fontWeight: '500',
     },
 });
 

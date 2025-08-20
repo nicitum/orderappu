@@ -212,8 +212,9 @@ const Catalogue = () => {
   useEffect(() => {
     let filtered = products;
     
-    // Filter by enable_product - only show products with enable_product = "Yes"
-    filtered = filtered.filter(p => p.enable_product === "Yes");
+    // Filter by enable_product - handle new backend values
+    // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+    filtered = filtered.filter(p => p.enable_product !== "Mask");
     
     if (selectedCategoryId !== 'All') {
       filtered = filtered.filter(p => p.category === selectedCategoryId);
@@ -354,16 +355,27 @@ const Catalogue = () => {
     // Remove GST calculation: just use discountPrice and price as-is
     const discountPrice = Number(item.discountPrice) || 0;
     const price = Number(item.price) || 0;
+    
+    // Check if product is inactive
+    const isInactive = item.enable_product === "Inactive";
+    
     return (
-      <View style={styles.productCardContainer}>
+      <View style={[
+        styles.productCardContainer,
+        isInactive && styles.inactiveProductCard
+      ]}>
         <TouchableOpacity
           style={styles.productImageWrapper}
-          onPress={() => setEnlargedProduct(item)}
+          onPress={() => !isInactive && setEnlargedProduct(item)}
+          disabled={isInactive}
         >
           {item.image ? (
             <Image
               source={{ uri: imageUri }}
-              style={styles.productImageLarge}
+              style={[
+                styles.productImageLarge,
+                isInactive && styles.inactiveProductImage
+              ]}
               resizeMode="contain"
               onError={() => {}}
             />
@@ -379,16 +391,34 @@ const Catalogue = () => {
               <Text style={styles.offerText}>{item.offers.toLowerCase()}</Text>
             </View>
           ) : null}
-          <Text style={styles.productNameLarge} numberOfLines={2}>{item.name}</Text>
-          {item.size ? <Text style={styles.productVolume}>{item.size}</Text> : null}
+          <Text style={[
+            styles.productNameLarge,
+            isInactive && styles.inactiveProductText
+          ]} numberOfLines={2}>{item.name}</Text>
+          {item.size ? (
+            <Text style={[
+              styles.productVolume,
+              isInactive && styles.inactiveProductText
+            ]}>{item.size}</Text>
+          ) : null}
           <View style={styles.priceContainer}>
             {/* Show MRP scratched, then Selling Price, no GST calculation */}
             {item.price ? (
-              <Text style={styles.originalPrice}>{formatCurrency(price)}</Text>
+              <Text style={[
+                styles.originalPrice,
+                isInactive && styles.inactiveProductText
+              ]}>{formatCurrency(price)}</Text>
             ) : null}
-            <Text style={styles.currentPrice}>{formatCurrency(discountPrice)}</Text>
+            <Text style={[
+              styles.currentPrice,
+              isInactive && styles.inactiveProductText
+            ]}>{formatCurrency(discountPrice)}</Text>
           </View>
-          {quantityInCart === 0 ? (
+          {isInactive ? (
+            <View style={styles.inactiveButton}>
+              <Text style={styles.inactiveButtonText}>UNAVAILABLE</Text>
+            </View>
+          ) : quantityInCart === 0 ? (
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => handleAddItem(item)}
@@ -1043,6 +1073,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#003366',
     marginLeft: 10,
+  },
+  // Inactive product styles
+  inactiveProductCard: {
+    opacity: 0.6,
+    backgroundColor: '#F5F5F5',
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: '#999999',
+  },
+  inactiveButton: {
+    backgroundColor: '#CCCCCC',
+    paddingVertical: 10,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    minWidth: 120,
+    height: 40,
+  },
+  inactiveButtonText: {
+    color: '#666666',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

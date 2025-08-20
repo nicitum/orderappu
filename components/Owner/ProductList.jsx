@@ -17,6 +17,8 @@ import { ipAddress } from "../../services/urls";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { jwtDecode } from "jwt-decode";
 
 const ProductsComponent = () => {
   const [products, setProducts] = useState([]);
@@ -28,7 +30,25 @@ const ProductsComponent = () => {
   const [categories, setCategories] = useState([]);
   const [enlargedImage, setEnlargedImage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState(null);
   const navigation = useNavigation();
+
+  // Check user role on component mount
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const token = await AsyncStorage.getItem("userAuthToken");
+        if (token) {
+          const decoded = jwtDecode(token);
+          setUserRole(decoded.role);
+          console.log("User role in ProductList:", decoded.role);
+        }
+      } catch (error) {
+        console.error("Error checking user role:", error);
+      }
+    };
+    checkUserRole();
+  }, []);
 
   // Always refresh products when focused (like Catalogue.jsx)
   useFocusEffect(
@@ -40,24 +60,57 @@ const ProductsComponent = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
+      console.log("Fetching products from:", `http://${ipAddress}:8091/products`);
+      
+      // Test if API is reachable
+      try {
+        const testResponse = await fetch(`http://${ipAddress}:8091/`, { method: 'HEAD' });
+        console.log("API reachability test:", testResponse.status);
+      } catch (testError) {
+        console.log("API reachability test failed:", testError.message);
+      }
+      
       const response = await fetch(`http://${ipAddress}:8091/products`);
       const data = await response.json();
+      console.log("API response status:", response.status);
+      console.log("API response data length:", data.length);
+      console.log("Sample product data:", data[0]);
+      
       if (response.ok) {
         // Filter by enable_product - only show products with enable_product = "Yes"
-        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        // Handle cases where enable_product might be missing or have different values
+        const enabledProducts = data.filter(p => {
+          const enableStatus = p.enable_product;
+          console.log(`Product ${p.name} (ID: ${p.id}) enable_product:`, enableStatus);
+          return enableStatus === "Yes" || enableStatus === "yes" || enableStatus === true || enableStatus === 1;
+        });
+        console.log("Enabled products count:", enabledProducts.length);
+        console.log("Sample enabled product:", enabledProducts[0]);
         
-        setProducts(enabledProducts);
-        setFilteredProducts(enabledProducts);
+        // If no enabled products found, show all products for debugging
+        const productsToShow = enabledProducts.length > 0 ? enabledProducts : data;
+        if (enabledProducts.length === 0) {
+          console.log("No enabled products found, showing all products for debugging");
+        }
         
-        // Extract unique brands and categories from enabled products only
-        setBrands(["All", ...new Set(enabledProducts.map((product) => product.brand))]);
-        setCategories(["All", ...new Set(enabledProducts.map((product) => product.category))]);
+        setProducts(productsToShow);
+        setFilteredProducts(productsToShow);
+        
+        // Extract unique brands and categories from products to show
+        setBrands(["All", ...new Set(productsToShow.map((product) => product.brand))]);
+        setCategories(["All", ...new Set(productsToShow.map((product) => product.category))]);
+        
+        // Set default selections
+        if (!selectedCategory) setSelectedCategory("All");
+        if (!selectedBrand) setSelectedBrand("All");
       } else {
-        Alert.alert("Error", "Failed to fetch products");
+        console.log("API returned error status:", response.status);
+        console.log("API error response:", data);
+        Alert.alert("Error", `Failed to fetch products. Status: ${response.status}`);
       }
     } catch (error) {
       console.error("Error fetching products:", error);
-      Alert.alert("Error", "An error occurred while fetching products");
+      Alert.alert("Error", `An error occurred while fetching products: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -119,10 +172,38 @@ const ProductsComponent = () => {
     );
   }
 
+  // Check if user has access to this component
+  if (userRole && userRole !== "superadmin" && userRole !== "owner") {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar backgroundColor="#003366" barStyle="light-content" />
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Access Denied</Text>
+        </View>
+        <View style={styles.accessDeniedContainer}>
+          <Icon name="block" size={64} color="#FF6B6B" />
+          <Text style={styles.accessDeniedTitle}>Access Denied</Text>
+          <Text style={styles.accessDeniedText}>
+            You need superadmin or owner role to access this page.
+          </Text>
+          <Text style={styles.accessDeniedText}>
+            Your current role: {userRole}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#003366" barStyle="light-content" />
-      
+     
       
       <View style={styles.searchContainer}>
         <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
@@ -133,6 +214,15 @@ const ProductsComponent = () => {
           value={searchTerm}
           onChangeText={setSearchTerm}
         />
+      </View>
+
+      {/* Debug info */}
+      <View style={styles.debugContainer}>
+       
+        <Text style={styles.debugText}>Total Products: {products.length}</Text>
+        <Text style={styles.debugText}>Filtered Products: {filteredProducts.length}</Text>
+        <Text style={styles.debugText}>Categories: {categories.length - 1}</Text>
+        <Text style={styles.debugText}>Brands: {brands.length - 1}</Text>
       </View>
 
       <View style={styles.filterContainer}>
@@ -184,6 +274,7 @@ const ProductsComponent = () => {
           <View style={styles.emptyContainer}>
             <Icon name="search-off" size={48} color="#CCC" />
             <Text style={styles.noProducts}>No products found</Text>
+            <Text style={styles.emptySubText}>Try adjusting your search or filters</Text>
           </View>
         }
       />
@@ -247,8 +338,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#FFFFFF",
+    flex: 1,
     fontSize: 20,
     fontWeight: "600",
+    textAlign: "center",
+  },
+  refreshButton: {
+    padding: 8,
+    marginLeft: 16,
   },
   searchContainer: {
     flexDirection: "row",
@@ -358,6 +455,13 @@ const styles = StyleSheet.create({
     color: "#666666",
     fontSize: 16,
     marginTop: 12,
+    fontWeight: "600",
+  },
+  emptySubText: {
+    color: "#999999",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
   },
   modalContainer: {
     flex: 1,
@@ -376,6 +480,43 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     padding: 8,
     borderRadius: 20,
+  },
+  debugContainer: {
+    backgroundColor: "#FFFFFF",
+    margin: 16,
+    marginTop: 10,
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  debugText: {
+    fontSize: 14,
+    color: "#333",
+    marginBottom: 4,
+  },
+  accessDeniedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#F5F7FA",
+  },
+  accessDeniedTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FF6B6B",
+    marginTop: 20,
+    textAlign: "center",
+  },
+  accessDeniedText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 10,
   },
 });
 

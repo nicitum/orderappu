@@ -362,6 +362,7 @@ const OrderHistoryOwner = ({ route }) => {
                     customer_id: order.customer_id,
                     order_type: order.order_type || 'AM',
                     products: productsPayload,
+                    entered_by: jwtDecode(token).username,
                 }),
             });
             const data = await response.json();
@@ -375,11 +376,28 @@ const OrderHistoryOwner = ({ route }) => {
     };
 
     const handleEditAndReorder = (products, order) => {
+        // Get customer name with fallback
+        const customerName = customerNames[order.customer_id];
+        const displayName = customerName && customerName !== order.customer_id.toString() 
+            ? customerName 
+            : `Customer ${order.customer_id}`;
+        
         // Store products and customer in AsyncStorage for cart page
         const customerInfo = {
             customer_id: order.customer_id,
-            name: customerNames[order.customer_id] || `Customer ${order.customer_id}`
+            name: displayName,
+            username: customerName || displayName // Include username as fallback
         };
+        
+        // Debug logging
+        console.log('=== EDIT AND REORDER DEBUG ===');
+        console.log('Order customer_id:', order.customer_id);
+        console.log('Customer names from state:', customerNames);
+        console.log('Customer name for this ID:', customerName);
+        console.log('Final display name:', displayName);
+        console.log('Final customer info:', customerInfo);
+        console.log('=== END DEBUG ===');
+        
         const cartData = {
             customer: customerInfo,
             products: products.map(product => ({
@@ -393,6 +411,7 @@ const OrderHistoryOwner = ({ route }) => {
                 gst_rate: product.gst_rate || 0
             }))
         };
+        
         AsyncStorage.setItem('ownerCart', JSON.stringify(cartData.products));
         AsyncStorage.setItem('ownerCartCustomer', JSON.stringify(customerInfo));
         navigation.navigate('OwnerCartPage', { customer: customerInfo, products: products });
@@ -497,13 +516,19 @@ const OrderHistoryOwner = ({ route }) => {
         }
     };
 
-    const getAcceptanceStatusText = (status) => {
-      if (!status) return 'PENDING';
-      return status.toUpperCase();
-    };
-
-    const getCancellationStatusText = (cancelled) => {
-      return cancelled === 'Yes' ? 'CANCELLED' : 'ACTIVE';
+    const getConsolidatedStatus = (order) => {
+      if (order.cancelled === 'Yes') {
+        return { text: 'CANCELLED', color: '#DC2626' };
+      }
+      switch (order.approve_status?.toLowerCase()) {
+        case 'rejected':
+          return { text: 'REJECTED', color: '#DC2626' };
+        case 'accepted':
+          return { text: 'ACCEPTED', color: '#10B981' };
+        case 'pending':
+        default:
+          return { text: 'PENDING', color: '#F59E0B' };
+      }
     };
 
     if (loading) {
@@ -684,21 +709,19 @@ const OrderHistoryOwner = ({ route }) => {
                                     <Text style={styles.orderDate}>
                                         {moment.unix(order.placed_on).format('MMM D, YYYY [at] h:mm A')}
                                     </Text>
+                                    {order.entered_by && (
+                                        <Text style={styles.orderEnteredBy}>Entered By: {order.entered_by}</Text>
+                                    )}
+                                    {order.altered_by && (
+                                        <Text style={styles.orderEnteredBy}>Altered By: {order.altered_by}</Text>
+                                    )}
                                 </View>
                                 <View style={styles.statusContainer}>
-                                  {/* Order Acceptance Status */}
-                                  <View style={styles.statusRow}>
-                                    <Text style={styles.statusLabel}>Acceptance:</Text>
-                                    <Text style={[styles.statusValue, { color: getAcceptanceStatusColor(order.approve_status) }]}>
-                                      {getAcceptanceStatusText(order.approve_status)}
-                                    </Text>
-                                  </View>
-                                  
-                                  {/* Cancellation Status */}
+                                  {/* Consolidated Status */}
                                   <View style={styles.statusRow}>
                                     <Text style={styles.statusLabel}>Status:</Text>
-                                    <Text style={[styles.statusValue, { color: getCancellationStatusColor(order.cancelled) }]}>
-                                      {getCancellationStatusText(order.cancelled)}
+                                    <Text style={[styles.statusValue, { color: getConsolidatedStatus(order).color }]}>
+                                      {getConsolidatedStatus(order).text}
                                     </Text>
                                   </View>
                                 </View>
@@ -960,6 +983,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
         marginTop: 3,
+    },
+    orderEnteredBy: {
+      fontSize: 12,
+      color: '#003366',
+      fontWeight: 'bold',
+      marginTop: 2,
     },
     orderSummary: {
         flexDirection: 'row',

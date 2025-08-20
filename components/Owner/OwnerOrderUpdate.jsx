@@ -253,110 +253,44 @@ const OwnerOrderUpdate = () => {
     setEditModalVisible(true);
   };
 
-  const saveEditProduct = async () => {
+  const saveEditProduct = () => {
     if (!editProduct) return;
-    
+
     const newPrice = parseFloat(editPrice);
     const newQty = parseInt(editQty);
     const minPrice = editProduct.min_selling_price !== undefined ? editProduct.min_selling_price : 0;
     const maxPrice = editProduct.discountPrice !== undefined ? editProduct.discountPrice : (editProduct.price !== undefined ? editProduct.price : 0);
+
     if (isNaN(newPrice) || newPrice < minPrice || newPrice > maxPrice) {
-      setEditError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
-      return;
+        setEditError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
+        return;
     }
     if (isNaN(newQty) || newQty <= 0) {
-      setEditError('Please enter a valid quantity');
-      return;
+        setEditError('Please enter a valid quantity');
+        return;
     }
 
-    setLoading(true);
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      
-      const url = `http://${ipAddress}:8091/order_update`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      
-      const productsToUpdate = products.map(product => {
-        if (product.product_id === editProduct.product_id) {
-          return {
-            order_id: selectedOrderId,
-            product_id: product.product_id,
-            name: product.name,
-            category: product.category,
-            price: newPrice,
-            quantity: newQty,
-            gst_rate: product.gst_rate
-          };
-        }
-        return {
-          order_id: selectedOrderId,
-          product_id: product.product_id,
-          name: product.name,
-          category: product.category,
-          price: product.price,
-          quantity: product.quantity,
-          gst_rate: product.gst_rate
-        };
-      });
-
-      const calculatedTotalAmount = productsToUpdate.reduce((sum, product) => {
-        return sum + (product.quantity * product.price);
-      }, 0);
-
-      const requestBody = {
-        orderId: selectedOrderId,
-        products: productsToUpdate,
-        totalAmount: calculatedTotalAmount,
-        total_amount: calculatedTotalAmount
-      };
-
-      const updateResponse = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        throw new Error(`Failed to update product. Status: ${updateResponse.status}, Text: ${errorText}`);
-      }
-
-      const updateData = await updateResponse.json();
-
-      // Update local state
-      setProducts(prevProducts => 
-        prevProducts.map(product => 
-          product.product_id === editProduct.product_id 
-            ? { ...product, price: newPrice, quantity: newQty }
-            : product
+    // Update local state only
+    setProducts(prevProducts =>
+        prevProducts.map(product =>
+            product.product_id === editProduct.product_id
+                ? { ...product, price: newPrice, quantity: newQty }
+                : product
         )
-      );
+    );
 
-      setEditModalVisible(false);
-      setEditProduct(null);
-      setEditPrice('');
-      setEditQty('1');
-      setEditError(null);
+    // Close modal and reset state
+    setEditModalVisible(false);
+    setEditProduct(null);
+    setEditPrice('');
+    setEditQty('1');
+    setEditError(null);
 
-      Toast.show({
+    Toast.show({
         type: 'success',
-        text1: 'Product Updated',
-        text2: 'Product has been updated successfully'
-      });
-
-    } catch (error) {
-      setEditError(error.message || "Failed to update product.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message || "Failed to update product." 
-      });
-    } finally {
-      setLoading(false);
-    }
+        text1: 'Product Updated Locally',
+        text2: 'Press \"Update Order\" to save changes.',
+    });
   };
 
   const handleDeleteProductItem = async (indexToDelete) => {
@@ -449,11 +383,13 @@ const OwnerOrderUpdate = () => {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       };
+      const decodedToken = jwtDecode(token);
       const requestBody = {
         orderId: selectedOrderId,
         products: productsToUpdate,
         totalAmount: calculatedTotalAmount,
-        total_amount: calculatedTotalAmount
+        total_amount: calculatedTotalAmount,
+        altered_by: decodedToken.username
       };
 
       const updateResponse = await fetch(url, {
@@ -538,6 +474,29 @@ const OwnerOrderUpdate = () => {
       setOrderDeleteLoading(false);
       setOrderDeleteLoadingId(null);
     }
+  };
+
+  const confirmCancelOrder = (orderId) => {
+    Alert.alert(
+      'Cancel Order',
+      'Do you really want to cancel this order?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          style: 'default',
+          onPress: () =>
+            Alert.alert(
+              'Confirm Cancel',
+              'This action cannot be undone. Proceed?',
+              [
+                { text: 'No', style: 'cancel' },
+                { text: 'Yes', style: 'destructive', onPress: () => handleDeleteOrder(orderId) },
+              ]
+            ),
+        },
+      ]
+    );
   };
 
   const handleAddProductToOrder = async (productToAdd) => {
@@ -702,27 +661,45 @@ const OwnerOrderUpdate = () => {
             }
           </Text>
         </View>
-        <View style={styles.orderCenterSection}>
-          <Text style={styles.orderAmountText}>{formatCurrency(item.total_amount)}</Text>
-          <View style={styles.statusContainer}>
-            {item.cancelled === 'Yes' && (
-              <Text style={styles.cancelledStatusText}>Cancelled</Text>
-            )}
-            {item.loading_slip === "Yes" && (
-              <Text style={styles.processedStatusText}>Processed</Text>
-            )}
-            {item.approve_status === 'Rejected' && (
-              <Text style={styles.rejectedStatusText}>Rejected</Text>
-            )}
+                  <View style={styles.orderCenterSection}>
+            <Text style={styles.orderAmountText}>{formatCurrency(item.total_amount)}</Text>
+            <View style={styles.statusContainer}>
+              {item.cancelled === 'Yes' && (
+                <Text style={styles.cancelledStatusText}>Cancelled</Text>
+              )}
+              {item.loading_slip === "Yes" && (
+                <Text style={styles.processedStatusText}>Processed</Text>
+              )}
+              {/* Show approval status prominently */}
+              {item.approve_status && item.approve_status !== 'null' && item.approve_status !== 'Null' && item.approve_status !== 'NULL' && (
+                <Text style={[
+                  styles.approvalStatusText,
+                  { color: getApprovalStatusColor(item.approve_status) }
+                ]}>
+                  {getApprovalStatusText(item.approve_status)}
+                </Text>
+              )}
+              {(!item.approve_status || item.approve_status === 'null' || item.approve_status === 'Null' || item.approve_status === 'NULL') && (
+                <Text style={[styles.approvalStatusText, { color: COLORS.warning }]}>
+                  PENDING
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
         <TouchableOpacity
           style={[
             styles.cancelOrderButton,
-            (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected") && styles.disabledCancelButton
+            (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected" || item.approve_status === "Accepted" || item.approve_status === "Altered") && styles.disabledCancelButton
           ]}
-          onPress={() => handleDeleteOrder(item.id)}
-          disabled={orderDeleteLoading || item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected"}
+          onPress={() => confirmCancelOrder(item.id)}
+          disabled={
+            orderDeleteLoading || 
+            item.loading_slip === "Yes" || 
+            item.cancelled === "Yes" || 
+            item.approve_status === "Rejected" ||
+            item.approve_status === "Accepted" ||
+            item.approve_status === "Altered"
+          }
         >
           {orderDeleteLoading && orderDeleteLoadingId === item.id ? (
             <ActivityIndicator size="small" color={COLORS.text.light} />
@@ -746,43 +723,43 @@ const OwnerOrderUpdate = () => {
     const itemTotal = (item.price || 0) * (item.quantity || 1);
 
     return (
-      <View style={styles.productCard}>
+      <View style={[styles.productCard, isOrderRestricted && styles.restrictedProductCard]}>
         <View style={styles.productContent}>
           <View style={styles.productImageContainer}>
             {imageUri ? (
               <Image
                 source={{ uri: imageUri }}
-                style={styles.productImage}
+                style={[styles.productImage, isOrderRestricted && styles.restrictedProductImage]}
                 resizeMode="cover"
                 onError={() => console.warn(`Failed to load image for ${item.name}`)}
               />
             ) : (
-              <View style={[styles.productImage, styles.noImageContainer]}>
-                <Icon name="image-not-supported" size={24} color="#CCC" />
+              <View style={[styles.productImage, styles.noImageContainer, isOrderRestricted && styles.restrictedNoImageContainer]}>
+                <Icon name="image-not-supported" size={24} color={isOrderRestricted ? "#999" : "#CCC"} />
               </View>
             )}
           </View>
           <View style={styles.productDetails}>
-            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.productPrice}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
-            {item.category && <Text style={styles.productCategory}>{item.category}</Text>}
+            <Text style={[styles.productName, isOrderRestricted && styles.restrictedProductText]} numberOfLines={2}>{item.name}</Text>
+            <Text style={[styles.productPrice, isOrderRestricted && styles.restrictedProductText]}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
+            {item.category && <Text style={[styles.productCategory, isOrderRestricted && styles.restrictedProductText]}>{item.category}</Text>}
             <TouchableOpacity 
-              style={[styles.editButton, !isOrderEditable && styles.disabledEditButton]}
+              style={[styles.editButton, (!isOrderEditable || isOrderRestricted) && styles.disabledEditButton]}
               onPress={() => handleEditProduct(item)}
-              disabled={!isOrderEditable}
+              disabled={!isOrderEditable || isOrderRestricted}
             >
-              <Icon name="edit" size={16} color={isOrderEditable ? COLORS.primary : COLORS.text.tertiary} />
-              <Text style={[styles.editButtonText, !isOrderEditable && styles.disabledEditButtonText]}>Edit</Text>
+              <Icon name="edit" size={16} color={isOrderEditable && !isOrderRestricted ? COLORS.primary : COLORS.text.tertiary} />
+              <Text style={[styles.editButtonText, (!isOrderEditable || isOrderRestricted) && styles.disabledEditButtonText]}>Edit</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.productActions}>
             <TouchableOpacity
               style={[
                 styles.deleteButton,
-                !isOrderEditable && styles.disabledDeleteButton
+                (!isOrderEditable || isOrderRestricted) && styles.disabledDeleteButton
               ]}
               onPress={() => handleDeleteProductItem(index)}
-              disabled={deleteLoading || !isOrderEditable}
+              disabled={deleteLoading || !isOrderEditable || isOrderRestricted}
             >
               {deleteLoading && deleteLoadingIndex === index ? (
                 <ActivityIndicator size="small" color={COLORS.error} />
@@ -790,7 +767,7 @@ const OwnerOrderUpdate = () => {
                 <Icon
                   name="delete"
                   size={20}
-                  color={!isOrderEditable ? COLORS.text.tertiary : COLORS.error}
+                  color={(!isOrderEditable || isOrderRestricted) ? COLORS.text.tertiary : COLORS.error}
                 />
               )}
             </TouchableOpacity>
@@ -805,11 +782,44 @@ const OwnerOrderUpdate = () => {
     return sum + (product.quantity * product.price);
   }, 0);
 
-  // Check if order is editable (not cancelled, not processed, not rejected)
+  // Check if order is editable (not cancelled, not processed, not rejected, not accepted, not altered)
   const isOrderEditable = selectedOrder && 
     selectedOrder.cancelled !== 'Yes' && 
     selectedOrder.approve_status !== 'Rejected' &&
+    selectedOrder.approve_status !== 'Accepted' &&  // Don't allow editing if accepted
+    selectedOrder.approve_status !== 'Altered' &&   // Don't allow editing if altered
     selectedOrder.loading_slip !== "Yes";
+
+  // Check if order is restricted (accepted, rejected, or altered)
+  const isOrderRestricted = selectedOrder && (
+    selectedOrder.approve_status === 'Accepted' || 
+    selectedOrder.approve_status === 'Rejected' || 
+    selectedOrder.approve_status === 'Altered'
+  );
+
+  // Helper functions for approval status display
+  const getApprovalStatusColor = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return COLORS.warning;
+    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return COLORS.success;
+    if (approveStatus === 'Rejected') return COLORS.error;
+    if (approveStatus === 'Altered') return '#1E40AF'; // Deep blue for Altered
+    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return COLORS.accent;
+    return COLORS.primary;
+  };
+
+  const getApprovalStatusText = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'PENDING';
+    return approveStatus.toUpperCase();
+  };
+
+  const getApprovalStatusIcon = (approveStatus) => {
+    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'schedule';
+    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'check-circle';
+    if (approveStatus === 'Rejected') return 'block';
+    if (approveStatus === 'Altered') return 'edit';
+    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'schedule';
+    return 'info';
+  };
 
   // Filtered orders based on cancelled state
   const filteredOrders = orders.filter(order => {
@@ -929,6 +939,22 @@ const OwnerOrderUpdate = () => {
                   {selectedOrder.loading_slip === "Yes" ? "Processed" : "Pending"}
                 </Text>
               </View>
+              {/* Show approval status */}
+              {selectedOrder.approve_status && selectedOrder.approve_status !== 'null' && selectedOrder.approve_status !== 'Null' && selectedOrder.approve_status !== 'NULL' && (
+                <View style={styles.orderStatusContainer}>
+                  <Icon 
+                    name={getApprovalStatusIcon(selectedOrder.approve_status)} 
+                    size={16} 
+                    color={getApprovalStatusColor(selectedOrder.approve_status)} 
+                  />
+                  <Text style={[
+                    styles.orderStatusText,
+                    { color: getApprovalStatusColor(selectedOrder.approve_status) }
+                  ]}>
+                    {getApprovalStatusText(selectedOrder.approve_status)}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.editHeader}>
@@ -936,15 +962,25 @@ const OwnerOrderUpdate = () => {
               <TouchableOpacity
                 style={[
                   styles.addProductButton,
-                  !isOrderEditable && styles.disabledButton
+                  (!isOrderEditable || isOrderRestricted) && styles.disabledButton
                 ]}
                 onPress={() => setShowSearchModal(true)}
-                disabled={!isOrderEditable}
+                disabled={!isOrderEditable || isOrderRestricted}
               >
                 <Icon name="add" size={20} color={COLORS.text.light} />
                 <Text style={styles.addProductButtonText}>Add Product</Text>
               </TouchableOpacity>
             </View>
+            
+            {/* Show restriction message */}
+            {isOrderRestricted && (
+              <View style={styles.restrictionMessageContainer}>
+                <Icon name="info" size={16} color={COLORS.warning} />
+                <Text style={styles.restrictionMessageText}>
+                  This order cannot be modified (Status: {getApprovalStatusText(selectedOrder.approve_status)})
+                </Text>
+              </View>
+            )}
 
             {products.length === 0 ? (
               <View style={styles.emptyProductsContainer}>
@@ -953,10 +989,10 @@ const OwnerOrderUpdate = () => {
                 <TouchableOpacity
                   style={[
                     styles.addProductsButton,
-                    !isOrderEditable && styles.disabledButton
+                    (!isOrderEditable || isOrderRestricted) && styles.disabledButton
                   ]}
                   onPress={() => setShowSearchModal(true)}
-                  disabled={!isOrderEditable}
+                  disabled={!isOrderEditable || isOrderRestricted}
                 >
                   <Text style={styles.addProductsButtonText}>Add Products</Text>
                 </TouchableOpacity>
@@ -992,13 +1028,13 @@ const OwnerOrderUpdate = () => {
               <TouchableOpacity
                 style={[
                   styles.updateButton,
-                  !isOrderEditable && styles.disabledButton
+                  (!isOrderEditable || isOrderRestricted) && styles.disabledButton
                 ]}
                 onPress={handleUpdateOrder}
-                disabled={loading || !isOrderEditable}
+                disabled={loading || !isOrderEditable || isOrderRestricted}
               >
                 <Text style={styles.updateButtonText}>
-                  {!isOrderEditable ? "Order Not Editable" : "Update Order"}
+                  {(!isOrderEditable || isOrderRestricted) ? "Order Not Editable" : "Update Order"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1731,6 +1767,41 @@ const styles = StyleSheet.create({
     width: 100,
     height: 28,
     marginLeft: 8,
+  },
+  // Restricted order styles
+  restrictedProductCard: {
+    opacity: 0.7,
+    backgroundColor: '#F8F9FA',
+  },
+  restrictedProductImage: {
+    opacity: 0.6,
+  },
+  restrictedNoImageContainer: {
+    backgroundColor: '#E9ECEF',
+  },
+  restrictedProductText: {
+    color: COLORS.text.tertiary,
+  },
+  approvalStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  restrictionMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.warning,
+  },
+  restrictionMessageText: {
+    fontSize: 14,
+    color: COLORS.warning,
+    marginLeft: 8,
+    fontWeight: '500',
   },
 });
 

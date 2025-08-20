@@ -119,8 +119,9 @@ const CartCustomer = ({ hideHeader = false }) => {
       if (response.ok) {
         const data = await response.json();
         
-        // Filter by enable_product - only show products with enable_product = "Yes"
-        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        // Filter by enable_product - handle new backend values
+        // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+        const enabledProducts = data.filter(p => p.enable_product !== "Mask");
         
         setProducts(enabledProducts);
         setFilteredProducts(enabledProducts);
@@ -136,6 +137,36 @@ const CartCustomer = ({ hideHeader = false }) => {
       Alert.alert('Error', 'Failed to load cart and products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Persist/merge product metadata for items added from this screen
+  const upsertCartItemMeta = async (product) => {
+    try {
+      const saved = await AsyncStorage.getItem('cartItems');
+      const existing = saved ? JSON.parse(saved) : {};
+      const merged = {
+        ...existing,
+        [product.id]: { ...product, price: product.discountPrice || product.price }
+      };
+      await AsyncStorage.setItem('cartItems', JSON.stringify(merged));
+      setCartProducts(Object.values(merged));
+    } catch (e) {
+      console.error('Failed to persist cart item meta:', e);
+    }
+  };
+
+  // Remove product metadata when deleting a specific item
+  const removeCartItemMeta = async (productId) => {
+    try {
+      const saved = await AsyncStorage.getItem('cartItems');
+      if (!saved) return;
+      const existing = JSON.parse(saved);
+      delete existing[productId];
+      await AsyncStorage.setItem('cartItems', JSON.stringify(existing));
+      setCartProducts(Object.values(existing));
+    } catch (e) {
+      console.error('Failed to remove cart item meta:', e);
     }
   };
 
@@ -242,7 +273,8 @@ const CartCustomer = ({ hideHeader = false }) => {
         products: orderItems,
         orderType: getOrderType(),
         orderDate: now.toISOString(),
-        total_amount: calculateTotalAmount()
+        total_amount: calculateTotalAmount(),
+        entered_by: jwtDecode(token).username
       };
 
       const response = await fetch(`http://${ipAddress}:8091/place`, {
@@ -360,25 +392,40 @@ const CartCustomer = ({ hideHeader = false }) => {
     const imageUrl = item.image ? { uri: `http://${ipAddress}:8091/images/products/${item.image}` } : null;
     const inCartQuantity = cart[item.id] || 0;
     
+    // Check if product is inactive
+    const isInactive = item.enable_product === "Inactive";
+    
     return (
       <TouchableOpacity 
-        style={styles.productCard}
+        style={[
+          styles.productCard,
+          isInactive && styles.inactiveProductCard
+        ]}
         onPress={() => {
+          // Don't allow adding inactive products to cart
+          if (isInactive) return;
+          
           // Add to cart or increase quantity
           if (inCartQuantity === 0) {
             setCart(prev => ({ ...prev, [item.id]: 1 }));
           } else {
             setCart(prev => ({ ...prev, [item.id]: inCartQuantity + 1 }));
           }
+          // Ensure product metadata is saved so totals and rendering work
+          upsertCartItemMeta(item);
           // Close modal
           setShowAddMoreModal(false);
         }}
+        disabled={isInactive}
       >
         <View style={styles.productImageWrapper}>
           {imageUrl ? (
             <Image 
               source={imageUrl} 
-              style={styles.productImage} 
+              style={[
+                styles.productImage,
+                isInactive && styles.inactiveProductImage
+              ]} 
               resizeMode="contain"
               onError={(e) => console.log("Product image loading error", e.nativeEvent.error)}
             />
@@ -390,9 +437,19 @@ const CartCustomer = ({ hideHeader = false }) => {
         </View>
         
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productPrice}>{formatCurrency(item.discountPrice || item.price || 0)}</Text>
-          {inCartQuantity > 0 && (
+          <Text style={[
+            styles.productName,
+            isInactive && styles.inactiveProductText
+          ]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[
+            styles.productPrice,
+            isInactive && styles.inactiveProductText
+          ]}>{formatCurrency(item.discountPrice || item.price || 0)}</Text>
+          {isInactive ? (
+            <View style={styles.inactiveBadge}>
+              <Text style={styles.inactiveBadgeText}>UNAVAILABLE</Text>
+            </View>
+          ) : inCartQuantity > 0 && (
             <View style={styles.inCartBadge}>
               <Text style={styles.inCartText}>In Cart: {inCartQuantity}</Text>
             </View>
@@ -418,6 +475,8 @@ const CartCustomer = ({ hideHeader = false }) => {
           onPress: () => {
             setCart({});
             AsyncStorage.removeItem('catalogueCart');
+            AsyncStorage.removeItem('cartItems');
+            setCartProducts([]);
           }
         }
       ]
@@ -433,13 +492,13 @@ const CartCustomer = ({ hideHeader = false }) => {
         {
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => {
-            setCart(prevCart => {
-              const newCart = { ...prevCart };
-              delete newCart[productId];
-              return newCart;
-            });
-            AsyncStorage.setItem('catalogueCart', JSON.stringify({ ...cart, [productId]: undefined }));
+          onPress: async () => {
+            // Compute and persist updated cart synchronously
+            const currentCart = { ...cart };
+            delete currentCart[productId];
+            setCart(currentCart);
+            await AsyncStorage.setItem('catalogueCart', JSON.stringify(currentCart));
+            removeCartItemMeta(productId);
           }
         }
       ]
@@ -1054,6 +1113,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 6,
     fontSize: 14,
+  },
+  // Inactive product styles
+  inactiveProductCard: {
+    opacity: 0.6,
+    backgroundColor: '#F5F5F5',
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: '#999999',
+  },
+  inactiveBadge: {
+    marginTop: 8,
+    backgroundColor: '#CCCCCC',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  inactiveBadgeText: {
+    fontSize: 12,
+    color: '#666666',
+    fontWeight: '500',
   },
 });
 

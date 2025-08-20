@@ -51,8 +51,9 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         },
       });
 
-      // Filter by enable_product - only show products with enable_product = "Yes"
-      const enabledProducts = response.data.filter(p => p.enable_product === "Yes");
+      // Filter by enable_product - handle new backend values
+      // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+      const enabledProducts = response.data.filter(p => p.enable_product !== "Mask");
       
       const fetchedProducts = enabledProducts.map((product) => ({
         ...product,
@@ -185,12 +186,21 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
 
   // Render product item
   const renderProductItem = ({ item }) => {
+    // Check if product is inactive
+    const isInactive = item.enable_product === "Inactive";
+    
     return (
-      <View style={styles.productCard}>
+      <View style={[
+        styles.productCard,
+        isInactive && styles.inactiveProductCard
+      ]}>
         {item.imageUrl ? (
           <Image
             source={{ uri: item.imageUrl }}
-            style={styles.productImage}
+            style={[
+              styles.productImage,
+              isInactive && styles.inactiveProductImage
+            ]}
             resizeMode="cover"
             onError={() => console.warn(`Failed to load image for ${item.name}`)}
           />
@@ -200,34 +210,61 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
           </View>
         )}
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={1}>
+          <Text style={[
+            styles.productName,
+            isInactive && styles.inactiveProductText
+          ]} numberOfLines={1}>
             {item.name}
           </Text>
           <View style={styles.tagContainer}>
             {item.category && (
               <View style={styles.productTag}>
-                <Text style={styles.productTagText}>{item.category}</Text>
+                <Text style={[
+                  styles.productTagText,
+                  isInactive && styles.inactiveProductText
+                ]}>{item.category}</Text>
               </View>
             )}
             {item.brand && (
               <View style={styles.productTag}>
-                <Text style={styles.productTagText}>{item.brand}</Text>
+                <Text style={[
+                  styles.productTagText,
+                  isInactive && styles.inactiveProductText
+                ]}>{item.brand}</Text>
               </View>
             )}
           </View>
-          <Text style={styles.priceText}>
+          <Text style={[
+            styles.priceText,
+            isInactive && styles.inactiveProductText
+          ]}>
             ₹{typeof item.price === 'number' ? item.price.toFixed(2) : "N/A"}
           </Text>
-          <Text style={styles.priceText}>
+          <Text style={[
+            styles.priceText,
+            isInactive && styles.inactiveProductText
+          ]}>
             GST {item.gstRate || 0}%
           </Text>
+          {isInactive && (
+            <View style={styles.inactiveBadge}>
+              <Text style={styles.inactiveBadgeText}>UNAVAILABLE</Text>
+            </View>
+          )}
         </View>
         <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleStartEditProduct(item)}
-          disabled={!allowProductEdit && false} // always enabled, but disables edit modal
+          style={[
+            styles.addButton,
+            isInactive && styles.inactiveAddButton
+          ]}
+          onPress={() => {
+            // Don't allow adding inactive products
+            if (isInactive) return;
+            handleStartEditProduct(item);
+          }}
+          disabled={isInactive}
         >
-          <Ionicons name="add" size={20} color="#fff" />
+          <Ionicons name="add" size={20} color={isInactive ? "#ccc" : "#fff"} />
         </TouchableOpacity>
       </View>
     );
@@ -713,6 +750,33 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     marginHorizontal: 6,
+  },
+  // Inactive product styles
+  inactiveProductCard: {
+    opacity: 0.6,
+    backgroundColor: '#F5F5F5',
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: '#999999',
+  },
+  inactiveBadge: {
+    marginTop: 8,
+    backgroundColor: '#CCCCCC',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  inactiveBadgeText: {
+    fontSize: 12,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  inactiveAddButton: {
+    backgroundColor: '#CCCCCC',
   },
 });
 

@@ -77,6 +77,7 @@ const OrderAcceptOwner = () => {
 
   useFocusEffect(
     React.useCallback(() => {
+      console.log('Owner page focused - refreshing data...');
       fetchInitialData();
       return () => {
         setOrders([]);
@@ -111,7 +112,7 @@ const OrderAcceptOwner = () => {
 
   // Only show users with orders today
   const usersWithOrdersToday = filteredUsers.filter(user =>
-    orders.some(order => order.customer_id === user.customer_id)
+    orders.some(order => order.customer_id === user.cust_id)
   );
   const displayedUsers = usersWithOrdersToday;
 
@@ -160,8 +161,14 @@ const OrderAcceptOwner = () => {
       }
       const responseData = await response.json();
       const userData = responseData.data?.filter(u => u.role === 'user') || [];
-      setUsers(userData);
-      setFilteredUsers(userData);
+      // Transform user data to match Admin page structure
+      const transformedUsers = userData.map(user => ({
+        ...user,
+        cust_id: user.customer_id || user.cust_id, // Use cust_id for consistency
+        username: user.username || user.name // Use username for consistency
+      }));
+      setUsers(transformedUsers);
+      setFilteredUsers(transformedUsers);
     } catch (err) {
       setError("Error fetching users. Please try again.");
     }
@@ -171,6 +178,7 @@ const OrderAcceptOwner = () => {
     const today = moment().format('YYYY-MM-DD');
     const apiUrl = `http://${ipAddress}:8091/get-orders-sa?date=${today}`;
     try {
+      console.log(`Fetching owner orders for date: ${today}`);
       const response = await fetch(apiUrl, {
         headers: {
           "Authorization": `Bearer ${userAuthToken}`,
@@ -181,6 +189,8 @@ const OrderAcceptOwner = () => {
         throw new Error(`Failed to fetch orders. Status: ${response.status}`);
       }
       const responseData = await response.json();
+      console.log(`Received ${responseData.orders?.length || 0} orders from backend`);
+      console.log('Order statuses:', responseData.orders?.map(o => ({ id: o.id, status: o.approve_status })));
       setOrders(responseData.orders || []);
     } catch (err) {
       setError("Error fetching orders. Please try again.");
@@ -207,6 +217,36 @@ const OrderAcceptOwner = () => {
       }
       return updatedSelectedOrderIds;
     });
+  };
+
+  // Check if order can be accepted
+  const canAcceptOrder = (order) => {
+    // Can accept if status is Pending, null, or Altered
+    const status = order.approve_status;
+    console.log(`Order ${order.id} status: "${status}" (type: ${typeof status})`);
+    const canAccept = status === 'Pending' || status === null || status === 'null' || status === 'Altered';
+    console.log(`Can accept order ${order.id}: ${canAccept}`);
+    return canAccept;
+  };
+
+  // Check if order can be rejected
+  const canRejectOrder = (order) => {
+    // Can reject if status is Pending, null, or Altered
+    const status = order.approve_status;
+    console.log(`Order ${order.id} status: "${status}" (type: ${typeof status})`);
+    const canReject = status === 'Pending' || status === null || status === 'null' || status === 'Altered';
+    console.log(`Can reject order ${order.id}: ${canReject}`);
+    return canReject;
+  };
+
+  // Get orders that can be accepted
+  const getAcceptableOrders = () => {
+    return orders.filter(order => canAcceptOrder(order));
+  };
+
+  // Get orders that can be rejected
+  const getRejectableOrders = () => {
+    return orders.filter(order => canRejectOrder(order));
   };
 
   const handleOrderCardPress = (order) => {
@@ -243,46 +283,100 @@ const OrderAcceptOwner = () => {
       Alert.alert("No Orders Selected", "Please select orders to approve.");
       return;
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-      for (const orderId of orderIdsToApprove) {
-        const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
-          method: 'POST',
-          headers: {
-            "Authorization": `Bearer ${userAuthToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Accepted' })
-        });
-        if (!response.ok) {
-          console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
-          continue;
-        }
-        const responseData = await response.json();
-        if (responseData.success) {
-          updateOrderStatusInState(parseInt(orderId), 'Accepted');
-        }
-      }
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Selected orders approved successfully'
-      });
-      setSelectedOrderIds({});
-      setSelectAllOrders(false);
-      await fetchAllOrders(userAuthToken);
-    } catch (err) {
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to approve selected orders. Please try again.'
-      });
-      setError("Failed to approve selected orders. Please try again.");
-    } finally {
-      setLoading(false);
+
+    // Filter orders that can be accepted
+    const acceptableOrders = orderIdsToApprove.filter(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && canAcceptOrder(order);
+    });
+
+    if (acceptableOrders.length === 0) {
+      Alert.alert(
+        "Cannot Accept Orders",
+        "Selected orders are already accepted or rejected and cannot be modified.",
+        [{ text: "OK", style: "default" }]
+      );
+      return;
     }
+
+    const nonAcceptableOrders = orderIdsToApprove.filter(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && !canAcceptOrder(order);
+    });
+
+    // Show alert for non-acceptable orders
+    if (nonAcceptableOrders.length > 0) {
+      Alert.alert(
+        "Some Orders Cannot Be Accepted",
+        `${nonAcceptableOrders.length} orders are already accepted/rejected and will be skipped.`,
+        [{ text: "OK", style: "default" }]
+      );
+    }
+
+    let alertMessage = 'Are you sure you want to accept the selected orders?';
+    if (nonAcceptableOrders.length > 0) {
+      alertMessage = `Some selected orders cannot be accepted (already accepted/rejected). Only ${acceptableOrders.length} orders will be accepted. Continue?`;
+    }
+
+    Alert.alert(
+      'Accept Selected Orders',
+      alertMessage,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          style: 'default',
+          onPress: () =>
+            Alert.alert(
+              'Confirm Accept',
+              'Do you really want to accept these orders?',
+              [
+                { text: 'No', style: 'cancel' },
+                { text: 'Yes', style: 'default', onPress: async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                    let successCount = 0;
+                    for (const orderId of acceptableOrders) {
+                      const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                        method: 'POST',
+                        headers: {
+                          "Authorization": `Bearer ${userAuthToken}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ id: orderId, approve_status: 'Accepted' })
+                      });
+                      if (!response.ok) {
+                        console.error(`HTTP Error approving order ID ${orderId}. Status: ${response.status}`);
+                        continue;
+                      }
+                      const responseData = await response.json();
+                      if (responseData.success) {
+                        updateOrderStatusInState(orderId, 'Accepted');
+                        successCount++;
+                      }
+                    }
+                    Toast.show({
+                      type: 'success',
+                      text1: 'Orders Accepted',
+                      text2: 'Selected orders accepted successfully'
+                    });
+                    setSelectedOrderIds({});
+                    setSelectAllOrders(false);
+                    await fetchAllOrders(userAuthToken);
+                  } catch (err) {
+                    Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve selected orders. Please try again.' });
+                    setError("Failed to approve selected orders. Please try again.");
+                  } finally {
+                    setLoading(false);
+                  }
+                } }
+              ]
+            ),
+        }
+      ]
+    );
   };
 
   // Bulk reject selected orders
@@ -292,52 +386,97 @@ const OrderAcceptOwner = () => {
       Alert.alert("No Orders Selected", "Please select orders to reject.");
       return;
     }
+
+    // Filter orders that can be rejected
+    const rejectableOrders = orderIdsToReject.filter(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && canRejectOrder(order);
+    });
+
+    if (rejectableOrders.length === 0) {
+      Alert.alert(
+        "Cannot Reject Orders",
+        "Selected orders are already accepted or rejected and cannot be modified.",
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+
+    const nonRejectableOrders = orderIdsToReject.filter(orderId => {
+      const order = orders.find(o => o.id === orderId);
+      return order && !canRejectOrder(order);
+    });
+
+    // Show alert for non-rejectable orders
+    if (nonRejectableOrders.length > 0) {
+      Alert.alert(
+        "Some Orders Cannot Be Rejected",
+        `${nonRejectableOrders.length} orders are already accepted/rejected and will be skipped.`,
+        [{ text: "OK", style: "default" }]
+      );
+    }
+
+    let alertMessage = 'Are you sure you want to reject the selected orders?';
+    if (nonRejectableOrders.length > 0) {
+      alertMessage = `Some selected orders cannot be rejected (already accepted/rejected). Only ${rejectableOrders.length} orders will be rejected. Continue?`;
+    }
+
     Alert.alert(
       'Reject Selected Orders',
-      'Are you sure you want to reject all selected orders?',
+      alertMessage,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reject',
           style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            setError(null);
-            try {
-              const userAuthToken = await AsyncStorage.getItem("userAuthToken");
-              for (const orderId of orderIdsToReject) {
-                const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
-                  method: 'POST',
-                  headers: {
-                    "Authorization": `Bearer ${userAuthToken}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ id: parseInt(orderId), approve_status: 'Rejected' })
-                });
-                if (!response.ok) {
-                  console.error(`HTTP Error rejecting order ID ${orderId}. Status: ${response.status}`);
-                  continue;
-                }
-                const responseData = await response.json();
-                if (responseData.success) {
-                  updateOrderStatusInState(parseInt(orderId), 'Rejected');
-                }
-              }
-              Toast.show({
-                type: 'success',
-                text1: 'Orders Rejected',
-                text2: 'Selected orders rejected successfully'
-              });
-              setSelectedOrderIds({});
-              setSelectAllOrders(false);
-              await fetchAllOrders(userAuthToken);
-            } catch (err) {
-              Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject selected orders. Please try again.' });
-              setError("Failed to reject selected orders. Please try again.");
-            } finally {
-              setLoading(false);
-            }
-          }
+          onPress: () =>
+            Alert.alert(
+              'Confirm Reject',
+              'Do you really want to reject these orders?',
+              [
+                { text: 'No', style: 'cancel' },
+                { text: 'Yes', style: 'destructive', onPress: async () => {
+                  setLoading(true);
+                  setError(null);
+                  try {
+                    const userAuthToken = await AsyncStorage.getItem("userAuthToken");
+                    let successCount = 0;
+                    for (const orderId of rejectableOrders) {
+                      const response = await fetch(`http://${ipAddress}:8091/update-order-status`, {
+                        method: 'POST',
+                        headers: {
+                          "Authorization": `Bearer ${userAuthToken}`,
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ id: orderId, approve_status: 'Rejected' })
+                      });
+                      if (!response.ok) {
+                        console.error(`HTTP Error rejecting order ID ${orderId}. Status: ${response.status}`);
+                        continue;
+                      }
+                      const responseData = await response.json();
+                      if (responseData.success) {
+                        updateOrderStatusInState(orderId, 'Rejected');
+                        successCount++;
+                      }
+                    }
+                    Toast.show({
+                      type: 'success',
+                      text1: 'Orders Rejected',
+                      text2: 'Selected orders rejected successfully'
+                    });
+                    setSelectedOrderIds({});
+                    setSelectAllOrders(false);
+                    await fetchAllOrders(userAuthToken);
+                  } catch (err) {
+                    Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject selected orders. Please try again.' });
+                    setError("Failed to reject selected orders. Please try again.");
+                  } finally {
+                    setLoading(false);
+                  }
+                } }
+              ]
+            ),
         }
       ]
     );
@@ -346,7 +485,7 @@ const OrderAcceptOwner = () => {
   const renderUserOrderItem = ({ item }) => {
     const today = moment();
     const userOrdersToday = orders.filter(order =>
-      order.customer_id === item.customer_id &&
+      order.customer_id === item.cust_id &&
       moment.unix(order.placed_on).isSame(today, 'day')
     );
 
@@ -379,7 +518,7 @@ const OrderAcceptOwner = () => {
               <Icon name="account-circle" size={32} color={COLORS.primary} />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{item.username}</Text>
+              <Text style={styles.userName}>{item.username || item.name}</Text>
               {/* Route and Phone side by side */}
               <View style={styles.userMetaRowHorizontal}>
                 <Text style={styles.userMetaText}>{item.route || 'N/A'}</Text>
@@ -419,6 +558,7 @@ const OrderAcceptOwner = () => {
                           status={!!selectedOrderIds[order.id] ? 'checked' : 'unchecked'}
                           onPress={() => handleCheckboxChange(order.id, !selectedOrderIds[order.id])}
                           color={COLORS.primary}
+                          disabled={!canAcceptOrder(order) && !canRejectOrder(order)}
                         />
                         <View style={styles.orderDetails}>
                           <View style={styles.orderMeta}>
@@ -434,9 +574,15 @@ const OrderAcceptOwner = () => {
                             <Text style={styles.orderLabel}>Order Value:</Text>
                             <Text style={styles.orderValue}>{order.total_amount}</Text>
                           </View>
+
                         </View>
                         <View style={styles.orderStatus}>
                           {order.altered === 'Yes' ? (
+                            <View style={[styles.statusBadge, styles.alteredBadge]}>
+                              <Icon name="pencil" size={14} color={COLORS.primary} />
+                              <Text style={styles.alteredStatus}>Altered</Text>
+                            </View>
+                          ) : order.approve_status === 'Altered' ? (
                             <View style={[styles.statusBadge, styles.alteredBadge]}>
                               <Icon name="pencil" size={14} color={COLORS.primary} />
                               <Text style={styles.alteredStatus}>Altered</Text>
@@ -495,29 +641,23 @@ const OrderAcceptOwner = () => {
                 />
                 <Text style={styles.selectAllText}>Select All Orders</Text>
               </View>
+              
             </View>
             <View style={styles.bulkActionsButtonRow}>
               <Button
                 mode="contained"
                 compact={true}
                 onPress={() => {
-                  const orderIdsToApprove = Object.keys(selectedOrderIds);
-                  if (orderIdsToApprove.length === 0) {
-                    Alert.alert("No Orders Selected", "Please select orders to accept.");
+                  const acceptableCount = getAcceptableOrders().length;
+                  if (acceptableCount === 0) {
+                    Alert.alert(
+                      "Cannot Accept Orders",
+                      "Selected orders are already accepted or rejected and cannot be modified.",
+                      [{ text: "OK", style: "default" }]
+                    );
                     return;
                   }
-                  Alert.alert(
-                    'Accept Selected Orders',
-                    'Are you sure you want to accept all selected orders?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Accept',
-                        style: 'default',
-                        onPress: handleBulkApprove
-                      }
-                    ]
-                  );
+                  handleBulkApprove();
                 }}
                 style={[styles.bulkApproveButton, smallButtonStyle]}
                 labelStyle={[styles.bulkApproveButtonLabel, smallLabelStyle]}
@@ -529,7 +669,18 @@ const OrderAcceptOwner = () => {
               <Button
                 mode="contained"
                 compact={true}
-                onPress={handleBulkReject}
+                onPress={() => {
+                  const rejectableCount = getRejectableOrders().length;
+                  if (rejectableCount === 0) {
+                    Alert.alert(
+                      "Cannot Reject Orders",
+                      "Selected orders are already accepted or rejected and cannot be modified.",
+                      [{ text: "OK", style: "default" }]
+                    );
+                    return;
+                  }
+                  handleBulkReject();
+                }}
                 style={[styles.bulkRejectButton, smallButtonStyle]}
                 labelStyle={[styles.bulkRejectButtonLabel, smallLabelStyle]}
                 disabled={Object.keys(selectedOrderIds).length === 0}
@@ -550,12 +701,29 @@ const OrderAcceptOwner = () => {
           inputStyle={styles.searchInput}
         />
 
+        {/* Manual Refresh Button */}
+        <View style={styles.refreshButtonContainer}>
+          <Button
+            mode="outlined"
+            compact={true}
+            onPress={() => {
+              console.log('Manual refresh triggered');
+              fetchInitialData();
+            }}
+            style={styles.refreshButton}
+            labelStyle={styles.refreshButtonLabel}
+            icon="refresh"
+          >
+            Refresh Orders
+          </Button>
+        </View>
+
         {/* Route Filter Dropdown */}
-        <View style={{ marginTop: 2, marginBottom: 6, backgroundColor: COLORS.surface, borderRadius: 6, borderWidth: 1, borderColor: COLORS.text.secondary, paddingHorizontal: 0, width: 120, alignSelf: 'flex-start', minHeight: 35 }}>
+        <View style={styles.routeFilterContainer}>
           <Picker
             selectedValue={selectedRoute}
             onValueChange={setSelectedRoute}
-            style={{ height: 40, color: COLORS.text.primary, fontSize: 13 }}
+            style={styles.routePicker}
             dropdownIconColor={COLORS.primary}
           >
             {uniqueRoutes.map((route, idx) => (
@@ -612,6 +780,9 @@ const OrderAcceptOwner = () => {
       ) : (
         renderContent()
       )}
+      
+      {/* Toast Component */}
+      <Toast />
     </View>
   );
 };
@@ -661,6 +832,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '500',
   },
+
   bulkApproveButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 8,
@@ -905,6 +1077,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 12,
   },
+  bulkActionsButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 0,
+    justifyContent: 'center',
+  },
   userMetaRowHorizontal: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -918,6 +1097,39 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  routeFilterContainer: {
+    marginTop: 2,
+    marginBottom: 6,
+    backgroundColor: COLORS.surface,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 0,
+    width: 120,
+    alignSelf: 'flex-start',
+    minHeight: 35,
+  },
+  routePicker: {
+    height: 50,
+    color: COLORS.text.primary,
+    fontSize: 13,
+  },
+  refreshButtonContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  refreshButton: {
+    borderColor: COLORS.primary,
+    borderWidth: 1,
+    borderRadius: 8,
+    minHeight: 36,
+    paddingHorizontal: 16,
+  },
+  refreshButtonLabel: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

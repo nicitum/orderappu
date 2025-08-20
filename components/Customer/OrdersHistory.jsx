@@ -28,8 +28,10 @@ const OrdersHistory = () => {
   const navigation = useNavigation();
   const [expandedOrderDetailsId, setExpandedOrderDetailsId] = useState(null);
   const [orderDetails, setOrderDetails] = useState({});
-  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [fromDate, setFromDate] = useState(new Date());
+  const [toDate, setToDate] = useState(new Date());
+  const [isFromPickerVisible, setFromPickerVisible] = useState(false);
+  const [isToPickerVisible, setToPickerVisible] = useState(false);
   const [allProductsData, setAllProductsData] = useState([]);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelLoadingId, setCancelLoadingId] = useState(null);
@@ -40,17 +42,30 @@ const OrdersHistory = () => {
     acceptance: 'All'
   });
 
-  const showDatePicker = () => {
-    setDatePickerVisibility(true);
+  const showFromPicker = () => setFromPickerVisible(true);
+  const hideFromPicker = () => setFromPickerVisible(false);
+  const showToPicker = () => setToPickerVisible(true);
+  const hideToPicker = () => setToPickerVisible(false);
+
+  const handleConfirmFrom = (date) => {
+    hideFromPicker();
+    const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    setFromDate(normalized);
+    // Ensure toDate is not earlier than fromDate
+    if (normalized > toDate) {
+      setToDate(normalized);
+    }
   };
 
-  const hideDatePicker = () => {
-    setDatePickerVisibility(false);
-  };
-
-  const handleConfirm = (date) => {
-    hideDatePicker();
-    setSelectedDate(date);
+  const handleConfirmTo = (date) => {
+    hideToPicker();
+    const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    // Ensure toDate >= fromDate
+    if (normalized < fromDate) {
+      setToDate(fromDate);
+    } else {
+      setToDate(normalized);
+    }
   };
 
   const getFilteredOrders = () => {
@@ -165,7 +180,7 @@ const OrdersHistory = () => {
               });
 
               // Refresh orders list
-              await fetchOrders();
+              await fetchOrdersRange();
             } catch (error) {
               console.error('Error cancelling order:', error);
               Toast.show({
@@ -217,54 +232,52 @@ const OrdersHistory = () => {
     }
   }, []);
 
-  const fetchOrders = useCallback(async () => {
+
+  const fetchOrdersRange = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const token = await AsyncStorage.getItem("userAuthToken");
-        if (!token) {
-            throw new Error("Authentication token missing");
-        }
+      if (!token) {
+        throw new Error("Authentication token missing");
+      }
+      const decodedToken = jwtDecode(token);
+      const custId = decodedToken.id;
 
-        const decodedToken = jwtDecode(token);
-        const custId = decodedToken.id;
+      const from = moment(fromDate).format("YYYY-MM-DD");
+      const to = moment(toDate).format("YYYY-MM-DD");
 
-      // Assuming customer_id is available; replace with actual logic to get customer_id
-     
-      
-      // Replace with logic to get customer_id (e.g., from token or user context)
-
-      const formattedDate = moment(selectedDate).format("YYYY-MM-DD");
       const response = await axios.get(
         `http://${ipAddress}:8091/get-orders/${custId}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            date: formattedDate,
-          },
+          headers: { Authorization: `Bearer ${token}` },
+          params: { from, to },
         }
       );
 
-      if (response.data.status) {
-        setOrders(response.data.orders);
+      if (response.data && response.data.status) {
+        const list = Array.isArray(response.data.orders) ? response.data.orders : [];
+        list.sort((a, b) => (b.placed_on || 0) - (a.placed_on || 0));
+        setOrders(list);
       } else {
-        throw new Error(response.data.message || "Failed to fetch orders");
+        setOrders([]);
       }
-    } catch (error) {
-      console.error("Error fetching order history:", error);
+    } catch (e) {
       Alert.alert("Error", "Failed to fetch orders. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [navigation, selectedDate]);
+  }, [fromDate, toDate]);
 
   useFocusEffect(
     useCallback(() => {
       fetchAllProducts();
-      fetchOrders();
-    }, [fetchOrders, fetchAllProducts])
+      fetchOrdersRange();
+    }, [fetchOrdersRange, fetchAllProducts])
   );
+
+  useEffect(() => {
+    fetchOrdersRange();
+  }, [fromDate, toDate, fetchOrdersRange]);
 
   const fetchOrderProducts = async (orderId) => {
     try {
@@ -357,18 +370,7 @@ const OrdersHistory = () => {
     );
   };
 
-  const getAcceptanceStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'approved': return '#10B981';
-      case 'pending': return '#F59E0B';
-      case 'rejected': return '#DC2626';
-      default: return '#6B7280';
-    }
-  };
 
-  const getCancellationStatusColor = (cancelled) => {
-    return cancelled === 'Yes' ? '#DC2626' : '#10B981';
-  };
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -385,13 +387,20 @@ const OrdersHistory = () => {
     }
   };
 
-  const getAcceptanceStatusText = (status) => {
-    if (!status) return 'PENDING';
-    return status.toUpperCase();
-  };
-
-  const getCancellationStatusText = (cancelled) => {
-    return cancelled === 'Yes' ? 'CANCELLED' : 'ACTIVE';
+  const getConsolidatedStatus = (order) => {
+    if (order.cancelled === 'Yes') {
+      return { text: 'CANCELLED', color: '#DC2626' };
+    }
+    switch (order.approve_status?.toLowerCase()) {
+      case 'rejected':
+        return { text: 'REJECTED', color: '#DC2626' };
+      case 'approved': // Covers 'approved' from backend
+      case 'accepted': // Covers potential frontend states
+        return { text: 'ACCEPTED', color: '#10B981' };
+      case 'pending':
+      default:
+        return { text: 'PENDING', color: '#F59E0B' };
+    }
   };
 
   const handleReorder = async (order) => {
@@ -429,7 +438,8 @@ const OrdersHistory = () => {
                 products: orderItems,
                 orderType: getOrderType(),
                 orderDate: new Date().toISOString(),
-                total_amount
+                total_amount,
+                entered_by: jwtDecode(token).username
               };
               const response = await fetch(`http://${ipAddress}:8091/place`, {
                 method: 'POST',
@@ -444,7 +454,7 @@ const OrdersHistory = () => {
                 throw new Error(data.message || 'Failed to place reorder');
               }
               Toast.show({ type: 'success', text1: 'Reorder Placed', text2: 'Order placed successfully!' });
-              fetchOrders();
+              fetchOrdersRange();
             } catch (error) {
               Toast.show({ type: 'error', text1: 'Reorder Failed', text2: error.message });
             }
@@ -495,16 +505,28 @@ const OrdersHistory = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.dateFilterButton}
-            onPress={showDatePicker}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="calendar" size={18} color="#fff" />
-            <Text style={styles.dateFilterText}>
-              {moment(selectedDate).format("MMM D, YYYY")}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.dateFilterButton}
+              onPress={showFromPicker}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar" size={18} color="#fff" />
+              <Text style={styles.dateFilterText}>
+                {moment(fromDate).format("MMM D, YYYY")}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dateFilterButton}
+              onPress={showToPicker}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar" size={18} color="#fff" />
+              <Text style={styles.dateFilterText}>
+                {moment(toDate).format("MMM D, YYYY")}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.headerRight}>
@@ -524,11 +546,18 @@ const OrdersHistory = () => {
       </View>
 
       <DateTimePickerModal
-        isVisible={isDatePickerVisible}
+        isVisible={isFromPickerVisible}
         mode="date"
-        onConfirm={handleConfirm}
-        onCancel={hideDatePicker}
-        date={selectedDate}
+        onConfirm={handleConfirmFrom}
+        onCancel={hideFromPicker}
+        date={fromDate}
+      />
+      <DateTimePickerModal
+        isVisible={isToPickerVisible}
+        mode="date"
+        onConfirm={handleConfirmTo}
+        onCancel={hideToPicker}
+        date={toDate}
       />
 
       {/* Filter Modal */}
@@ -645,7 +674,7 @@ const OrdersHistory = () => {
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={60} color="#003366" />
             <Text style={styles.emptyStateText}>
-              No orders found for selected date
+              No orders found for selected range
             </Text>
           </View>
         ) : (
@@ -655,21 +684,23 @@ const OrdersHistory = () => {
                 <View>
                   <Text style={styles.orderId}>Order #{order.id}</Text>
                   <Text style={styles.orderDate}>{moment.unix(order.placed_on).format('MMM D, YYYY [at] h:mm A')}</Text>
+                  {order.entered_by && (
+                  <Text style={styles.orderEnteredBy}>
+                    Entered By: {order.entered_by}
+                  </Text>
+                )}
+                {order.altered_by && (
+                  <Text style={styles.orderEnteredBy}>
+                    Altered By: {order.altered_by}
+                  </Text>
+                )}
                 </View>
                 <View style={styles.statusContainer}>
-                  {/* Order Acceptance Status */}
-                  <View style={styles.statusRow}>
-                    <Text style={styles.statusLabel}>Acceptance:</Text>
-                    <Text style={[styles.statusValue, { color: getAcceptanceStatusColor(order.approve_status) }]}>
-                      {getAcceptanceStatusText(order.approve_status)}
-                    </Text>
-                  </View>
-                  
-                  {/* Cancellation Status */}
+                  {/* Consolidated Status */}
                   <View style={styles.statusRow}>
                     <Text style={styles.statusLabel}>Status:</Text>
-                    <Text style={[styles.statusValue, { color: getCancellationStatusColor(order.cancelled) }]}>
-                      {getCancellationStatusText(order.cancelled)}
+                    <Text style={[styles.statusValue, { color: getConsolidatedStatus(order).color }]}>
+                      {getConsolidatedStatus(order).text}
                     </Text>
                   </View>
                 </View>
@@ -944,10 +975,16 @@ const styles = StyleSheet.create({
     color: "#003366",
   },
   orderDate: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 3,
+    fontSize: 12,
+    color: '#666',
   },
+  orderEnteredBy: {
+    fontSize: 12,
+    color: '#003366',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+
   orderStatus: {
     paddingHorizontal: 10,
     paddingVertical: 4,

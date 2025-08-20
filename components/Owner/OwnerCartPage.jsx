@@ -100,23 +100,49 @@ const OwnerCartPage = () => {
 
   useEffect(() => {
     if (route.params?.customer) {
-      setSelectedCustomer({
+      console.log('=== OWNER CART DEBUG ===');
+      console.log('Route params customer:', route.params.customer);
+      
+      const customerData = {
         customer_id: route.params.customer.customer_id || route.params.customer.cust_id,
-        name: route.params.customer.name || route.params.customer.customer_name || ''
-      });
+        name: route.params.customer.name || route.params.customer.customer_name || route.params.customer.username || ''
+      };
+      
+      console.log('Processed customer data:', customerData);
+      
+      // Ensure we have a valid customer_id
+      if (!customerData.customer_id) {
+        console.warn('No customer ID found in route params');
+        return;
+      }
+      
+      // If name is empty or same as customer_id, use a fallback
+      if (!customerData.name || customerData.name === customerData.customer_id.toString()) {
+        customerData.name = `Customer ${customerData.customer_id}`;
+        console.log('Applied fallback name:', customerData.name);
+      }
+      
+      console.log('Final customer data:', customerData);
+      setSelectedCustomer(customerData);
+      
       // Save to AsyncStorage as well
-      AsyncStorage.setItem('ownerCartCustomer', JSON.stringify({
-        customer_id: route.params.customer.customer_id || route.params.customer.cust_id,
-        name: route.params.customer.name || route.params.customer.customer_name || ''
-      }));
+      AsyncStorage.setItem('ownerCartCustomer', JSON.stringify(customerData));
     } else {
       // Try to load from AsyncStorage if not in params
       AsyncStorage.getItem('ownerCartCustomer').then(savedCustomer => {
         if (savedCustomer) {
-          setSelectedCustomer(JSON.parse(savedCustomer));
+          const parsedCustomer = JSON.parse(savedCustomer);
+          console.log('Loaded customer from storage:', parsedCustomer);
+          // Apply the same fallback logic for saved customers
+          if (!parsedCustomer.name || parsedCustomer.name === parsedCustomer.customer_id.toString()) {
+            parsedCustomer.name = `Customer ${parsedCustomer.customer_id}`;
+            console.log('Applied fallback name from storage:', parsedCustomer.name);
+          }
+          setSelectedCustomer(parsedCustomer);
         }
       });
     }
+    
     if (route.params?.products) {
       // Replace the cart with these products (for Edit and Reorder)
       const newCart = route.params.products.map(product => ({
@@ -297,8 +323,9 @@ const OwnerCartPage = () => {
       if (response.ok) {
         const data = await response.json();
         
-        // Filter by enable_product - only show products with enable_product = "Yes"
-        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        // Filter by enable_product - handle new backend values
+        // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+        const enabledProducts = data.filter(p => p.enable_product !== "Mask");
         
         setProducts(enabledProducts);
         setFilteredProducts(enabledProducts);
@@ -358,6 +385,7 @@ const OwnerCartPage = () => {
           customer_id: selectedCustomer.customer_id,
           order_type: getOrderType(),
           products: productsPayload,
+          entered_by: jwtDecode(token).username,
         }),
       });
       const data = await res.json();
@@ -471,18 +499,33 @@ const OwnerCartPage = () => {
     const imageUri = item.image ? `http://${ipAddress}:8091/images/products/${item.image}` : null;
     const isInCart = cartItems.some(cartItem => cartItem.product_id === item.id);
     const displayPrice = item.discountPrice ?? item.price ?? 0;
+    
+    // Check if product is inactive
+    const isInactive = item.enable_product === "Inactive";
 
     return (
       <TouchableOpacity
-        style={[styles.productCard, isInCart && styles.productCardInCart]}
-        onPress={() => addToCart({ ...item, product_id: item.id, quantity: 1 })}
+        style={[
+          styles.productCard, 
+          isInCart && styles.productCardInCart,
+          isInactive && styles.inactiveProductCard
+        ]}
+        onPress={() => {
+          // Don't allow adding inactive products to cart
+          if (isInactive) return;
+          addToCart({ ...item, product_id: item.id, quantity: 1 });
+        }}
         activeOpacity={0.7}
+        disabled={isInactive}
       >
         <View style={styles.productImageContainer}>
           {imageUri ? (
             <Image
               source={{ uri: imageUri }}
-              style={styles.productImage}
+              style={[
+                styles.productImage,
+                isInactive && styles.inactiveProductImage
+              ]}
               resizeMode="contain"
             />
           ) : (
@@ -492,11 +535,30 @@ const OwnerCartPage = () => {
           )}
         </View>
         <View style={styles.productDetails}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productPrice}>₹{displayPrice}</Text>
-          <Text style={styles.productPrice}>GST {item.gst_rate || 0}%</Text>
-          {item.size && <Text style={styles.productVolume}>{item.size}</Text>}
-          {isInCart && (
+          <Text style={[
+            styles.productName,
+            isInactive && styles.inactiveProductText
+          ]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[
+            styles.productPrice,
+            isInactive && styles.inactiveProductText
+          ]}>₹{displayPrice}</Text>
+          <Text style={[
+            styles.productPrice,
+            isInactive && styles.inactiveProductText
+          ]}>GST {item.gst_rate || 0}%</Text>
+          {item.size && (
+            <Text style={[
+              styles.productVolume,
+              isInactive && styles.inactiveProductText
+            ]}>{item.size}</Text>
+          )}
+          {isInactive ? (
+            <View style={styles.inactiveIndicator}>
+              <Icon name="block" size={16} color="#999999" />
+              <Text style={styles.inactiveText}>UNAVAILABLE</Text>
+            </View>
+          ) : isInCart && (
             <View style={styles.inCartIndicator}>
               <Icon name="check-circle" size={16} color={COLORS.success} />
               <Text style={styles.inCartText}>In Cart</Text>
@@ -594,8 +656,14 @@ const OwnerCartPage = () => {
       {selectedCustomer && (
         <View style={styles.customerInfo}>
           <Text style={styles.customerLabel}>Order for:</Text>
-          <Text style={styles.customerName}>{selectedCustomer.name}</Text>
+          <Text style={styles.customerName}>
+            {selectedCustomer.name && selectedCustomer.name !== selectedCustomer.customer_id 
+              ? selectedCustomer.name 
+              : `Customer ${selectedCustomer.customer_id}`
+            }
+          </Text>
           <Text style={styles.customerId}>ID: {selectedCustomer.customer_id}</Text>
+        
         </View>
       )}
 
@@ -1249,6 +1317,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: 'right',
+  },
+  // Inactive product styles
+  inactiveProductCard: {
+    opacity: 0.6,
+    backgroundColor: '#F5F5F5',
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: '#999999',
+  },
+  inactiveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  inactiveText: {
+    fontSize: 12,
+    color: '#999999',
+    marginLeft: 4,
+  },
+  debugText: {
+    fontSize: 10,
+    color: COLORS.text.tertiary,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });
 

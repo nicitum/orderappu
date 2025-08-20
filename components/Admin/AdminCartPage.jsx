@@ -125,6 +125,12 @@ const AdminCartPage = () => {
       if (savedCart) {
         setCartItems(JSON.parse(savedCart));
       }
+      
+      // Also load customer info if available
+      const savedCustomer = await AsyncStorage.getItem('adminCartCustomer');
+      if (savedCustomer && !selectedCustomer) {
+        setSelectedCustomer(JSON.parse(savedCustomer));
+      }
     } catch (error) {
       console.error('Error loading admin cart:', error);
     }
@@ -300,8 +306,9 @@ const AdminCartPage = () => {
       if (response.ok) {
         const data = await response.json();
         
-        // Filter by enable_product - only show products with enable_product = "Yes"
-        const enabledProducts = data.filter(p => p.enable_product === "Yes");
+        // Filter by enable_product - handle new backend values
+        // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+        const enabledProducts = data.filter(p => p.enable_product !== "Mask");
         
         setProducts(enabledProducts);
         setFilteredProducts(enabledProducts);
@@ -361,6 +368,7 @@ const AdminCartPage = () => {
           customer_id: selectedCustomer.cust_id,
           order_type: getOrderType(),
           products: productsPayload,
+          entered_by: jwtDecode(token).username,
         }),
       });
       const data = await res.json();
@@ -477,18 +485,33 @@ const AdminCartPage = () => {
   const renderProductItem = ({ item }) => {
     const imageUri = item.image ? `http://${ipAddress}:8091/images/products/${item.image}` : null;
     const isInCart = cartItems.some(cartItem => cartItem.product_id === item.id);
+    
+    // Check if product is inactive
+    const isInactive = item.enable_product === "Inactive";
 
     return (
       <TouchableOpacity
-        style={[styles.productCard, isInCart && styles.productCardInCart]}
-        onPress={() => addToCart({ ...item, product_id: item.id, quantity: 1 })}
+        style={[
+          styles.productCard, 
+          isInCart && styles.productCardInCart,
+          isInactive && styles.inactiveProductCard
+        ]}
+        onPress={() => {
+          // Don't allow adding inactive products to cart
+          if (isInactive) return;
+          addToCart({ ...item, product_id: item.id, quantity: 1 });
+        }}
         activeOpacity={0.7}
+        disabled={isInactive}
       >
         <View style={styles.productImageContainer}>
           {imageUri ? (
             <Image
               source={{ uri: imageUri }}
-              style={styles.productImage}
+              style={[
+                styles.productImage,
+                isInactive && styles.inactiveProductImage
+              ]}
               resizeMode="contain"
             />
           ) : (
@@ -499,10 +522,26 @@ const AdminCartPage = () => {
         </View>
         
         <View style={styles.productDetails}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productPrice}>₹{item.price}</Text>
-          {item.size && <Text style={styles.productVolume}>{item.size}</Text>}
-          {isInCart && (
+          <Text style={[
+            styles.productName,
+            isInactive && styles.inactiveProductText
+          ]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[
+            styles.productPrice,
+            isInactive && styles.inactiveProductText
+          ]}>₹{item.price}</Text>
+          {item.size && (
+            <Text style={[
+              styles.productVolume,
+              isInactive && styles.inactiveProductText
+            ]}>{item.size}</Text>
+          )}
+          {isInactive ? (
+            <View style={styles.inactiveIndicator}>
+              <Icon name="block" size={16} color="#999999" />
+              <Text style={styles.inactiveText}>UNAVAILABLE</Text>
+            </View>
+          ) : isInCart && (
             <View style={styles.inCartIndicator}>
               <Icon name="check-circle" size={16} color={COLORS.success} />
               <Text style={styles.inCartText}>In Cart</Text>
@@ -600,7 +639,7 @@ const AdminCartPage = () => {
       {selectedCustomer && (
         <View style={styles.customerInfo}>
           <Text style={styles.customerLabel}>Order for:</Text>
-          <Text style={styles.customerName}>{selectedCustomer.name}</Text>
+          <Text style={styles.customerName}>{selectedCustomer.username || selectedCustomer.name}</Text>
           <Text style={styles.customerId}>ID: {selectedCustomer.cust_id}</Text>
         </View>
       )}
@@ -1276,6 +1315,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: COLORS.text.primary,
+  },
+  // Inactive product styles
+  inactiveProductCard: {
+    opacity: 0.6,
+    backgroundColor: '#F5F5F5',
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: '#999999',
+  },
+  inactiveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  inactiveText: {
+    fontSize: 12,
+    color: '#999999',
+    marginLeft: 4,
   },
 });
 

@@ -25,8 +25,10 @@ const AdminOrderStatus = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigation = useNavigation();
-    const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [fromDate, setFromDate] = useState(new Date());
+    const [toDate, setToDate] = useState(new Date());
+    const [isFromPickerVisible, setFromPickerVisible] = useState(false);
+    const [isToPickerVisible, setToPickerVisible] = useState(false);
     const [customerNames, setCustomerNames] = useState({});
     const [error, setError] = useState(null);
     const [showFilterModal, setShowFilterModal] = useState(false);
@@ -36,21 +38,27 @@ const AdminOrderStatus = () => {
         acceptance: 'All'
     });
 
-    const showDatePicker = () => {
-        setDatePickerVisibility(true);
+    const showFromPicker = () => setFromPickerVisible(true);
+    const hideFromPicker = () => setFromPickerVisible(false);
+    const showToPicker = () => setToPickerVisible(true);
+    const hideToPicker = () => setToPickerVisible(false);
+
+    const handleConfirmFrom = (date) => {
+        hideFromPicker();
+        const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        setFromDate(normalized);
+        if (normalized > toDate) setToDate(normalized);
+        fetchOrders();
     };
 
-    const hideDatePicker = () => {
-        setDatePickerVisibility(false);
+    const handleConfirmTo = (date) => {
+        hideToPicker();
+        const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        if (normalized < fromDate) setToDate(fromDate); else setToDate(normalized);
+        fetchOrders();
     };
 
-    const handleConfirm = (date) => {
-        hideDatePicker();
-        setSelectedDate(date);
-        fetchOrders(date);
-    };
-
-    const fetchOrders = useCallback(async (dateFilter) => {
+    const fetchOrders = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -58,12 +66,12 @@ const AdminOrderStatus = () => {
             const decodedToken = jwtDecode(token);
             const adminId = decodedToken.id1;
 
-            // Format the dateFilter as YYYY-MM-DD if provided, otherwise use today's date
-            const formattedDate = dateFilter ? moment(dateFilter).format("YYYY-MM-DD") : moment().format("YYYY-MM-DD");
+            const from = moment(fromDate).format("YYYY-MM-DD");
+            const to = moment(toDate).format("YYYY-MM-DD");
 
-            // Construct the URL with the date query parameter
+            // Construct the URL with the date range query parameters
             const baseUrl = `http://${ipAddress}:8091/get-admin-orders/${adminId}`;
-            const url = `${baseUrl}?date=${formattedDate}`;
+            const url = `${baseUrl}?from=${from}&to=${to}`;
 
             const headers = {
                 Authorization: `Bearer ${token}`,
@@ -93,7 +101,7 @@ const AdminOrderStatus = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [fromDate, toDate]);
 
     // Function to fetch customer name by customer ID
     const fetchCustomerName = async (customerId) => {
@@ -253,7 +261,7 @@ const AdminOrderStatus = () => {
 
     useFocusEffect(
         useCallback(() => {
-            fetchOrders(selectedDate);
+            fetchOrders();
         }, [fetchOrders])
     );
 
@@ -269,16 +277,28 @@ const AdminOrderStatus = () => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity 
-                        style={styles.dateFilterButton} 
-                        onPress={showDatePicker}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="calendar" size={18} color="#fff" />
-                        <Text style={styles.dateFilterText}>
-                            {moment(selectedDate).format('MMM D, YYYY')}
-                        </Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity 
+                            style={styles.dateFilterButton} 
+                            onPress={showFromPicker}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="calendar" size={18} color="#fff" />
+                            <Text style={styles.dateFilterText}>
+                                {moment(fromDate).format('MMM D, YYYY')}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.dateFilterButton} 
+                            onPress={showToPicker}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="calendar" size={18} color="#fff" />
+                            <Text style={styles.dateFilterText}>
+                                {moment(toDate).format('MMM D, YYYY')}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={styles.headerRight}>
@@ -298,11 +318,18 @@ const AdminOrderStatus = () => {
             </View>
 
             <DateTimePickerModal
-                isVisible={isDatePickerVisible}
+                isVisible={isFromPickerVisible}
                 mode="date"
-                onConfirm={handleConfirm}
-                onCancel={hideDatePicker}
-                date={selectedDate}
+                onConfirm={handleConfirmFrom}
+                onCancel={hideFromPicker}
+                date={fromDate}
+            />
+            <DateTimePickerModal
+                isVisible={isToPickerVisible}
+                mode="date"
+                onConfirm={handleConfirmTo}
+                onCancel={hideToPicker}
+                date={toDate}
             />
 
             {/* Filter Modal */}
