@@ -42,6 +42,13 @@ const OrderHistoryOwner = ({ route }) => {
       acceptance: 'All'
     });
 
+    // New state for due date picker in reorder
+    const [showDueDateModal, setShowDueDateModal] = useState(false);
+    const [selectedDueDate, setSelectedDueDate] = useState(new Date());
+    const [isReorderDatePickerVisible, setIsReorderDatePickerVisible] = useState(false);
+    const [pendingReorderOrderId, setPendingReorderOrderId] = useState(null);
+    const [pendingReorderProducts, setPendingReorderProducts] = useState([]);
+
     // Get navigation parameters
     const expandedOrderId = route?.params?.expandedOrderId;
     const selectedDateString = route?.params?.selectedDate;
@@ -63,6 +70,19 @@ const OrderHistoryOwner = ({ route }) => {
         hideDatePicker();
         setSelectedDate(date);
         fetchOrders(date);
+    };
+
+    const showReorderDatePicker = () => {
+        setIsReorderDatePickerVisible(true);
+    };
+
+    const hideReorderDatePicker = () => {
+        setIsReorderDatePickerVisible(false);
+    };
+
+    const handleConfirmDate = (date) => {
+        hideDatePicker();
+        setSelectedDueDate(date);
     };
 
     const getFilteredOrders = () => {
@@ -309,41 +329,96 @@ const OrderHistoryOwner = ({ route }) => {
         try {
             const products = await fetchOrderProducts(orderId);
             if (products && products.length > 0) {
+                // Find the order object for this orderId
                 const order = orders.find(o => o.id === orderId);
                 if (!order) {
-                    ToastAndroid.show('Order not found', ToastAndroid.SHORT);
+                    Toast.show({
+                        type: 'error',
+                        text1: 'Error',
+                        text2: 'Order not found'
+                    });
                     return;
                 }
+                
+                // Show popup with 2 options
                 Alert.alert(
                     'Reorder Options',
                     'Choose how you want to reorder this order:',
                     [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Confirm Reorder', onPress: () => handleConfirmReorder(orderId, products) },
-                        { text: 'Edit and Reorder', onPress: () => handleEditAndReorder(products, order) },
+                        {
+                            text: 'Cancel',
+                            style: 'cancel'
+                        },
+                        {
+                            text: 'Confirm Reorder',
+                            onPress: () => {
+                                // Set pending reorder data and show due date modal
+                                setPendingReorderOrderId(orderId);
+                                setPendingReorderProducts(products);
+                                setShowDueDateModal(true);
+                            }
+                        },
+                        {
+                            text: 'Edit and Reorder',
+                            onPress: () => handleEditAndReorder(products, order)
+                        }
                     ]
                 );
             } else {
-                ToastAndroid.show('No products found in this order', ToastAndroid.SHORT);
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'No products found in this order'
+                });
             }
         } catch (error) {
             console.error('Error adding order to cart:', error);
-            ToastAndroid.show('Failed to add order to cart', ToastAndroid.SHORT);
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to add order to cart'
+            });
+        }
+    };
+
+    const handleConfirmDueDate = () => {
+        // Close modal and proceed with reorder
+        setShowDueDateModal(false);
+        if (pendingReorderOrderId && pendingReorderProducts.length > 0) {
+            handleConfirmReorder(pendingReorderOrderId, pendingReorderProducts);
         }
     };
 
     const handleConfirmReorder = async (orderId, products) => {
         try {
+            console.log('DEBUG: handleConfirmReorder called with orderId:', orderId, 'products:', products);
+            
+            // Get the order details to get customer_id
             const order = orders.find(o => o.id === orderId);
             if (!order) {
-                Toast.show({ type: 'error', text1: 'Order not found' });
+                console.log('DEBUG: Order not found for ID:', orderId);
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'Order not found'
+                });
                 return;
             }
+
+            console.log('DEBUG: Found order:', order);
+
             const token = await AsyncStorage.getItem("userAuthToken");
             if (!token) {
-                Toast.show({ type: 'error', text1: 'Authentication token missing' });
+                console.log('DEBUG: No auth token found');
+                Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: 'Authentication token missing'
+                });
                 return;
             }
+
+            // Prepare products for on-behalf-2 API
             const productsPayload = products.map((product) => ({
                 product_id: product.product_id,
                 quantity: product.quantity,
@@ -352,6 +427,10 @@ const OrderHistoryOwner = ({ route }) => {
                 category: product.category || '',
                 gst_rate: product.gst_rate || 0
             }));
+
+            console.log('DEBUG: Products payload:', productsPayload);
+
+            // Call on-behalf-2 API for fresh orders with due_on parameter
             const response = await fetch(`http://${ipAddress}:8091/on-behalf-2`, {
                 method: 'POST',
                 headers: {
@@ -363,15 +442,41 @@ const OrderHistoryOwner = ({ route }) => {
                     order_type: order.order_type || 'AM',
                     products: productsPayload,
                     entered_by: jwtDecode(token).username,
+                    due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
                 }),
             });
+
+            console.log('DEBUG: API response status:', response.status);
             const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Failed to place reorder');
-            Toast.show({ type: 'success', text1: 'Reorder placed successfully' });
-            await fetchOrders(selectedDate);
+            console.log('DEBUG: API response data:', data);
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to place reorder');
+            }
+
+            console.log('DEBUG: About to show success toast');
+            Toast.show({
+                type: 'success',
+                text1: 'Reorder Placed',
+                text2: `Order has been successfully reordered with ${productsPayload.length} products for delivery on ${moment(selectedDueDate).format('DD MMM, YYYY')}`
+            });
+            console.log('DEBUG: Success toast should have been shown');
+
+            // Refresh the orders list to show the new reorder
+            console.log('DEBUG: About to refresh orders');
+            await fetchOrders();
+            console.log('DEBUG: Orders refreshed');
+
+            // Reset pending reorder data
+            setPendingReorderOrderId(null);
+            setPendingReorderProducts([]);
         } catch (error) {
-            console.error('Error placing reorder:', error);
-            Toast.show({ type: 'error', text1: error.message || 'Failed to place reorder' });
+            console.error('DEBUG: Error placing reorder:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Reorder Failed',
+                text2: error.message || 'Failed to place reorder'
+            });
         }
     };
 
@@ -571,12 +676,73 @@ const OrderHistoryOwner = ({ route }) => {
                 </View>
             </View>
 
+            {/* Due Date Modal for Reorder */}
+            <Modal
+                visible={showDueDateModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowDueDateModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dueDateModal}>
+                        <View style={styles.dueDateModalHeader}>
+                            <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowDueDateModal(false)}
+                                style={styles.closeDueDateButton}
+                            >
+                                <MaterialIcons name="close" size={24} color="#003366" />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.dueDateContent}>
+                            <Text style={styles.dueDateLabel}>
+                                When should this reorder be delivered?
+                            </Text>
+                            
+                            <TouchableOpacity
+                                style={styles.datePickerButton}
+                                onPress={showReorderDatePicker}
+                            >
+                                <MaterialIcons name="calendar-today" size={20} color="#003366" />
+                                <Text style={styles.datePickerButtonText}>
+                                    {moment(selectedDueDate).format('DD MMM, YYYY')}
+                                </Text>
+                                <MaterialIcons name="keyboard-arrow-down" size={20} color="#003366" />
+                            </TouchableOpacity>
+                            
+                            <Text style={styles.dueDateNote}>
+                                Note: This date will be used by our delivery team to schedule the reorder delivery.
+                            </Text>
+                        </View>
+                        
+                        <View style={styles.dueDateModalFooter}>
+                            <TouchableOpacity
+                                style={styles.cancelDueDateButton}
+                                onPress={() => setShowDueDateModal(false)}
+                            >
+                                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity
+                                style={styles.confirmDueDateButton}
+                                onPress={handleConfirmDueDate}
+                            >
+                                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Reorder</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Date Picker Modal */}
             <DateTimePickerModal
-                isVisible={isDatePickerVisible}
+                isVisible={isReorderDatePickerVisible}
                 mode="date"
-                onConfirm={handleConfirm}
-                onCancel={hideDatePicker}
-                date={selectedDate}
+                onConfirm={handleConfirmDate}
+                onCancel={hideReorderDatePicker}
+                date={selectedDueDate}
+                minimumDate={new Date()} // Can't select past dates
             />
 
             {/* Filter Modal */}
@@ -1067,6 +1233,106 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginLeft: 4,
         fontSize: 12,
+    },
+    
+    // New styles for due date modal
+    dueDateModal: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        width: '90%',
+        maxWidth: 400,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    dueDateModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    dueDateModalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#003366',
+    },
+    closeDueDateButton: {
+        padding: 5,
+    },
+    dueDateContent: {
+        padding: 20,
+    },
+    dueDateLabel: {
+        fontSize: 16,
+        color: '#4B5563',
+        marginBottom: 20,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    datePickerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F3F4F6',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 16,
+    },
+    datePickerButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#111827',
+        flex: 1,
+        textAlign: 'center',
+    },
+    dueDateNote: {
+        fontSize: 14,
+        color: '#9CA3AF',
+        textAlign: 'center',
+        lineHeight: 20,
+        fontStyle: 'italic',
+    },
+    dueDateModalFooter: {
+        flexDirection: 'row',
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        gap: 12,
+    },
+    cancelDueDateButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    cancelDueDateButtonText: {
+        color: '#4B5563',
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    confirmDueDateButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        backgroundColor: '#003366',
+        alignItems: 'center',
+    },
+    confirmDueDateButtonText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
     },
 });
 

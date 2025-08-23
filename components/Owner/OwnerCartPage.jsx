@@ -22,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkTokenAndRedirect } from '../../services/auth.js';
 import { jwtDecode } from 'jwt-decode';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import moment from 'moment';
 
 import Toast from 'react-native-toast-message';
 import SearchProductModal_1 from './searchProductModal_1.jsx';
@@ -86,6 +88,11 @@ const OwnerCartPage = () => {
   // Cart state
   const [cartItems, setCartItems] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  // New state for due date picker
+  const [showDueDateModal, setShowDueDateModal] = useState(false);
+  const [selectedDueDate, setSelectedDueDate] = useState(new Date());
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
 
   // Load cart from storage on mount
   useEffect(() => {
@@ -350,6 +357,30 @@ const OwnerCartPage = () => {
     return hour < 12 ? 'AM' : 'PM';
   };
 
+  const showDatePicker = () => {
+    setIsDatePickerVisible(true);
+  };
+
+  const hideDatePicker = () => {
+    setIsDatePickerVisible(false);
+  };
+
+  const handleConfirmDate = (date) => {
+    hideDatePicker();
+    setSelectedDueDate(date);
+  };
+
+  const handlePlaceOrderClick = () => {
+    // Show due date modal first
+    setShowDueDateModal(true);
+  };
+
+  const handleConfirmDueDate = () => {
+    // Close modal and proceed with order placement
+    setShowDueDateModal(false);
+    placeOrder();
+  };
+
   const placeOrder = async () => {
     
  
@@ -382,15 +413,16 @@ const OwnerCartPage = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          customer_id: selectedCustomer.customer_id,
+          customer_id: selectedCustomer.cust_id,
           order_type: getOrderType(),
           products: productsPayload,
           entered_by: jwtDecode(token).username,
+          due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to place custom order.');
-      Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Admin custom order placed successfully!' });
+      Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Owner custom order placed successfully!' });
       clearCart();
       navigation.goBack();
     } catch (err) {
@@ -685,7 +717,7 @@ const OwnerCartPage = () => {
           
           <TouchableOpacity
             style={[styles.placeOrderButton, isPlacingOrder && styles.placeOrderButtonDisabled]}
-            onPress={placeOrder}
+            onPress={handlePlaceOrderClick}
             disabled={isPlacingOrder}
           >
             {isPlacingOrder ? (
@@ -824,6 +856,75 @@ const OwnerCartPage = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Due Date Modal */}
+      <Modal
+        visible={showDueDateModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDueDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.dueDateModal}>
+            <View style={styles.dueDateModalHeader}>
+              <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+              <TouchableOpacity
+                onPress={() => setShowDueDateModal(false)}
+                style={styles.closeDueDateButton}
+              >
+                <Icon name="close" size={24} color={COLORS.text.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.dueDateContent}>
+              <Text style={styles.dueDateLabel}>
+                When should this order be delivered to {selectedCustomer?.username || selectedCustomer?.name}?
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={showDatePicker}
+              >
+                <Icon name="calendar-today" size={20} color={COLORS.primary} />
+                <Text style={styles.datePickerButtonText}>
+                  {moment(selectedDueDate).format('DD MMM, YYYY')}
+                </Text>
+                <Icon name="keyboard-arrow-down" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
+              
+              <Text style={styles.dueDateNote}>
+                Note: This date will be used by our delivery team to schedule the order delivery.
+              </Text>
+            </View>
+            
+            <View style={styles.dueDateModalFooter}>
+              <TouchableOpacity
+                style={styles.cancelDueDateButton}
+                onPress={() => setShowDueDateModal(false)}
+              >
+                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.confirmDueDateButton}
+                onPress={handleConfirmDueDate}
+              >
+                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleConfirmDate}
+        onCancel={hideDatePicker}
+        date={selectedDueDate}
+        minimumDate={new Date()} // Can't select past dates
+      />
     </SafeAreaView>
   );
 };
@@ -1344,6 +1445,112 @@ const styles = StyleSheet.create({
     color: COLORS.text.tertiary,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+
+  // New styles for due date modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dueDateModal: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  dueDateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  dueDateModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+  },
+  closeDueDateButton: {
+    padding: 5,
+  },
+  dueDateContent: {
+    padding: 20,
+  },
+  dueDateLabel: {
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 16,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  dueDateNote: {
+    fontSize: 14,
+    color: COLORS.text.tertiary,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  dueDateModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 12,
+  },
+  cancelDueDateButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  cancelDueDateButtonText: {
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  confirmDueDateButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+  },
+  confirmDueDateButtonText: {
+    color: COLORS.text.light,
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

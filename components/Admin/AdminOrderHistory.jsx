@@ -45,6 +45,13 @@ const AdminOrderHistory = ({ route }) => {
       acceptance: 'All'
     });
 
+    // New state for due date picker in reorder
+    const [showDueDateModal, setShowDueDateModal] = useState(false);
+    const [selectedDueDate, setSelectedDueDate] = useState(new Date());
+    const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+    const [pendingReorderOrderId, setPendingReorderOrderId] = useState(null);
+    const [pendingReorderProducts, setPendingReorderProducts] = useState([]);
+
     // Get navigation parameters
     const expandedOrderId = route?.params?.expandedOrderId;
     const initialSelectedDate = route?.params?.selectedDate;
@@ -396,6 +403,19 @@ const AdminOrderHistory = ({ route }) => {
         }
     };
 
+    const showDatePicker = () => {
+        setIsDatePickerVisible(true);
+    };
+
+    const hideDatePicker = () => {
+        setIsDatePickerVisible(false);
+    };
+
+    const handleConfirmDate = (date) => {
+        hideDatePicker();
+        setSelectedDueDate(date);
+    };
+
     const handleReorder = async (orderId) => {
         try {
             const products = await fetchOrderProducts(orderId);
@@ -422,7 +442,12 @@ const AdminOrderHistory = ({ route }) => {
                         },
                         {
                             text: 'Confirm Reorder',
-                            onPress: () => handleConfirmReorder(orderId, products)
+                            onPress: () => {
+                                // Set pending reorder data and show due date modal
+                                setPendingReorderOrderId(orderId);
+                                setPendingReorderProducts(products);
+                                setShowDueDateModal(true);
+                            }
                         },
                         {
                             text: 'Edit and Reorder',
@@ -444,6 +469,14 @@ const AdminOrderHistory = ({ route }) => {
                 text1: 'Error',
                 text2: 'Failed to add order to cart'
             });
+        }
+    };
+
+    const handleConfirmDueDate = () => {
+        // Close modal and proceed with reorder
+        setShowDueDateModal(false);
+        if (pendingReorderOrderId && pendingReorderProducts.length > 0) {
+            handleConfirmReorder(pendingReorderOrderId, pendingReorderProducts);
         }
     };
 
@@ -488,7 +521,7 @@ const AdminOrderHistory = ({ route }) => {
 
             console.log('DEBUG: Products payload:', productsPayload);
 
-            // Call on-behalf-2 API for fresh orders
+            // Call on-behalf-2 API for fresh orders with due_on parameter
             const response = await fetch(`http://${ipAddress}:8091/on-behalf-2`, {
                 method: 'POST',
                 headers: {
@@ -500,6 +533,7 @@ const AdminOrderHistory = ({ route }) => {
                     order_type: order.order_type || 'AM',
                     products: productsPayload,
                     entered_by: jwtDecode(token).username,
+                    due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
                 }),
             });
 
@@ -515,7 +549,7 @@ const AdminOrderHistory = ({ route }) => {
             Toast.show({
                 type: 'success',
                 text1: 'Reorder Placed',
-                text2: `Order has been successfully reordered with ${productsPayload.length} products`
+                text2: `Order has been successfully reordered with ${productsPayload.length} products for delivery on ${moment(selectedDueDate).format('DD MMM, YYYY')}`
             });
             console.log('DEBUG: Success toast should have been shown');
 
@@ -523,6 +557,10 @@ const AdminOrderHistory = ({ route }) => {
             console.log('DEBUG: About to refresh orders');
             await fetchOrders();
             console.log('DEBUG: Orders refreshed');
+
+            // Reset pending reorder data
+            setPendingReorderOrderId(null);
+            setPendingReorderProducts([]);
         } catch (error) {
             console.error('DEBUG: Error placing reorder:', error);
             Toast.show({
@@ -849,6 +887,75 @@ const AdminOrderHistory = ({ route }) => {
                 </View>
               </View>
             </Modal>
+
+            {/* Due Date Modal for Reorder */}
+            <Modal
+                visible={showDueDateModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowDueDateModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dueDateModal}>
+                        <View style={styles.dueDateModalHeader}>
+                            <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowDueDateModal(false)}
+                                style={styles.closeDueDateButton}
+                            >
+                                <MaterialIcons name="close" size={24} color="#003366" />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.dueDateContent}>
+                            <Text style={styles.dueDateLabel}>
+                                When should this reorder be delivered?
+                            </Text>
+                            
+                            <TouchableOpacity
+                                style={styles.datePickerButton}
+                                onPress={showDatePicker}
+                            >
+                                <MaterialIcons name="calendar-today" size={20} color="#003366" />
+                                <Text style={styles.datePickerButtonText}>
+                                    {moment(selectedDueDate).format('DD MMM, YYYY')}
+                                </Text>
+                                <MaterialIcons name="keyboard-arrow-down" size={20} color="#003366" />
+                            </TouchableOpacity>
+                            
+                            <Text style={styles.dueDateNote}>
+                                Note: This date will be used by our delivery team to schedule the reorder delivery.
+                            </Text>
+                        </View>
+                        
+                        <View style={styles.dueDateModalFooter}>
+                            <TouchableOpacity
+                                style={styles.cancelDueDateButton}
+                                onPress={() => setShowDueDateModal(false)}
+                            >
+                                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity
+                                style={styles.confirmDueDateButton}
+                                onPress={handleConfirmDueDate}
+                            >
+                                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Reorder</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Date Picker Modal */}
+            <DateTimePickerModal
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={handleConfirmDate}
+                onCancel={hideDatePicker}
+                date={selectedDueDate}
+                minimumDate={new Date()} // Can't select past dates
+            />
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 {orders.length === 0 ? (
@@ -1255,6 +1362,112 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginRight: 5,
         fontSize: 14,
+    },
+
+    // New styles for due date modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    dueDateModal: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        width: '90%',
+        maxWidth: 400,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    dueDateModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    dueDateModalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#003366',
+    },
+    closeDueDateButton: {
+        padding: 5,
+    },
+    dueDateContent: {
+        padding: 20,
+    },
+    dueDateLabel: {
+        fontSize: 16,
+        color: '#4B5563',
+        marginBottom: 20,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    datePickerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F3F4F6',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 16,
+    },
+    datePickerButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#111827',
+        flex: 1,
+        textAlign: 'center',
+    },
+    dueDateNote: {
+        fontSize: 14,
+        color: '#9CA3AF',
+        textAlign: 'center',
+        lineHeight: 20,
+        fontStyle: 'italic',
+    },
+    dueDateModalFooter: {
+        flexDirection: 'row',
+        padding: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        gap: 12,
+    },
+    cancelDueDateButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    cancelDueDateButtonText: {
+        color: '#4B5563',
+        fontWeight: '600',
+        fontSize: 16,
+    },
+    confirmDueDateButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        backgroundColor: '#003366',
+        alignItems: 'center',
+    },
+    confirmDueDateButtonText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 16,
     },
 });
 
