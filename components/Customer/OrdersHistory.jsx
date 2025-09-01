@@ -42,10 +42,31 @@ const OrdersHistory = () => {
     acceptance: 'All'
   });
 
+  // New state for due date picker in reorder
+  const [showDueDateModal, setShowDueDateModal] = useState(false);
+  const [selectedDueDate, setSelectedDueDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  });
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+  const [defaultDueOn, setDefaultDueOn] = useState(1);
+  const [maxDueOn, setMaxDueOn] = useState(30);
+  const [currentReorderOrder, setCurrentReorderOrder] = useState(null);
+
   const showFromPicker = () => setFromPickerVisible(true);
   const hideFromPicker = () => setFromPickerVisible(false);
   const showToPicker = () => setToPickerVisible(true);
   const hideToPicker = () => setToPickerVisible(false);
+
+  // Due date picker functions
+  const showDatePicker = () => setIsDatePickerVisible(true);
+  const hideDatePicker = () => setIsDatePickerVisible(false);
+
+  const handleConfirmDate = (date) => {
+    hideDatePicker();
+    setSelectedDueDate(date);
+  };
 
   const handleConfirmFrom = (date) => {
     hideFromPicker();
@@ -232,6 +253,56 @@ const OrdersHistory = () => {
     }
   }, []);
 
+  const fetchClientStatus = useCallback(async () => {
+    try {
+      console.log('Fetching client status...');
+      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      console.log('Response status:', response.status);
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('API Response data:', responseData);
+        
+        // Extract data from the nested structure
+        const data = responseData.data && responseData.data[0];
+        console.log('Extracted client data:', data);
+        
+        if (data) {
+          // Update due date configuration based on API response
+          const newDefaultDueOn = data.default_due_on || 1;
+          const newMaxDueOn = data.max_due_on || 30;
+          
+          console.log('Setting defaultDueOn to:', newDefaultDueOn);
+          console.log('Setting maxDueOn to:', newMaxDueOn);
+          
+          setDefaultDueOn(newDefaultDueOn);
+          setMaxDueOn(newMaxDueOn);
+          
+          // Update selected due date based on default_due_on
+          const newDefaultDate = new Date();
+          if (newDefaultDueOn > 0) {
+            newDefaultDate.setDate(newDefaultDate.getDate() + newDefaultDueOn);
+          }
+          console.log('Setting selectedDueDate to:', newDefaultDate);
+          setSelectedDueDate(newDefaultDate);
+        } else {
+          console.log('No client data found in response');
+        }
+      } else {
+        console.log('API response not ok:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching client status:', error);
+      // Keep default values if API fails
+    }
+  }, []);
+
 
   const fetchOrdersRange = useCallback(async () => {
     setLoading(true);
@@ -272,7 +343,8 @@ const OrdersHistory = () => {
     useCallback(() => {
       fetchAllProducts();
       fetchOrdersRange();
-    }, [fetchOrdersRange, fetchAllProducts])
+      fetchClientStatus(); // Fetch due date configuration
+    }, [fetchOrdersRange, fetchAllProducts, fetchClientStatus])
   );
 
   useEffect(() => {
@@ -404,93 +476,78 @@ const OrdersHistory = () => {
   };
 
   const handleReorder = async (order) => {
-    Alert.alert(
-      'Reorder Options',
-      'Choose how you want to reorder this order:',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
+    // Reset due date based on API default_due_on value
+    const newDefaultDate = new Date();
+    if (defaultDueOn > 0) {
+      newDefaultDate.setDate(newDefaultDate.getDate() + defaultDueOn);
+    }
+    setSelectedDueDate(newDefaultDate);
+    setCurrentReorderOrder(order);
+    setShowDueDateModal(true);
+  };
+
+  const handleConfirmDueDate = () => {
+    // Close modal and directly execute reorder
+    setShowDueDateModal(false);
+    if (currentReorderOrder) {
+      // Directly place the reorder without additional confirmation
+      placeReorderDirectly(currentReorderOrder);
+    }
+  };
+
+  const placeReorderDirectly = async (order) => {
+    try {
+      const token = await AsyncStorage.getItem('userAuthToken');
+      if (!token) throw new Error('No authentication token found');
+      
+      // Prepare products payload
+      const products = await fetchOrderProducts(order.id);
+      if (!products || products.length === 0) throw new Error('No products found in this order');
+      
+      // Build products array for /place
+      const orderItems = products.map(p => ({
+        product_id: p.product_id,
+        quantity: p.quantity,
+        price: Number(p.price) || 0
+      }));
+      
+      // Get orderType (AM/PM)
+      const getOrderType = () => {
+        const currentHour = new Date().getHours();
+        return currentHour < 12 ? 'AM' : 'PM';
+      };
+      
+      // Calculate total_amount
+      const total_amount = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      
+      const orderData = {
+        products: orderItems,
+        orderType: getOrderType(),
+        orderDate: new Date().toISOString(),
+        total_amount,
+        entered_by: jwtDecode(token).username,
+        due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
+      };
+      
+      const response = await fetch(`http://${ipAddress}:8091/place`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-        {
-          text: 'Confirm Reorder',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('userAuthToken');
-              if (!token) throw new Error('No authentication token found');
-              // Prepare products payload
-              const products = await fetchOrderProducts(order.id);
-              if (!products || products.length === 0) throw new Error('No products found in this order');
-              // Build products array for /place
-              const orderItems = products.map(p => ({
-                product_id: p.product_id,
-                quantity: p.quantity,
-                price: Number(p.price) || 0
-              }));
-              // Get orderType (AM/PM)
-              const getOrderType = () => {
-                const currentHour = new Date().getHours();
-                return currentHour < 12 ? 'AM' : 'PM';
-              };
-              // Calculate total_amount
-              const total_amount = orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-              const orderData = {
-                products: orderItems,
-                orderType: getOrderType(),
-                orderDate: new Date().toISOString(),
-                total_amount,
-                entered_by: jwtDecode(token).username
-              };
-              const response = await fetch(`http://${ipAddress}:8091/place`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(orderData),
-              });
-              const data = await response.json();
-              if (!response.ok) {
-                throw new Error(data.message || 'Failed to place reorder');
-              }
-              Toast.show({ type: 'success', text1: 'Reorder Placed', text2: 'Order placed successfully!' });
-              fetchOrdersRange();
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Reorder Failed', text2: error.message });
-            }
-          },
-        },
-        {
-          text: 'Edit and Reorder',
-          onPress: async () => {
-            try {
-              const products = await fetchOrderProducts(order.id);
-              if (!products || products.length === 0) throw new Error('No products found in this order');
-              const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
-              // Build cartItems and catalogueCart
-              const cartItems = {};
-              const catalogueCart = {};
-              products.forEach(p => {
-                const fullProduct = allProductsMap.get(p.product_id);
-                if (fullProduct) {
-                  cartItems[p.product_id] = {
-                    ...fullProduct,
-                    id: p.product_id,
-                    quantity: p.quantity,
-                  };
-                  catalogueCart[p.product_id] = p.quantity;
-                }
-              });
-              await AsyncStorage.setItem('cartItems', JSON.stringify(cartItems));
-              await AsyncStorage.setItem('catalogueCart', JSON.stringify(catalogueCart));
-              navigation.navigate('CartCustomer');
-            } catch (error) {
-              Toast.show({ type: 'error', text1: 'Edit & Reorder Failed', text2: error.message });
-            }
-          },
-        },
-      ]
-    );
+        body: JSON.stringify(orderData),
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to place reorder');
+      }
+      
+      Toast.show({ type: 'success', text1: 'Reorder Placed', text2: 'Order placed successfully!' });
+      fetchOrdersRange();
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Reorder Failed', text2: error.message });
+    }
   };
 
   if (loading) {
@@ -587,67 +644,73 @@ const OrdersHistory = () => {
               {/* Delivery Filter */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Delivery Status</Text>
-                {['All', 'pending', 'delivered', 'out for delivery', 'processing', 'objection'].map(status => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.filterOption,
-                      selectedFilters.delivery === status && styles.filterOptionSelected
-                    ]}
-                    onPress={() => handleFilterChange('delivery', status)}
-                  >
-                    <Text style={[
-                      styles.filterOptionText,
-                      selectedFilters.delivery === status && styles.filterOptionTextSelected
-                    ]}>
-                      {status.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <View style={styles.filterOptionsRow}>
+                  {['All', 'pending', 'delivered', 'out for delivery', 'processing', 'objection'].map(status => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.filterOption,
+                        selectedFilters.delivery === status && styles.filterOptionSelected
+                      ]}
+                      onPress={() => handleFilterChange('delivery', status)}
+                    >
+                      <Text style={[
+                        styles.filterOptionText,
+                        selectedFilters.delivery === status && styles.filterOptionTextSelected
+                      ]}>
+                        {status.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {/* Acceptance Filter */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Acceptance Status</Text>
-                {['All', 'Accepted', 'Rejected', 'Pending'].map(status => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.filterOption,
-                      selectedFilters.acceptance === status && styles.filterOptionSelected
-                    ]}
-                    onPress={() => handleFilterChange('acceptance', status)}
-                  >
-                    <Text style={[
-                      styles.filterOptionText,
-                      selectedFilters.acceptance === status && styles.filterOptionTextSelected
-                    ]}>
-                      {status}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <View style={styles.filterOptionsRow}>
+                  {['All', 'Accepted', 'Rejected', 'Pending'].map(status => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.filterOption,
+                        selectedFilters.acceptance === status && styles.filterOptionSelected
+                      ]}
+                      onPress={() => handleFilterChange('acceptance', status)}
+                    >
+                      <Text style={[
+                        styles.filterOptionText,
+                        selectedFilters.acceptance === status && styles.filterOptionTextSelected
+                      ]}>
+                        {status}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {/* Cancelled Filter */}
               <View style={styles.filterSection}>
                 <Text style={styles.filterSectionTitle}>Order Status</Text>
-                {['All', 'Active', 'Cancelled'].map(status => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.filterOption,
-                      selectedFilters.cancelled === status && styles.filterOptionSelected
-                    ]}
-                    onPress={() => handleFilterChange('cancelled', status)}
-                  >
-                    <Text style={[
-                      styles.filterOptionText,
-                      selectedFilters.cancelled === status && styles.filterOptionTextSelected
-                    ]}>
-                      {status}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <View style={styles.filterOptionsRow}>
+                  {['All', 'Active', 'Cancelled'].map(status => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.filterOption,
+                        selectedFilters.cancelled === status && styles.filterOptionSelected
+                      ]}
+                      onPress={() => handleFilterChange('cancelled', status)}
+                    >
+                      <Text style={[
+                        styles.filterOptionText,
+                        selectedFilters.cancelled === status && styles.filterOptionTextSelected
+                      ]}>
+                        {status}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </ScrollView>
 
@@ -772,6 +835,89 @@ const OrdersHistory = () => {
           ))
         )}
       </ScrollView>
+
+      {/* Due Date Modal */}
+      <Modal
+        visible={showDueDateModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDueDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.dueDateModal}>
+            <View style={styles.dueDateModalHeader}>
+              <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+              <TouchableOpacity
+                onPress={() => setShowDueDateModal(false)}
+                style={styles.closeDueDateButton}
+              >
+                <MaterialIcons name="close" size={24} color="#003366" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.dueDateContent}>
+              <Text style={styles.dueDateLabel}>
+                When would you like this order to be delivered?
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={showDatePicker}
+              >
+                <MaterialIcons name="calendar-today" size={20} color="#003366" />
+                <Text style={styles.datePickerButtonText}>
+                  {moment(selectedDueDate).format('DD MMM, YYYY')}
+                </Text>
+                <MaterialIcons name="keyboard-arrow-down" size={20} color="#003366" />
+              </TouchableOpacity>
+              
+              <Text style={styles.dueDateNote}>
+                Note: This date will be used by our delivery team to schedule your order delivery.
+              </Text>
+            </View>
+            
+            <View style={styles.dueDateModalFooter}>
+              <TouchableOpacity
+                style={styles.cancelDueDateButton}
+                onPress={() => setShowDueDateModal(false)}
+              >
+                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.confirmDueDateButton}
+                onPress={handleConfirmDueDate}
+              >
+                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Order</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <DateTimePickerModal
+        isVisible={isDatePickerVisible}
+        mode="date"
+        onConfirm={handleConfirmDate}
+        onCancel={hideDatePicker}
+        date={selectedDueDate}
+        minimumDate={new Date()} // Can't select past dates
+        maximumDate={(() => {
+          // Calculate maximum selectable date based on max_due_on
+          console.log('Calculating maximumDate, maxDueOn =', maxDueOn);
+          if (maxDueOn === 0) {
+            console.log('maxDueOn is 0, returning today only');
+            return new Date(); // Only today if max_due_on is 0
+          }
+          const maxDate = new Date();
+          // If max_due_on is 2, we want: today + tomorrow = 2 days total
+          // So we add (maxDueOn - 1) to get exactly maxDueOn days including today
+          maxDate.setDate(maxDate.getDate() + (maxDueOn - 1));
+          console.log('maxDueOn is', maxDueOn, ', setting max date to:', maxDate, '(allowing exactly', maxDueOn, 'days including today)');
+          return maxDate;
+        })()}
+      />
     </View>
   );
 };
@@ -840,13 +986,14 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filterModal: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
+    borderRadius: 20,
+    width: '95%',
+    maxHeight: '85%',
     minHeight: 500,
   },
   filterModalHeader: {
@@ -873,6 +1020,11 @@ const styles = StyleSheet.create({
   filterSection: {
     marginBottom: 25,
   },
+  filterOptionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -880,11 +1032,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   filterOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    marginBottom: 8,
     backgroundColor: '#F9FAFB',
+    minWidth: 80,
+    alignItems: 'center',
   },
   filterOptionSelected: {
     backgroundColor: '#003366',
@@ -1133,6 +1286,106 @@ const styles = StyleSheet.create({
   deliveryStatusValue: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  
+  // Due date modal styles
+  dueDateModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  dueDateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  dueDateModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#003366',
+  },
+  closeDueDateButton: {
+    padding: 5,
+  },
+  dueDateContent: {
+    padding: 20,
+  },
+  dueDateLabel: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 16,
+  },
+  datePickerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#003366',
+    flex: 1,
+    textAlign: 'center',
+  },
+  dueDateNote: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  dueDateModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  cancelDueDateButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  cancelDueDateButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  confirmDueDateButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#003366',
+    alignItems: 'center',
+  },
+  confirmDueDateButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

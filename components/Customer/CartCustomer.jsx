@@ -79,15 +79,80 @@ const CartCustomer = ({ hideHeader = false }) => {
   
   // New state for due date picker
   const [showDueDateModal, setShowDueDateModal] = useState(false);
-  const [selectedDueDate, setSelectedDueDate] = useState(new Date());
+  const [selectedDueDate, setSelectedDueDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
+  });
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+
+  // New state for API-based due date configuration
+  const [defaultDueOn, setDefaultDueOn] = useState(1);
+  const [maxDueOn, setMaxDueOn] = useState(30);
+
+  // Fetch client status for due date configuration
+  const fetchClientStatus = async () => {
+    try {
+      console.log('Fetching client status...');
+      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      console.log('Response status:', response.status);
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('API Response data:', responseData);
+        
+        // Extract data from the nested structure
+        const data = responseData.data && responseData.data[0];
+        console.log('Extracted client data:', data);
+        
+        if (data) {
+          // Update due date configuration based on API response
+          const newDefaultDueOn = data.default_due_on || 1;
+          const newMaxDueOn = data.max_due_on || 30;
+          
+          console.log('Setting defaultDueOn to:', newDefaultDueOn);
+          console.log('Setting maxDueOn to:', newMaxDueOn);
+          
+          setDefaultDueOn(newDefaultDueOn);
+          setMaxDueOn(newMaxDueOn);
+          
+          // Update selected due date based on default_due_on
+          const newDefaultDate = new Date();
+          if (newDefaultDueOn > 0) {
+            newDefaultDate.setDate(newDefaultDate.getDate() + newDefaultDueOn);
+          }
+          console.log('Setting selectedDueDate to:', newDefaultDate);
+          setSelectedDueDate(newDefaultDate);
+        } else {
+          console.log('No client data found in response');
+        }
+      } else {
+        console.log('API response not ok:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching client status:', error);
+      // Keep default values if API fails
+    }
+  };
 
   // Load cart and products on mount and focus
   useFocusEffect(
     useCallback(() => {
       loadCartAndProducts();
+      fetchClientStatus(); // Fetch due date configuration
     }, [])
   );
+
+  // Monitor state changes for debugging
+  useEffect(() => {
+    console.log('State changed - defaultDueOn:', defaultDueOn, 'maxDueOn:', maxDueOn);
+  }, [defaultDueOn, maxDueOn]);
 
   useEffect(() => {
     if (route.params?.clearCartOnOpen) {
@@ -269,6 +334,19 @@ const CartCustomer = ({ hideHeader = false }) => {
   };
 
   const handlePlaceOrderClick = () => {
+    console.log('handlePlaceOrderClick called');
+    console.log('Current defaultDueOn value:', defaultDueOn);
+    console.log('Current maxDueOn value:', maxDueOn);
+    
+    // Reset due date based on API default_due_on value
+    const newDefaultDate = new Date();
+    if (defaultDueOn > 0) {
+      newDefaultDate.setDate(newDefaultDate.getDate() + defaultDueOn);
+      console.log('Setting due date to:', newDefaultDate, '(+', defaultDueOn, 'days)');
+    } else {
+      console.log('defaultDueOn is 0, keeping today as due date');
+    }
+    setSelectedDueDate(newDefaultDate);
     // Show due date modal first
     setShowDueDateModal(true);
   };
@@ -801,6 +879,20 @@ const CartCustomer = ({ hideHeader = false }) => {
         onCancel={hideDatePicker}
         date={selectedDueDate}
         minimumDate={new Date()} // Can't select past dates
+        maximumDate={(() => {
+          // Calculate maximum selectable date based on max_due_on
+          console.log('Calculating maximumDate, maxDueOn =', maxDueOn);
+          if (maxDueOn === 0) {
+            console.log('maxDueOn is 0, returning today only');
+            return new Date(); // Only today if max_due_on is 0
+          }
+          const maxDate = new Date();
+          // If max_due_on is 2, we want: today + tomorrow = 2 days total
+          // So we add (maxDueOn - 1) to get exactly maxDueOn days including today
+          maxDate.setDate(maxDate.getDate() + (maxDueOn - 1));
+          console.log('maxDueOn is', maxDueOn, ', setting max date to:', maxDate, '(allowing exactly', maxDueOn, 'days including today)');
+          return maxDate;
+        })()}
       />
     </SafeAreaView>
   );

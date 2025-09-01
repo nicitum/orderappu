@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,7 +33,6 @@ const formatCurrency = (amount) => {
 const Catalogue = () => {
   const navigation = useNavigation();
   const [products, setProducts] = useState([]);
-  const [displayedProducts, setDisplayedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [selectedBrandId, setSelectedBrandId] = useState('All');
@@ -129,7 +128,6 @@ const Catalogue = () => {
     }
   };
 
-  // Refactored: fetch all catalogue data
   const reloadCatalogueData = async () => {
     setLoading(true);
     setPriceModeLoading(true);
@@ -180,9 +178,8 @@ const Catalogue = () => {
     }
   };
 
-  // Always refresh catalogue when focused
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       reloadCatalogueData();
     }, [])
   );
@@ -195,6 +192,7 @@ const Catalogue = () => {
         console.error('Failed to save cart to AsyncStorage:', error);
       }
     };
+    
     saveCart();
   }, [cart]);
 
@@ -206,15 +204,12 @@ const Catalogue = () => {
         console.error('Failed to save cart items to AsyncStorage:', error);
       }
     };
+    
     saveCartItems();
   }, [cartItems]);
 
-  useEffect(() => {
-    let filtered = products;
-    
-    // Filter by enable_product - handle new backend values
-    // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
-    filtered = filtered.filter(p => p.enable_product !== "Mask");
+  const filteredProducts = useMemo(() => {
+    let filtered = products.filter(p => p.enable_product !== "Mask");
     
     if (selectedCategoryId !== 'All') {
       filtered = filtered.filter(p => p.category === selectedCategoryId);
@@ -227,7 +222,7 @@ const Catalogue = () => {
         p.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    setDisplayedProducts(filtered);
+    return filtered;
   }, [selectedCategoryId, selectedBrandId, products, searchTerm, brands]);
 
   const handleSelectCategory = (categoryId) => {
@@ -240,43 +235,21 @@ const Catalogue = () => {
     Keyboard.dismiss();
   };
 
-  const handleAddItem = async (item) => {
+  const handleAddItem = (item) => {
     const updatedCart = { ...cart };
     updatedCart[item.id] = (updatedCart[item.id] || 0) + 1;
     setCart(updatedCart);
-    await AsyncStorage.setItem('catalogueCart', JSON.stringify(updatedCart));
-    // Update cart items with discount price
+    
     const updatedCartItems = { ...cartItems, [item.id]: { ...item, price: item.discountPrice || item.price } };
     setCartItems(updatedCartItems);
-    await AsyncStorage.setItem('cartItems', JSON.stringify(updatedCartItems));
-    console.log(`Added ${item.name} to cart`);
-  };
-
-  const handleQuantityChange = (productId, newQuantity) => {
-    if (newQuantity === '') {
-      setCart(prevCart => ({
-        ...prevCart,
-        [productId]: 0
-      }));
-      return;
-    }
-    const quantity = parseInt(newQuantity);
-    if (isNaN(quantity) || quantity < 1) {
-      return;
-    }
-    setCart(prevCart => ({
-      ...prevCart,
-      [productId]: quantity
-    }));
-  };
-
-  const handleQuantityBlur = (productId, value) => {
-    if (!value || parseInt(value) < 1) {
-      setCart(prevCart => ({
-        ...prevCart,
-        [productId]: 1
-      }));
-    }
+    
+    // Save to storage in background without blocking UI
+    Promise.all([
+      AsyncStorage.setItem('catalogueCart', JSON.stringify(updatedCart)),
+      AsyncStorage.setItem('cartItems', JSON.stringify(updatedCartItems))
+    ]).catch(error => {
+      console.error('Failed to save cart:', error);
+    });
   };
 
   const handleIncreaseQuantity = (productId) => {
@@ -349,14 +322,11 @@ const Catalogue = () => {
     </TouchableOpacity>
   );
 
-  const renderProduct = ({ item }) => {
+  const renderProduct = useCallback(({ item }) => {
     const quantityInCart = cart[item.id] || 0;
-    const imageUri = `http://${ipAddress}:8091/images/products/${item.image}`;
-    // Remove GST calculation: just use discountPrice and price as-is
+    const imageUri = item.image ? `http://${ipAddress}:8091/images/products/${item.image}` : null;
     const discountPrice = Number(item.discountPrice) || 0;
     const price = Number(item.price) || 0;
-    
-    // Check if product is inactive
     const isInactive = item.enable_product === "Inactive";
     
     return (
@@ -369,7 +339,7 @@ const Catalogue = () => {
           onPress={() => !isInactive && setEnlargedProduct(item)}
           disabled={isInactive}
         >
-          {item.image ? (
+          {imageUri ? (
             <Image
               source={{ uri: imageUri }}
               style={[
@@ -402,7 +372,6 @@ const Catalogue = () => {
             ]}>{item.size}</Text>
           ) : null}
           <View style={styles.priceContainer}>
-            {/* Show MRP scratched, then Selling Price, no GST calculation */}
             {item.price ? (
               <Text style={[
                 styles.originalPrice,
@@ -445,15 +414,7 @@ const Catalogue = () => {
         </View>
       </View>
     );
-  };
-
-  const handleViewCart = () => {
-    if (Object.keys(cart).length === 0) {
-      Alert.alert("Empty Cart", "Your cart is empty. Add some items first!");
-      return;
-    }
-    navigation.navigate('CartCustomer');
-  };
+  }, [cart]);
 
   const handleCartIconPress = () => {
     if (Object.keys(cart).length === 0) {
@@ -472,12 +433,6 @@ const Catalogue = () => {
     );
   }
 
-  const today = new Date();
-  const deliveryDate = new Date(today);
-  deliveryDate.setDate(today.getDate() + 1);
-  const formattedDeliveryDate = deliveryDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long' });
-
-  // In the sidebar, separate brand images and the 'All' button
   const brandImageItems = brands.filter(b => b.id !== 'All');
   const allBrandItem = brands.find(b => b.id === 'All');
 
@@ -487,14 +442,12 @@ const Catalogue = () => {
       <View style={{padding: 8, backgroundColor: '#eafaf1', alignItems: 'center'}}>
         <Text style={{color: '#059669', fontSize: 13, fontWeight: 'bold'}}>All prices include GST</Text>
       </View>
-     
 
       <View style={styles.mainContainer}>
         <View style={styles.sidebar}>
           <View style={styles.sidebarHeader}>
             <Text style={styles.sidebarHeaderText}>Brands</Text>
           </View>
-          {/* Brand images */}
           <FlatList
             data={brandImageItems}
             renderItem={renderBrandItem}
@@ -502,7 +455,6 @@ const Catalogue = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.sidebarListContent}
           />
-          {/* 'All' brand button directly below brand images */}
           {allBrandItem && (
             <TouchableOpacity
               style={[
@@ -518,7 +470,6 @@ const Catalogue = () => {
               ]}>{allBrandItem.name}</Text>
             </TouchableOpacity>
           )}
-          {/* Categories header and list below brands and 'All' button */}
           <View style={[styles.sidebarHeader, { marginTop: 0 }]}> 
             <Text style={styles.sidebarHeaderText}>Categories</Text>
           </View>
@@ -532,25 +483,34 @@ const Catalogue = () => {
         </View>
 
         <View style={styles.mainContent}>
-          {displayedProducts.length > 0 ? (
+          {filteredProducts.length > 0 ? (
             <FlatList
-              data={displayedProducts}
+              data={filteredProducts}
               renderItem={renderProduct}
               keyExtractor={(item) => item.id.toString()}
               numColumns={1}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.productListContent}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={8}
+              getItemLayout={(data, index) => ({
+                length: 180,
+                offset: 180 * index,
+                index,
+              })}
             />
           ) : (
              !loading && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No products found.</Text></View>
           )}
-          {loading && products.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
         </View>
       </View>
 
       <TouchableOpacity
         style={styles.floatingSearchButton}
         onPress={() => setIsSearchModalVisible(true)}
+        activeOpacity={0.7}
       >
         <Icon name="search" size={24} color="#FFFFFF" />
         <Text style={styles.floatingSearchButtonText}>Search</Text>
@@ -599,7 +559,7 @@ const Catalogue = () => {
       )}
 
       <Modal
-        animationType="slide"
+        animationType="none"
         transparent={false}
         visible={isSearchModalVisible}
         onRequestClose={() => setIsSearchModalVisible(false)}
@@ -629,15 +589,23 @@ const Catalogue = () => {
             )}
           </View>
           <FlatList
-            data={displayedProducts}
+            data={filteredProducts}
             renderItem={renderProduct}
             keyExtractor={(item) => item.id.toString()}
             numColumns={1}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.productListContent}
             ListEmptyComponent={!loading && searchTerm.length > 0 && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No matching products found.</Text></View>}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={8}
+            getItemLayout={(data, index) => ({
+              length: 180,
+              offset: 180 * index,
+              index,
+            })}
           />
-          {loading && products.length > 0 && searchTerm.length > 0 && <ActivityIndicator style={{marginTop: 20}} size="small" color="#003366" />}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -653,19 +621,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  headerBackBtn: {
-    padding: 5,
-    marginRight: 10,
   },
   mainContainer: {
     flex: 1,
@@ -731,10 +686,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  sidebarOptionTextActive: {
-    color: '#003366',
-    fontWeight: 'bold',
-  },
   mainContent: {
     flex: 1,
     paddingHorizontal: 10,
@@ -754,11 +705,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
-    alignItems: 'center',
-  },
-  productCardContent: {
-    flexDirection: 'row',
-    flex: 1,
     alignItems: 'center',
   },
   productImageWrapper: {
@@ -798,9 +744,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     textTransform: 'lowercase',
     letterSpacing: 0.2,
-  },
-  productOfferText: {
-    display: 'none',
   },
   productNameLarge: {
     fontSize: 15,
@@ -867,28 +810,6 @@ const styles = StyleSheet.create({
     color: '#333333',
     minWidth: 20,
     textAlign: 'center',
-  },
-  offerTag: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    backgroundColor: '#10B981',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderTopLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    zIndex: 1,
-    paddingHorizontal: 15,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomOfferText: {
-    color: '#059669',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   floatingSearchButton: {
     position: 'absolute',
@@ -1068,13 +989,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
   },
-  topHeaderTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#003366',
-    marginLeft: 10,
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
   },
-  // Inactive product styles
   inactiveProductCard: {
     opacity: 0.6,
     backgroundColor: '#F5F5F5',
