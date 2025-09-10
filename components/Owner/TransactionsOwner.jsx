@@ -48,6 +48,10 @@ const TransactionsOwner = () => {
     navigation.navigate('OwnerOrderUpdate');
   };
 
+  const handleInvoiceDirect = () => {
+    navigation.navigate('InvoiceDirect');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
@@ -115,6 +119,21 @@ const TransactionsOwner = () => {
             <Text style={styles.cardSubtitle}>View and manage invoices</Text>
             <View style={styles.cardFooter}>
               <Text style={styles.cardAction}>View all</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Direct Invoice Card */}
+          <TouchableOpacity style={styles.card} onPress={handleInvoiceDirect} activeOpacity={0.8}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                <MaterialIcons name="receipt-long" size={24} color="#F59E0B" />
+              </View>
+            </View>
+            <Text style={styles.cardTitle}>Direct Invoice</Text>
+            <Text style={styles.cardSubtitle}>Select customer for direct invoice access</Text>
+            <View style={styles.cardFooter}>
+              <Text style={styles.cardAction}>Select customer</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>

@@ -575,6 +575,11 @@ const OrderAcceptOwner = () => {
                             <Text style={styles.orderValue}>{order.total_amount}</Text>
                           </View>
 
+                          <View style={styles.orderMeta}>
+                            <Text style={styles.orderLabel}>Due On:</Text>
+                            <Text style={styles.orderValue}>{moment.unix(order.due_on).format('DD MMM, YYYY')}</Text>
+                          </View>
+
                         </View>
                         <View style={styles.orderStatus}>
                           {order.altered === 'Yes' ? (

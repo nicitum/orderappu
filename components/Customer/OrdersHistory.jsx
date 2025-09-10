@@ -776,9 +776,12 @@ const OrdersHistory = () => {
                   <Text style={[styles.deliveryStatusValue, { color: getStatusColor(order.delivery_status) }]}>
                     {(order.delivery_status || 'pending').toUpperCase()}
                   </Text>
+                  <Text style={styles.deliveryDueDateLabel}>
+                    Delivery Due On: {moment.unix(order.due_on).format('MMM D, YYYY')}
+                  </Text>
                 </View>
               </View>
-
+            
               {/* Product preview images removed. Only show images in expanded details. */}
 
               <View style={styles.orderFooter}>
@@ -1286,6 +1289,12 @@ const styles = StyleSheet.create({
   deliveryStatusValue: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  deliveryDueDateLabel: {
+    fontSize: 13,
+    color: '#003366',
+    marginTop: 6,
+    fontWeight: '700',
   },
   
   // Due date modal styles
