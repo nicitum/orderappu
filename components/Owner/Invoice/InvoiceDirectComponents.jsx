@@ -75,7 +75,7 @@ export const ProductItem = ({
                 <Text style={styles.productDetails}>
                     {item.category || 'No Category'} • {item.brand || 'No Brand'}
                 </Text>
-                <Text style={styles.productPrice}>₹{item.discountPrice}</Text>
+                <Text style={styles.productPrice}>Rs.{item.discountPrice}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -91,7 +91,7 @@ export const SelectedProductItem = ({
         <View style={styles.selectedProductItem}>
             <View style={styles.selectedProductInfo}>
                 <Text style={styles.selectedProductName}>{item.name}</Text>
-                <Text style={styles.selectedProductPrice}>₹{item.price}</Text>
+                <Text style={styles.selectedProductPrice}>Rs.{item.price}</Text>
             </View>
             <View style={styles.quantityContainer}>
                 <TouchableOpacity
@@ -243,7 +243,7 @@ export const TotalAmountDisplay = ({
     <View style={styles.totalContainer}>
         <Text style={styles.totalLabel}>Total Amount:</Text>
         <Text style={styles.totalAmount}>
-            ₹{totalAmount.toFixed(2)}
+            Rs.{totalAmount.toFixed(2)}
         </Text>
     </View>
 );
@@ -779,10 +779,9 @@ export const styles = StyleSheet.create({
     },
     // PDF action buttons styles
     pdfActionButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+        flexDirection: 'column',
         marginTop: 24,
-        gap: 16,
+        gap: 12,
         paddingHorizontal: 4,
     },
     shareButton: {
@@ -793,7 +792,6 @@ export const styles = StyleSheet.create({
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
-        flex: 1,
         shadowColor: COLORS.success,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -820,7 +818,6 @@ export const styles = StyleSheet.create({
         paddingVertical: 16,
         paddingHorizontal: 24,
         borderRadius: 12,
-        flex: 1,
         shadowColor: COLORS.error,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,

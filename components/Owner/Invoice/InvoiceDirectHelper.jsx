@@ -105,10 +105,10 @@ export const fetchProducts = async () => {
     }
 };
 
-// Fetch client status to get invoice prefix
+// Fetch client status to get invoice prefix and gst method
 export const fetchClientStatus = async () => {
     try {
-        console.log('=== FETCHING CLIENT STATUS FOR INVOICE PREFIX ===');
+        console.log('=== FETCHING CLIENT STATUS FOR INVOICE PREFIX AND GST METHOD ===');
         const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
             method: "GET",
             headers: { "Content-Type": "application/json" }
@@ -129,7 +129,10 @@ export const fetchClientStatus = async () => {
         }
 
         const invPrefix = clientStatusData.data[0].inv_prefix || "INV";
-        return { success: true, data: { invPrefix } };
+        const gstMethod = clientStatusData.data[0].gst_method || "Inclusive GST"; // Default to inclusive
+        
+        console.log('GST Method from API:', gstMethod);
+        return { success: true, data: { invPrefix, gstMethod } };
     } catch (error) {
         console.error("Error fetching client status:", error);
         return { success: false, error: `An error occurred while fetching client status: ${error.message}` };
@@ -257,7 +260,8 @@ export const createDirectInvoice = async (invoiceData) => {
             invoice_number: invoiceData.invoiceNumber,
             products: invoiceData.products,
             invoice_amount: invoiceData.totalAmount,
-            customer_name: invoiceData.customerName || null
+            customer_name: invoiceData.customerName || null,
+            customer_phone: invoiceData.customerPhone || null
         };
 
         console.log('Creating direct invoice:', requestBody);
@@ -400,128 +404,219 @@ const numberToWords = (num) => {
     return result.trim() || "Zero Rupees Only";
 };
 
-
-// Generate PDF from invoice data (enhanced version based on InvoiceSA.jsx)
+// Generate PDF from invoice data (redesigned for professional, clean, readable layout)
 export const generateInvoicePDF = async (invoiceData, customerData = null) => {
     try {
         console.log('Generating PDF for invoice:', invoiceData.invoice_info.invoice_number);
+        
+        // Fetch client status to get GST method
+        const clientStatusResult = await fetchClientStatus();
+        let gstMethod = "Inclusive GST"; // Default to inclusive
+        if (clientStatusResult.success) {
+            gstMethod = clientStatusResult.data.gstMethod;
+        }
+        console.log('Using GST Method:', gstMethod);
         
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
         const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
         const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const primaryColor = rgb(0, 0.2, 0.4);
-        const textColor = rgb(0, 0, 0);
-        const secondaryColor = rgb(0.4, 0.4, 0.4);
+        const primaryColor = rgb(0.1, 0.3, 0.5); // Softer blue
+        const textColor = rgb(0.1, 0.1, 0.1); // Dark gray
+        const secondaryColor = rgb(0.5, 0.5, 0.5); // Medium gray
+        const backgroundColor = rgb(0.98, 0.98, 0.98); // Light gray
 
         const invoiceInfo = invoiceData.invoice_info;
         const products = invoiceData.products;
 
-        // Calculate totals
-        const subTotal = products.reduce((acc, item) => acc + parseFloat(item.item_total), 0).toFixed(2);
-        const totalGstAmount = products.reduce((acc, item) => {
-            const gstRate = parseFloat(item.gst_rate || 0);
-            const itemTotal = parseFloat(item.item_total);
-            return acc + (itemTotal * (gstRate / 100));
-        }, 0).toFixed(2);
-        const cgstAmount = (parseFloat(totalGstAmount) / 2).toFixed(2);
-        const sgstAmount = (parseFloat(totalGstAmount) / 2).toFixed(2);
-        const grandTotal = (parseFloat(subTotal) + parseFloat(totalGstAmount)).toFixed(2);
+        // Calculate totals based on GST method
+        let subTotal = 0;
+        let totalTaxableValue = 0;
+        let totalGstAmount = 0;
         
-        // Header
-        page.drawRectangle({ x: 0, y: 780, width: 595.28, height: 60, color: primaryColor });
-        page.drawText("INVOICE", { x: 250, y: 805, size: 28, font: helveticaBoldFont, color: rgb(1, 1, 1) });
+        const isInclusive = gstMethod === "Inclusive GST";
         
-        // Invoice From (Business Info)
-        page.drawText("INVOICE FROM", { x: 50, y: 750, size: 12, font: helveticaBoldFont, color: primaryColor });
-        page.drawText("Order Appu", { x: 50, y: 730, size: 14, font: helveticaBoldFont, color: textColor });
-        page.drawText("Bangalore - 560068", { x: 50, y: 710, size: 10, font: helveticaFont, color: secondaryColor });
+        if (isInclusive) {
+            products.forEach(item => {
+                const priceIncludingGst = parseFloat(item.item_total);
+                const gstRate = parseFloat(item.gst_rate || 0);
+                const taxableValue = gstRate > 0 ? priceIncludingGst / (1 + gstRate / 100) : priceIncludingGst;
+                const gstAmount = priceIncludingGst - taxableValue;
+                
+                item.calculated_taxable_value = taxableValue.toFixed(2);
+                item.calculated_gst_amount = gstAmount.toFixed(2);
+                
+                totalTaxableValue += taxableValue;
+                totalGstAmount += gstAmount;
+            });
+            subTotal = totalTaxableValue;
+        } else {
+            subTotal = products.reduce((acc, item) => acc + parseFloat(item.item_total), 0);
+            totalGstAmount = products.reduce((acc, item) => {
+                const gstRate = parseFloat(item.gst_rate || 0);
+                const itemTotal = parseFloat(item.item_total);
+                const gstAmount = itemTotal * (gstRate / 100);
+                
+                item.calculated_taxable_value = item.item_total;
+                item.calculated_gst_amount = gstAmount.toFixed(2);
+                
+                return acc + gstAmount;
+            }, 0);
+            totalTaxableValue = subTotal;
+        }
         
-        // Invoice To (Customer Info)
+        const cgstAmount = (totalGstAmount / 2).toFixed(2);
+        const sgstAmount = (totalGstAmount / 2).toFixed(2);
+        const grandTotal = (totalTaxableValue + totalGstAmount).toFixed(2);
+        
+        subTotal = subTotal.toFixed(2);
+        totalTaxableValue = totalTaxableValue.toFixed(2);
+        totalGstAmount = totalGstAmount.toFixed(2);
+        
+        // Header - Clean and minimal
+        page.drawText("TAX INVOICE", { x: 50, y: 790, size: 24, font: helveticaBoldFont, color: primaryColor });
+        
+        // GST Invoice Type - Small and subtle
+        const gstTypeText = isInclusive ? "(Inclusive GST)" : "(Exclusive GST)";
+        page.drawText(gstTypeText, { x: 50, y: 770, size: 10, font: helveticaFont, color: secondaryColor });
+        
+        // Company and Customer Info - Side by side with more space
+        page.drawText("From:", { x: 50, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
+        page.drawText("Order Appu", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
+        page.drawText("Bangalore - 560068", { x: 50, y: 705, size: 10, font: helveticaFont, color: secondaryColor });
+        page.drawText("GST: 29XXXXX1234Z1Z5", { x: 50, y: 690, size: 10, font: helveticaFont, color: secondaryColor });
+        
+        page.drawText("To:", { x: 300, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
         if (customerData) {
-            page.drawText("INVOICE TO", { x: 300, y: 750, size: 12, font: helveticaBoldFont, color: primaryColor });
-            page.drawText(customerData.username || "Customer", { x: 300, y: 730, size: 14, font: helveticaBoldFont, color: textColor });
-            if (customerData.route) {
-                page.drawText(customerData.route, { x: 300, y: 710, size: 10, font: helveticaFont, color: secondaryColor });
-            }
+            page.drawText(customerData.username || "Customer", { x: 300, y: 720, size: 14, font: helveticaFont, color: textColor });
+            const address = customerData.route || customerData.delivery_address || "";
+            page.drawText(address, { x: 300, y: 705, size: 10, font: helveticaFont, color: secondaryColor, maxWidth: 250 });
             if (customerData.phone) {
                 page.drawText(`Phone: ${customerData.phone}`, { x: 300, y: 690, size: 10, font: helveticaFont, color: secondaryColor });
             }
+        } else {
+            page.drawText("Walk-in Customer", { x: 300, y: 720, size: 14, font: helveticaFont, color: textColor });
         }
-
-        // Invoice Details
+        
+        // Invoice Details - Grid layout for clarity
+        page.drawLine({ start: { x: 50, y: 670 }, end: { x: 545, y: 670 }, thickness: 0.5, color: secondaryColor });
         page.drawText("Invoice Details", { x: 50, y: 650, size: 14, font: helveticaBoldFont, color: primaryColor });
-        page.drawLine({ start: { x: 50, y: 645 }, end: { x: 545, y: 645 }, thickness: 1, color: primaryColor });
-        let detailsY = 625;
-        const lineHeight = 20;
-
-        page.drawText("Invoice No:", { x: 50, y: detailsY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(invoiceInfo.invoice_number, { x: 150, y: detailsY, size: 10, font: helveticaFont, color: textColor });
-        detailsY -= lineHeight;
-        page.drawText("Date:", { x: 50, y: detailsY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(new Date(invoiceInfo.created_at).toLocaleDateString(), { x: 150, y: detailsY, size: 10, font: helveticaFont, color: textColor });
-        detailsY -= lineHeight;
-        page.drawText("Total Items:", { x: 50, y: detailsY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(invoiceInfo.total_items.toString(), { x: 150, y: detailsY, size: 10, font: helveticaFont, color: textColor });
-
-        // Order Items Table
-        page.drawText("Order Items", { x: 50, y: 475, size: 14, font: helveticaBoldFont, color: primaryColor });
-        page.drawRectangle({ x: 50, y: 445, width: 495, height: 25, color: rgb(0.9, 0.9, 0.9) });
-        const headers = ["S.No", "Item Name", "Qty", "UOM", "Rate", "Value", "GST Rate"];
-        const headerPositions = [50, 80, 280, 320, 360, 400, 450];
+        
+        page.drawText("Invoice No:", { x: 50, y: 630, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(invoiceInfo.invoice_number, { x: 130, y: 630, size: 10, font: helveticaFont, color: textColor });
+        
+        page.drawText("Date:", { x: 300, y: 630, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(new Date(invoiceInfo.created_at).toLocaleDateString(), { x: 350, y: 630, size: 10, font: helveticaFont, color: textColor });
+        
+        page.drawText("GST Method:", { x: 50, y: 610, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(isInclusive ? "Inclusive" : "Exclusive", { x: 130, y: 610, size: 10, font: helveticaFont, color: textColor });
+        
+        page.drawText("Total Items:", { x: 300, y: 610, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(invoiceInfo.total_items.toString(), { x: 380, y: 610, size: 10, font: helveticaFont, color: textColor });
+        
+        // Order Items Table - Wider columns, larger fonts, more spacing
+        page.drawLine({ start: { x: 50, y: 590 }, end: { x: 545, y: 590 }, thickness: 0.5, color: secondaryColor });
+        page.drawText("Items", { x: 50, y: 570, size: 14, font: helveticaBoldFont, color: primaryColor });
+        
+        // Table headers with cleaner layout (removed GST Amt column)
+        const headers = ["#", "Description", "Qty", "Rate", "Taxable", "GST%", "Total"];
+        const headerPositions = [55, 85, 280, 320, 370, 430, 480];
+        const columnWidths = [25, 190, 35, 45, 55, 45, 50];
+        
+        page.drawRectangle({ x: 50, y: 545, width: 495, height: 20, color: backgroundColor });
         headers.forEach((header, index) => {
-            page.drawText(header, { x: headerPositions[index], y: 455, size: 10, font: helveticaBoldFont, color: textColor });
+            page.drawText(header, { x: headerPositions[index], y: 550, size: 9, font: helveticaBoldFont, color: textColor });
         });
-
-        let itemY = 435;
+        
+        // Table rows with alternating colors and more vertical space
+        let itemY = 530;
+        const rowHeight = 25; // Increased for readability
         products.forEach((item, index) => {
-            if (index % 2 === 0) {
-                page.drawRectangle({ x: 50, y: itemY - 15, width: 495, height: 20, color: rgb(0.95, 0.95, 0.95) });
-            }
-            page.drawText(`${index + 1}`, { x: 50, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText(item.name, { x: 80, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText(`${item.quantity}`, { x: 280, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText("Pkts", { x: 320, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText(`Rs. ${item.price}`, { x: 360, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText(`Rs. ${item.item_total}`, { x: 400, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            page.drawText(`${item.gst_rate || 0}%`, { x: 450, y: itemY, size: 10, font: helveticaFont, color: textColor });
-            itemY -= 20;
+            const rowColor = index % 2 === 0 ? rgb(1, 1, 1) : backgroundColor;
+            page.drawRectangle({ x: 50, y: itemY - rowHeight + 5, width: 495, height: rowHeight, color: rowColor });
+            
+            page.drawText(`${index + 1}`, { x: 55, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            
+            const itemName = item.name.length > 28 ? item.name.substring(0, 25) + '...' : item.name;
+            page.drawText(itemName, { x: 85, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            
+            page.drawText(`${item.quantity}`, { x: 285, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            page.drawText(`${parseFloat(item.price).toFixed(2)}`, { x: 325, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            page.drawText(`${parseFloat(item.calculated_taxable_value).toFixed(2)}`, { x: 375, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            page.drawText(`${item.gst_rate || 0}%`, { x: 435, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            page.drawText(`${parseFloat(item.item_total).toFixed(2)}`, { x: 485, y: itemY, size: 10, font: helveticaFont, color: textColor });
+            
+            itemY -= rowHeight;
         });
-
-        // Totals
-        page.drawLine({ start: { x: 360, y: itemY }, end: { x: 545, y: itemY }, thickness: 1, color: primaryColor });
-        itemY -= 20;
-        page.drawText("Subtotal:", { x: 360, y: itemY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(`Rs. ${subTotal}`, { x: 450, y: itemY, size: 10, font: helveticaFont, color: textColor });
-        itemY -= 20;
-        page.drawText("CGST:", { x: 360, y: itemY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(`Rs. ${cgstAmount}`, { x: 450, y: itemY, size: 10, font: helveticaFont, color: textColor });
-        itemY -= 20;
-        page.drawText("SGST:", { x: 360, y: itemY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(`Rs. ${sgstAmount}`, { x: 450, y: itemY, size: 10, font: helveticaFont, color: textColor });
-        itemY -= 20;
-        page.drawText("Total:", { x: 360, y: itemY, size: 12, font: helveticaBoldFont, color: primaryColor });
-        page.drawText(`Rs. ${grandTotal}`, { x: 450, y: itemY, size: 12, font: helveticaBoldFont, color: primaryColor });
-
-        // Amount in Words
-        itemY -= 30;
-        page.drawText("Amount in words:", { x: 50, y: itemY, size: 10, font: helveticaBoldFont, color: textColor });
-        page.drawText(numberToWords(parseFloat(grandTotal)), { x: 150, y: itemY, size: 10, font: helveticaFont, color: textColor });
-
-        // Certification
-        itemY -= 30;
-        page.drawText("We hereby certify that its products mentioned in the said", { x: 50, y: itemY, size: 10, font: helveticaFont, color: textColor });
-        itemY -= 15;
-        page.drawText("invoices are warranted to be of the nature and quality", { x: 50, y: itemY, size: 10, font: helveticaFont, color: textColor });
-        itemY -= 15;
-        page.drawText("which they are purported to be.", { x: 50, y: itemY, size: 10, font: helveticaFont, color: textColor });
-
-        // Footer
-        const footerY = 100;
-        page.drawLine({ start: { x: 50, y: footerY + 20 }, end: { x: 545, y: footerY + 20 }, thickness: 1, color: primaryColor });
-        page.drawText("Thank you for your business!", { x: 230, y: footerY, size: 12, font: helveticaBoldFont, color: primaryColor });
-        page.drawText("Payment is due within 30 days. Please make checks payable to OrderAppu.", { x: 120, y: footerY - 20, size: 10, font: helveticaFont, color: secondaryColor });
-        page.drawText("Authorized Signatory", { x: 400, y: footerY - 40, size: 10, font: helveticaBoldFont, color: textColor });
+        
+        // Table borders - Light lines for separation
+        page.drawLine({ start: { x: 50, y: 565 }, end: { x: 545, y: 565 }, thickness: 1, color: secondaryColor });
+        page.drawLine({ start: { x: 50, y: itemY + 5 }, end: { x: 545, y: itemY + 5 }, thickness: 1, color: secondaryColor });
+        
+        // Add vertical column separators for professional look (updated for 7 columns)
+        const separatorPositions = [75, 275, 315, 365, 425, 475];
+        separatorPositions.forEach(x => {
+            page.drawLine({ 
+                start: { x: x, y: 565 }, 
+                end: { x: x, y: itemY + 5 }, 
+                thickness: 0.3, 
+                color: rgb(0.7, 0.7, 0.7) 
+            });
+        });
+        
+        // Totals - Aligned to right, clean box with GST details
+        const totalsY = itemY - 10;
+        page.drawRectangle({ x: 350, y: totalsY - 120, width: 195, height: 120, color: backgroundColor });
+        
+        let currentTotalsY = totalsY - 20;
+        const totalsSpacing = 15;
+        
+        page.drawText("Subtotal (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(subTotal, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        page.drawText("Taxable Value (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(totalTaxableValue, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        page.drawText("GST Amount (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(totalGstAmount, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        page.drawText("CGST (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(cgstAmount, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        page.drawText("SGST (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(sgstAmount, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        page.drawLine({ start: { x: 360, y: currentTotalsY + 5 }, end: { x: 535, y: currentTotalsY + 5 }, thickness: 0.5, color: secondaryColor });
+        page.drawText("Grand Total (Rs.):", { x: 360, y: currentTotalsY - 10, size: 12, font: helveticaBoldFont, color: primaryColor });
+        page.drawText(grandTotal, { x: 480, y: currentTotalsY - 10, size: 12, font: helveticaBoldFont, color: primaryColor });
+        
+        // Amount in Words - Full width, subtle background
+        const wordsY = currentTotalsY - 40;
+        page.drawRectangle({ x: 50, y: wordsY - 25, width: 495, height: 30, color: backgroundColor });
+        page.drawText("Amount in Words:", { x: 55, y: wordsY - 10, size: 10, font: helveticaBoldFont, color: textColor });
+        const amountInWords = numberToWords(parseFloat(grandTotal));
+        page.drawText(amountInWords, { x: 150, y: wordsY - 10, size: 10, font: helveticaFont, color: textColor, maxWidth: 390 });
+        
+        // Declaration and Terms - Spaced out
+        const footerY = wordsY - 60;
+        page.drawText("Declaration:", { x: 50, y: footerY, size: 12, font: helveticaBoldFont, color: primaryColor });
+        page.drawText("We certify that the goods mentioned are of the specified quality.", { x: 50, y: footerY - 15, size: 10, font: helveticaFont, color: textColor });
+        
+        page.drawText("Terms & Conditions:", { x: 50, y: footerY - 40, size: 12, font: helveticaBoldFont, color: primaryColor });
+        page.drawText("- Payment due within 30 days.", { x: 50, y: footerY - 55, size: 10, font: helveticaFont, color: textColor });
+        page.drawText("- Disputes subject to Bangalore jurisdiction.", { x: 50, y: footerY - 70, size: 10, font: helveticaFont, color: textColor });
+        
+        // Footer - Clean thank you and contact
+        page.drawLine({ start: { x: 50, y: 50 }, end: { x: 545, y: 50 }, thickness: 0.5, color: secondaryColor });
+        page.drawText("Thank you for your business!", { x: 50, y: 30, size: 12, font: helveticaBoldFont, color: primaryColor });
+        page.drawText("Contact: support@orderappu.com", { x: 50, y: 15, size: 10, font: helveticaFont, color: secondaryColor });
+        
+        page.drawText("Authorized Signature", { x: 400, y: 30, size: 10, font: helveticaBoldFont, color: textColor });
 
         // Generate PDF bytes
         const pdfBytes = await pdfDoc.save();

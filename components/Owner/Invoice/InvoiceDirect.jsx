@@ -13,12 +13,17 @@ import {
     Image,
     Modal,
     ScrollView,
+    Platform,
+    ToastAndroid,
+    PermissionsAndroid,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../../services/urls';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import RNFS from 'react-native-fs';
+import Share from 'react-native-share';
 import {
     fetchAllUsers,
     fetchCustomerData,
@@ -29,7 +34,8 @@ import {
     shareInvoicePDF,
     filterUsers,
     calculateTotalAmount,
-    updateProductQuantity
+    updateProductQuantity,
+    fetchClientStatus
 } from './InvoiceDirectHelper';
 import SearchProductModal_1 from '../searchProductModal_1';
 import {
@@ -44,6 +50,72 @@ import {
     CreateButton,
     styles
 } from './InvoiceDirectComponents';
+
+// Helper to convert Uint8Array to base64 (for RNFS)
+function uint8ToBase64(uint8) {
+    let binary = '';
+    for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+    }
+    if (typeof global !== 'undefined' && global.btoa) {
+        return global.btoa(binary);
+    } else if (typeof btoa !== 'undefined') {
+        return btoa(binary);
+    } else {
+        throw new Error('No base64 encoding function available');
+    }
+}
+
+// Helper function to save PDF to downloads (works on all Android versions)
+const savePDFToDownloads = async (pdfBytes, fileName) => {
+    try {
+        // For Android 10+ (API 29+), we use scoped storage approach
+        if (Platform.OS === 'android' && Platform.Version >= 29) {
+            // On Android 10+, we can write to Download directory without permissions
+            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            const base64Data = uint8ToBase64(pdfBytes);
+            await RNFS.writeFile(filePath, base64Data, 'base64');
+            
+            ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
+            return filePath;
+        } 
+        // For older Android versions, we need explicit permissions
+        else if (Platform.OS === 'android') {
+            // Request storage permissions
+            const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+                {
+                    title: "Storage Permission",
+                    message: "App needs access to storage to save PDFs",
+                    buttonPositive: "OK"
+                }
+            );
+            
+            if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+                const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+                const base64Data = uint8ToBase64(pdfBytes);
+                await RNFS.writeFile(filePath, base64Data, 'base64');
+                
+                ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
+                return filePath;
+            } else {
+                Alert.alert("Permission Denied", "Cannot save PDF without storage permission");
+                return null;
+            }
+        } 
+        // For iOS
+        else {
+            const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+            const base64Data = uint8ToBase64(pdfBytes);
+            await RNFS.writeFile(filePath, base64Data, 'base64');
+            return filePath;
+        }
+    } catch (error) {
+        console.error("Error saving PDF:", error);
+        Alert.alert("Error", `Failed to save PDF: ${error.message}`);
+        return null;
+    }
+};
 
 
 const InvoiceDirect = () => {
@@ -75,6 +147,7 @@ const InvoiceDirect = () => {
     const [isSharingPDF, setIsSharingPDF] = useState(false);
     const [generatedPDFData, setGeneratedPDFData] = useState(null);
     const [customerData, setCustomerData] = useState(null);
+    const [gstMethod, setGstMethod] = useState('Inclusive GST'); // Default to inclusive
 
     // Fade-in animation for search bar
     useEffect(() => {
@@ -109,6 +182,23 @@ const InvoiceDirect = () => {
             Alert.alert("Error", `Failed to load users: ${err.message}`);
         } finally {
             setLoading(false);
+        }
+    }, []);
+
+    // Fetch GST method from client status
+    const loadGSTMethod = useCallback(async () => {
+        try {
+            const result = await fetchClientStatus();
+            if (result.success) {
+                setGstMethod(result.data.gstMethod || 'Inclusive GST');
+                console.log('GST Method loaded:', result.data.gstMethod);
+            } else {
+                console.warn('Failed to fetch GST method, using default:', result.error);
+                setGstMethod('Inclusive GST'); // Default to inclusive
+            }
+        } catch (error) {
+            console.error('Error loading GST method:', error);
+            setGstMethod('Inclusive GST'); // Default to inclusive
         }
     }, []);
 
@@ -276,7 +366,8 @@ const InvoiceDirect = () => {
                 invoiceNumber: invoiceNumber.trim(),
                 products: selectedProducts,
                 totalAmount: totalAmount,
-                customerName: selectedUser?.username || `Customer ${selectedUser?.customer_id}`
+                customerName: selectedUser?.username || `Customer ${selectedUser?.customer_id}`,
+                customerPhone: customerData?.phone || 'N/A'
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -442,6 +533,48 @@ const InvoiceDirect = () => {
         }
     };
 
+    // Download PDF to device storage
+    const downloadPDFHandler = async () => {
+        if (!generatedPDFData) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'No PDF available to download'
+            });
+            return;
+        }
+
+        try {
+            setIsSharingPDF(true); // Reuse loading state
+            
+            // Convert base64 back to Uint8Array for file saving
+            const binaryString = atob(generatedPDFData.pdfBytes);
+            const uint8Array = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                uint8Array[i] = binaryString.charCodeAt(i);
+            }
+            
+            const filePath = await savePDFToDownloads(uint8Array, generatedPDFData.fileName);
+            
+            if (filePath) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Success',
+                    text2: 'Invoice downloaded successfully!'
+                });
+            }
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: error.message || 'Failed to download PDF'
+            });
+        } finally {
+            setIsSharingPDF(false);
+        }
+    };
+
     // Cancel PDF view and go back to main screen
     const cancelPDFHandler = () => {
         setRetrievedInvoice(null);
@@ -472,7 +605,8 @@ const InvoiceDirect = () => {
 
     useEffect(() => {
         loadAllUsers();
-    }, [loadAllUsers]);
+        loadGSTMethod();
+    }, [loadAllUsers, loadGSTMethod]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -567,6 +701,22 @@ const InvoiceDirect = () => {
 
                             {/* Action Buttons */}
                             <View style={styles.pdfActionButtons}>
+                                <TouchableOpacity
+                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    onPress={downloadPDFHandler}
+                                    disabled={isSharingPDF}
+                                    activeOpacity={0.8}
+                                >
+                                    {isSharingPDF ? (
+                                        <ActivityIndicator color={COLORS.text.light} size="small" />
+                                    ) : (
+                                        <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
+                                    )}
+                                    <Text style={styles.shareButtonText}>
+                                        {isSharingPDF ? 'Downloading...' : 'Download PDF'}
+                                    </Text>
+                                </TouchableOpacity>
+
                                 <TouchableOpacity
                                     style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
                                     onPress={sharePDFHandler}
@@ -678,23 +828,41 @@ const InvoiceDirect = () => {
                                         />
                                     </View>
 
-                                    {/* Share PDF Button */}
+                                    {/* Share and Download PDF Buttons */}
                                     {generatedPDFData && (
-                                        <TouchableOpacity
-                                            style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
-                                            onPress={sharePDFHandler}
-                                            disabled={isSharingPDF}
-                                            activeOpacity={0.8}
-                                        >
-                                            {isSharingPDF ? (
-                                                <ActivityIndicator color={COLORS.text.light} size="small" />
-                                            ) : (
-                                                <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
-                                            )}
-                                            <Text style={styles.shareButtonText}>
-                                                {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
-                                            </Text>
-                                        </TouchableOpacity>
+                                        <View style={styles.pdfActionButtons}>
+                                            <TouchableOpacity
+                                                style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                                onPress={downloadPDFHandler}
+                                                disabled={isSharingPDF}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSharingPDF ? (
+                                                    <ActivityIndicator color={COLORS.text.light} size="small" />
+                                                ) : (
+                                                    <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
+                                                )}
+                                                <Text style={styles.shareButtonText}>
+                                                    {isSharingPDF ? 'Downloading...' : 'Download PDF'}
+                                                </Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                                onPress={sharePDFHandler}
+                                                disabled={isSharingPDF}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSharingPDF ? (
+                                                    <ActivityIndicator color={COLORS.text.light} size="small" />
+                                                ) : (
+                                                    <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
+                                                )}
+                                                <Text style={styles.shareButtonText}>
+                                                    {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     )}
                                 </View>
                             )}

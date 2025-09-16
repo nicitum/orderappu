@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,9 +10,14 @@ import {
     ActivityIndicator,
     FlatList,
     ScrollView,
+    Platform,
+    ToastAndroid,
+    PermissionsAndroid,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import RNFS from 'react-native-fs';
+import Share from 'react-native-share';
 import SearchProductModal_1 from '../searchProductModal_1';
 import {
     generateInvoiceNumber,
@@ -21,7 +26,8 @@ import {
     generateInvoicePDF,
     shareInvoicePDF,
     calculateTotalAmount,
-    updateProductQuantity
+    updateProductQuantity,
+    fetchClientStatus
 } from './InvoiceDirectHelper';
 import {
     COLORS,
@@ -36,11 +42,78 @@ import {
 } from './InvoiceDirectComponents';
 import Toast from 'react-native-toast-message';
 
+// Helper to convert Uint8Array to base64 (for RNFS)
+function uint8ToBase64(uint8) {
+    let binary = '';
+    for (let i = 0; i < uint8.length; i++) {
+        binary += String.fromCharCode(uint8[i]);
+    }
+    if (typeof global !== 'undefined' && global.btoa) {
+        return global.btoa(binary);
+    } else if (typeof btoa !== 'undefined') {
+        return btoa(binary);
+    } else {
+        throw new Error('No base64 encoding function available');
+    }
+}
+
+// Helper function to save PDF to downloads (works on all Android versions)
+const savePDFToDownloads = async (pdfBytes, fileName) => {
+    try {
+        // For Android 10+ (API 29+), we use scoped storage approach
+        if (Platform.OS === 'android' && Platform.Version >= 29) {
+            // On Android 10+, we can write to Download directory without permissions
+            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+            const base64Data = uint8ToBase64(pdfBytes);
+            await RNFS.writeFile(filePath, base64Data, 'base64');
+            
+            ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
+            return filePath;
+        } 
+        // For older Android versions, we need explicit permissions
+        else if (Platform.OS === 'android') {
+            // Request storage permissions
+            const granted = await PermissionsAndroid.request(
+                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+                {
+                    title: "Storage Permission",
+                    message: "App needs access to storage to save PDFs",
+                    buttonPositive: "OK"
+                }
+            );
+            
+            if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+                const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+                const base64Data = uint8ToBase64(pdfBytes);
+                await RNFS.writeFile(filePath, base64Data, 'base64');
+                
+                ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
+                return filePath;
+            } else {
+                Alert.alert("Permission Denied", "Cannot save PDF without storage permission");
+                return null;
+            }
+        } 
+        // For iOS
+        else {
+            const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+            const base64Data = uint8ToBase64(pdfBytes);
+            await RNFS.writeFile(filePath, base64Data, 'base64');
+            return filePath;
+        }
+    } catch (error) {
+        console.error("Error saving PDF:", error);
+        Alert.alert("Error", `Failed to save PDF: ${error.message}`);
+        return null;
+    }
+};
+
 const WalkIn = () => {
     const navigation = useNavigation();
     
-    // Customer name state
+    // Customer details state
     const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
     
     // Product and invoice states
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -55,6 +128,29 @@ const WalkIn = () => {
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [isSharingPDF, setIsSharingPDF] = useState(false);
     const [generatedPDFData, setGeneratedPDFData] = useState(null);
+    const [gstMethod, setGstMethod] = useState('Inclusive GST'); // Default to inclusive
+
+    // Load GST method from client status
+    const loadGSTMethod = useCallback(async () => {
+        try {
+            const result = await fetchClientStatus();
+            if (result.success) {
+                setGstMethod(result.data.gstMethod || 'Inclusive GST');
+                console.log('GST Method loaded:', result.data.gstMethod);
+            } else {
+                console.warn('Failed to fetch GST method, using default:', result.error);
+                setGstMethod('Inclusive GST'); // Default to inclusive
+            }
+        } catch (error) {
+            console.error('Error loading GST method:', error);
+            setGstMethod('Inclusive GST'); // Default to inclusive
+        }
+    }, []);
+
+    // Load GST method on component mount
+    useEffect(() => {
+        loadGSTMethod();
+    }, [loadGSTMethod]);
 
     // Handle product addition from search modal
     const handleAddProduct = async (product) => {
@@ -145,6 +241,15 @@ const WalkIn = () => {
             return;
         }
 
+        if (!customerPhone.trim()) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Customer phone is required'
+            });
+            return;
+        }
+
         try {
             setIsCreatingInvoice(true);
             
@@ -155,7 +260,8 @@ const WalkIn = () => {
                 invoiceNumber: invoiceNumber.trim(),
                 products: selectedProducts,
                 totalAmount: totalAmount,
-                customerName: customerName.trim() // Add customer name for walk-in
+                customerName: customerName.trim(), // Add customer name for walk-in
+                customerPhone: customerPhone.trim() // Add customer phone for walk-in
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -169,7 +275,9 @@ const WalkIn = () => {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            customer_name: customerName.trim()
+                            customer_name: customerName.trim(),
+                            customer_phone: customerPhone.trim(),
+                            invoice_amount: totalAmount
                         })
                     });
 
@@ -200,8 +308,15 @@ const WalkIn = () => {
                     if (retrieveResult.success) {
                         setRetrievedInvoice(retrieveResult.data);
                         
-                        // Step 2: Generate PDF
-                        const pdfResult = await generateInvoicePDF(retrieveResult.data);
+                        // Step 2: Generate PDF with walk-in customer data
+                        const walkInCustomerData = {
+                            username: customerName.trim(),
+                            phone: customerPhone.trim(),
+                            route: 'Walk-In Customer',
+                            delivery_address: 'Walk-In Customer'
+                        };
+                        
+                        const pdfResult = await generateInvoicePDF(retrieveResult.data, walkInCustomerData);
                         
                         if (pdfResult.success) {
                             setGeneratedPDFData(pdfResult);
@@ -281,6 +396,48 @@ const WalkIn = () => {
         }
     };
 
+    // Download PDF to device storage
+    const downloadPDFHandler = async () => {
+        if (!generatedPDFData) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'No PDF available to download'
+            });
+            return;
+        }
+
+        try {
+            setIsSharingPDF(true); // Reuse loading state
+            
+            // Convert base64 back to Uint8Array for file saving
+            const binaryString = atob(generatedPDFData.pdfBytes);
+            const uint8Array = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                uint8Array[i] = binaryString.charCodeAt(i);
+            }
+            
+            const filePath = await savePDFToDownloads(uint8Array, generatedPDFData.fileName);
+            
+            if (filePath) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Success',
+                    text2: 'Invoice downloaded successfully!'
+                });
+            }
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: error.message || 'Failed to download PDF'
+            });
+        } finally {
+            setIsSharingPDF(false);
+        }
+    };
+
     // Cancel PDF view and go back to main screen
     const cancelPDFHandler = () => {
         setRetrievedInvoice(null);
@@ -293,6 +450,7 @@ const WalkIn = () => {
         setShowInvoiceCreation(false);
         setInvoiceNumber('');
         setCustomerName('');
+        setCustomerPhone('');
     };
 
     // Render selected product item for invoice creation
@@ -328,8 +486,8 @@ const WalkIn = () => {
                     </Text>
                     <Text style={styles.headerSubtitle}>
                         {retrievedInvoice && generatedPDFData ? 'Share or cancel to continue' :
-                         showInvoiceCreation ? `Invoice for ${customerName}` :
-                         'Enter customer name to create invoice'
+                         showInvoiceCreation ? `Invoice for ${customerName} (${customerPhone})` :
+                         'Enter customer details to create invoice'
                         }
                     </Text>
                 </View>
@@ -372,6 +530,10 @@ const WalkIn = () => {
                                     {customerName}
                                 </Text>
                                 <Text style={styles.invoiceInfoText}>
+                                    <Text style={styles.invoiceInfoLabel}>Phone: </Text>
+                                    {customerPhone}
+                                </Text>
+                                <Text style={styles.invoiceInfoText}>
                                     <Text style={styles.invoiceInfoLabel}>Amount: </Text>
                                     Rs {retrievedInvoice.invoice_info.invoice_amount}
                                 </Text>
@@ -387,6 +549,22 @@ const WalkIn = () => {
 
                             {/* Action Buttons */}
                             <View style={styles.pdfActionButtons}>
+                                <TouchableOpacity
+                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    onPress={downloadPDFHandler}
+                                    disabled={isSharingPDF}
+                                    activeOpacity={0.8}
+                                >
+                                    {isSharingPDF ? (
+                                        <ActivityIndicator color={COLORS.text.light} size="small" />
+                                    ) : (
+                                        <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
+                                    )}
+                                    <Text style={styles.shareButtonText}>
+                                        {isSharingPDF ? 'Downloading...' : 'Download PDF'}
+                                    </Text>
+                                </TouchableOpacity>
+
                                 <TouchableOpacity
                                     style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
                                     onPress={sharePDFHandler}
@@ -426,10 +604,14 @@ const WalkIn = () => {
                                 <View style={styles.card}>
                                     <Text style={styles.title}>Create Direct Invoice</Text>
                                     
-                                    {/* Customer Name Display */}
+                                    {/* Customer Info Display */}
                                     <View style={styles.customerInfoContainer}>
                                         <Text style={styles.customerInfoLabel}>Customer Name:</Text>
                                         <Text style={styles.customerInfoText}>{customerName}</Text>
+                                    </View>
+                                    <View style={styles.customerInfoContainer}>
+                                        <Text style={styles.customerInfoLabel}>Customer Phone:</Text>
+                                        <Text style={styles.customerInfoText}>{customerPhone}</Text>
                                     </View>
                                     
                                     {/* Invoice Number Display */}
@@ -499,20 +681,33 @@ const WalkIn = () => {
                                 />
                             </View>
                             
+                            {/* Customer Phone Input */}
+                            <View style={styles.inputContainer}>
+                                <Text style={styles.inputLabel}>Customer Phone</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder="Enter customer phone..."
+                                    value={customerPhone}
+                                    onChangeText={setCustomerPhone}
+                                    placeholderTextColor={COLORS.text.secondary}
+                                    keyboardType="phone-pad"
+                                />
+                            </View>
+                            
                             <TouchableOpacity 
-                                style={[styles.addProductButton, !customerName.trim() && styles.addProductButtonDisabled]}
+                                style={[styles.addProductButton, (!customerName.trim() || !customerPhone.trim()) && styles.addProductButtonDisabled]}
                                 onPress={() => {
-                                    if (customerName.trim()) {
+                                    if (customerName.trim() && customerPhone.trim()) {
                                         setShowSearchModal(true);
                                     } else {
                                         Toast.show({
                                             type: 'error',
-                                            text1: 'Customer Name Required',
-                                            text2: 'Please enter customer name first'
+                                            text1: 'Customer Details Required',
+                                            text2: 'Please enter customer name and phone first'
                                         });
                                     }
                                 }}
-                                disabled={!customerName.trim()}
+                                disabled={!customerName.trim() || !customerPhone.trim()}
                             >
                                 <MaterialIcons name="add" size={24} color={COLORS.text.light} />
                                 <Text style={styles.addProductButtonText}>Add Products</Text>

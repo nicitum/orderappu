@@ -115,7 +115,7 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="receipt" size={24} color="#10B981" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Invoices</Text>
+            <Text style={styles.cardTitle}>Invoice Against Orders</Text>
             <Text style={styles.cardSubtitle}>View and manage invoices</Text>
             <View style={styles.cardFooter}>
               <Text style={styles.cardAction}>View all</Text>
