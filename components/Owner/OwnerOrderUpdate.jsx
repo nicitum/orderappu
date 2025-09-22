@@ -4,7 +4,6 @@ import {
   Text, 
   TextInput, 
   FlatList, 
-  StyleSheet, 
   TouchableOpacity, 
   ActivityIndicator, 
   Alert, 
@@ -14,67 +13,43 @@ import {
   Platform,
   Modal,
   Image,
-
 } from 'react-native';
+import { useFontScale } from '../../App';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import Toast from 'react-native-toast-message';
-import { jwtDecode } from 'jwt-decode';
+
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import SearchProductModal_1 from './searchProductModal_1';
-import moment from 'moment';
+
 import { ipAddress } from '../../services/urls';
-import axios from 'axios';
 
-// Clean Color Palette
-const COLORS = {
-  primary: "#003366",
-  primaryLight: "#004488",
-  primaryDark: "#002244",
-  secondary: "#10B981",
-  accent: "#F59E0B",
-  success: "#059669",
-  error: "#DC2626",
-  warning: "#D97706",
-  background: "#F3F4F6",
-  surface: "#FFFFFF",
-  text: {
-    primary: "#111827",
-    secondary: "#4B5563",
-    tertiary: "#9CA3AF",
-    light: "#FFFFFF",
-  },
-  border: "#E5E7EB",
-  divider: "#F3F4F6",
-  card: {
-    background: "#FFFFFF",
-    shadow: "rgba(0, 0, 0, 0.1)",
-  },
-};
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(amount);
-};
-
-// Format date
-const formatDate = (epochTime) => {
-  if (!epochTime) return "N/A";
-  const date = new Date(epochTime * 1000);
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-};
+// Import from oupdateutils
+import { COLORS, formatCurrency, formatDate } from './oupdateutils/constants';
+import styles from './oupdateutils/styles';
+import { 
+  fetchOwnerOrders,
+  fetchOrderProducts,
+  deleteOrderProduct,
+  updateOrder,
+  deleteOrder,
+  addProductToOrder,
+  fetchAllProductsForImages,
+  fetchCustomerName
+} from './oupdateutils/apiHelpers';
+import { 
+  handleEditProduct,
+  saveEditProduct,
+  confirmCancelOrder,
+  getApprovalStatusColor,
+  getApprovalStatusText,
+  getApprovalStatusIcon,
+  getCustomerName
+} from './oupdateutils/utils';
 
 const OwnerOrderUpdate = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const [orders, setOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
@@ -106,8 +81,8 @@ const OwnerOrderUpdate = () => {
   const [editError, setEditError] = useState(null);
 
   useEffect(() => {
-    fetchOwnerOrders();
-    fetchAllProductsForImages();
+    fetchOwnerOrders(setLoading, setError, setOrders, Toast);
+    fetchAllProductsForImages(setAllProducts);
   }, []);
 
   // Fetch customer names when orders change
@@ -121,7 +96,7 @@ const OwnerOrderUpdate = () => {
           console.log(`Processing order ${order.id}, customer_id: ${order.customer_id}`);
           if (order.customer_id && !customerNames[order.customer_id]) {
             console.log(`Fetching name for customer_id: ${order.customer_id}`);
-            await getCustomerName(order.customer_id);
+            await getCustomerName(order.customer_id, customerNames, setCustomerNames, fetchCustomerName);
           }
         }
       }
@@ -145,152 +120,20 @@ const OwnerOrderUpdate = () => {
     }
   }, [selectedOrderId]);
 
-  const fetchOwnerOrders = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      if (!token) throw new Error("No authentication token found");
-
-      const todayFormatted = moment().format("YYYY-MM-DD");
-      const url = `http://${ipAddress}:8091/get-orders-sa?date=${todayFormatted}`;
-
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      };
-
-      const ordersResponse = await fetch(url, { headers });
-
-      if (!ordersResponse.ok) {
-        const errorText = await ordersResponse.text();
-        throw new Error(`Failed to fetch owner orders: ${ordersResponse.status}, ${errorText}`);
-      }
-
-      const ordersData = await ordersResponse.json();
-      if (!ordersData.status) {
-        throw new Error(ordersData.message || "Failed to fetch owner orders");
-      }
-
-      setOrders(ordersData.orders);
-    } catch (fetchOrdersError) {
-      const errorMessage = fetchOrdersError.message || "Failed to fetch owner orders.";
-      setError(errorMessage);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: errorMessage
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchOrderProducts = async (orderIdToFetch) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const url = `http://${ipAddress}:8091/order-products?orderId=${orderIdToFetch}`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-
-      const productsResponse = await fetch(url, { headers });
-
-      if (!productsResponse.ok) {
-        const errorText = await productsResponse.text();
-        if (productsResponse.status !== 404) {
-          throw new Error(`Failed to fetch order products. Status: ${productsResponse.status}, Text: ${errorText}`);
-        } else {
-          setProducts([]);
-          setSelectedOrderId(orderIdToFetch);
-          const selectedOrder = orders.find(order => order.id === orderIdToFetch);
-          if (selectedOrder) {
-            setSelectedOrderCustomerId(selectedOrder.customer_id);
-          }
-          return;
-        }
-      }
-
-      const productsData = await productsResponse.json();
-      setProducts(productsData);
-      setSelectedOrderId(orderIdToFetch);
-      
-      const selectedOrder = orders.find(order => order.id === orderIdToFetch);
-      if (selectedOrder) {
-        setSelectedOrderCustomerId(selectedOrder.customer_id);
-      }
-
-    } catch (error) {
-      setError(error.message || "Failed to fetch order products.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message || "Failed to fetch order products." 
-      });
-      setProducts([]);
-      setSelectedOrderId(null);
-      setSelectedOrderCustomerId(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditProduct = (item) => {
-    // Find the full product info from allProducts
-    const fullProduct = allProducts.find(p => p.id === item.product_id || p.id === item.id);
-    setEditProduct({
-      ...item,
-      min_selling_price: fullProduct?.min_selling_price ?? fullProduct?.minSellingPrice ?? 0,
-      discountPrice: fullProduct?.discountPrice ?? fullProduct?.selling_price ?? fullProduct?.price ?? 0,
-    });
-    setEditPrice(item.price.toString());
-    setEditQty(item.quantity.toString());
-    setEditError(null);
-    setEditModalVisible(true);
-  };
-
-  const saveEditProduct = () => {
-    if (!editProduct) return;
-
-    const newPrice = parseFloat(editPrice);
-    const newQty = parseInt(editQty);
-    const minPrice = editProduct.min_selling_price !== undefined ? editProduct.min_selling_price : 0;
-    const maxPrice = editProduct.discountPrice !== undefined ? editProduct.discountPrice : (editProduct.price !== undefined ? editProduct.price : 0);
-
-    if (isNaN(newPrice) || newPrice < minPrice || newPrice > maxPrice) {
-        setEditError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
-        return;
-    }
-    if (isNaN(newQty) || newQty <= 0) {
-        setEditError('Please enter a valid quantity');
-        return;
-    }
-
-    // Update local state only
-    setProducts(prevProducts =>
-        prevProducts.map(product =>
-            product.product_id === editProduct.product_id
-                ? { ...product, price: newPrice, quantity: newQty }
-                : product
-        )
+  const handleSaveEditProduct = () => {
+    saveEditProduct(
+      editProduct,
+      editPrice,
+      editQty,
+      setProducts,
+      products,
+      setEditModalVisible,
+      setEditProduct,
+      setEditPrice,
+      setEditQty,
+      setEditError,
+      Toast
     );
-
-    // Close modal and reset state
-    setEditModalVisible(false);
-    setEditProduct(null);
-    setEditPrice('');
-    setEditQty('1');
-    setEditError(null);
-
-    Toast.show({
-        type: 'success',
-        text1: 'Product Updated Locally',
-        text2: 'Press \"Update Order\" to save changes.',
-    });
   };
 
   const handleDeleteProductItem = async (indexToDelete) => {
@@ -304,335 +147,63 @@ const OwnerOrderUpdate = () => {
       return;
     }
 
-    setDeleteLoading(true);
-    setDeleteLoadingIndex(indexToDelete);
-    setError(null);
-
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const orderProductIdToDelete = productToDelete.product_id;
-
-      const url = `http://${ipAddress}:8091/delete_order_product/${orderProductIdToDelete}`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      const deleteResponse = await fetch(url, {
-        method: 'DELETE',
-        headers: headers,
-      });
-
-      if (!deleteResponse.ok) {
-        const errorText = await deleteResponse.text();
-        throw new Error(`Failed to delete order product. Status: ${deleteResponse.status}, Text: ${errorText}`);
-      }
-
-      const deleteData = await deleteResponse.json();
-
-      // Do NOT cancel the order if last product is deleted. Just update products state.
-      const updatedProducts = products.filter((_, index) => index !== indexToDelete);
-      setProducts(updatedProducts);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'Product Deleted',
-        text2: "Product item deleted successfully from order."
-      });
-
-    } catch (deleteError) {
-      setError(deleteError.message || "Failed to delete order product.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: deleteError.message || "Failed to delete product item." 
-      });
-    } finally {
-      setDeleteLoading(false);
-      setDeleteLoadingIndex(null);
-    }
-  };
-
-  const handleUpdateOrder = async () => {
-    if (!selectedOrderId) {
-      Alert.alert("Error", "Please select an order to update.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-
-      let calculatedTotalAmount = 0;
-      const productsToUpdate = products.map(product => ({
-        order_id: selectedOrderId,
-        product_id: product.product_id,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-        quantity: product.quantity,
-        gst_rate: product.gst_rate
-      }));
-
-      productsToUpdate.forEach(product => {
-        calculatedTotalAmount += product.quantity * product.price;
-      });
-
-      const url = `http://${ipAddress}:8091/order_update`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      const decodedToken = jwtDecode(token);
-      const requestBody = {
-        orderId: selectedOrderId,
-        products: productsToUpdate,
-        totalAmount: calculatedTotalAmount,
-        total_amount: calculatedTotalAmount,
-        altered_by: decodedToken.username
-      };
-
-      const updateResponse = await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        throw new Error(`Failed to update order. Status: ${updateResponse.status}, Text: ${errorText}`);
-      }
-
-      const updateData = await updateResponse.json();
-
-      Toast.show({
-        type: 'success',
-        text1: 'Order Updated',
-        text2: updateData.message || "Order updated successfully!"
-      });
-
-      await fetchOwnerOrders();
-      setSelectedOrderId(null);
-      setProducts([]);
-
-    } catch (error) {
-      setError(error.message || "Failed to update order.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message || "Failed to update order." 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteOrder = async (orderIdToDelete) => {
-    setOrderDeleteLoading(true);
-    setOrderDeleteLoadingId(orderIdToDelete);
-    setError(null);
-
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-
-      const deleteOrderResponse = await fetch(
-        `http://${ipAddress}:8091/cancel_order/${orderIdToDelete}`,
-        { method: "POST", headers }
-      );
-
-      if (!deleteOrderResponse.ok) {
-        const errorText = await deleteOrderResponse.text();
-        throw new Error(`Failed to delete order. Status: ${deleteOrderResponse.status}, Text: ${errorText}`);
-      }
-
-      const deleteOrderData = await deleteOrderResponse.json();
-      if (!deleteOrderData.success) {
-        throw new Error(deleteOrderData.message || "Failed to cancel the order.");
-      }
-
-      setSelectedOrderId(null);
-      setProducts([]);
-      await fetchOwnerOrders();
-
-      Toast.show({
-        type: "success",
-        text1: "Order Cancelled",
-        text2: deleteOrderData.message || `Order ID ${orderIdToDelete} cancelled successfully.`,
-      });
-    } catch (error) {
-      setError(error.message || "Failed to cancel order.");
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error.message || "Failed to cancel the order.",
-      });
-    } finally {
-      setOrderDeleteLoading(false);
-      setOrderDeleteLoadingId(null);
-    }
-  };
-
-  const confirmCancelOrder = (orderId) => {
-    Alert.alert(
-      'Cancel Order',
-      'Do you really want to cancel this order?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes',
-          style: 'default',
-          onPress: () =>
-            Alert.alert(
-              'Confirm Cancel',
-              'This action cannot be undone. Proceed?',
-              [
-                { text: 'No', style: 'cancel' },
-                { text: 'Yes', style: 'destructive', onPress: () => handleDeleteOrder(orderId) },
-              ]
-            ),
-        },
-      ]
+    await deleteOrderProduct(
+      productToDelete,
+      setDeleteLoading,
+      setDeleteLoadingIndex,
+      indexToDelete,
+      setError,
+      setProducts,
+      products,
+      Toast
     );
   };
 
+  const handleUpdateOrder = async () => {
+    await updateOrder(
+      selectedOrderId,
+      products,
+      setLoading,
+      setError,
+      setOrders,
+      setSelectedOrderId,
+      setProducts,
+      navigation,
+      Toast
+    );
+  };
+
+  const handleDeleteOrder = async (orderIdToDelete) => {
+    await deleteOrder(
+      orderIdToDelete,
+      setOrderDeleteLoading,
+      setOrderDeleteLoadingId,
+      setError,
+      setSelectedOrderId,
+      setProducts,
+      setOrders,
+      Toast
+    );
+  };
+
+  const handleConfirmCancelOrder = (orderId) => {
+    confirmCancelOrder(orderId, handleDeleteOrder);
+  };
+
   const handleAddProductToOrder = async (productToAdd) => {
-    if (!selectedOrderId) return Alert.alert("Error", "Please select an order.");
-    if (products.some(p => p.product_id === productToAdd.id)) {
-      Toast.show({ 
-        type: 'info', 
-        text1: 'Product Already Added', 
-        text2: 'Update quantity instead.' 
-      });
-      setShowSearchModal(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const orderToCheck = orders.find(order => order.id === selectedOrderId);
-      if (!orderToCheck) {
-        Toast.show({ 
-          type: 'error', 
-          text1: 'Order Not Found', 
-          text2: "The selected order no longer exists. Please select or create a new order." 
-        });
-        setSelectedOrderId(null);
-        setProducts([]);
-        await fetchOwnerOrders();
-        return;
-      }
-
-      // Use price and quantity from modal/productToAdd
-      const payload = {
-        orderId: selectedOrderId,
-        productId: productToAdd.id,
-        quantity: productToAdd.quantity ?? 1,
-        price: productToAdd.price,
-        name: productToAdd.name,
-        category: productToAdd.category,
-        gst_rate: productToAdd.gst_rate !== undefined ? productToAdd.gst_rate : 0
-      };
-
-      const response = await fetch(`http://${ipAddress}:8091/add-product-to-order`, {
-        method: 'POST',
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to add product: ${response.status}, ${errorText}`);
-      }
-
-      const addProductData = await response.json();
-      if (addProductData.success) {
-        Toast.show({ 
-          type: 'success', 
-          text1: 'Product Added', 
-          text2: `${productToAdd.name} added with price ₹${productToAdd.price}.` 
-        });
-        fetchOrderProducts(selectedOrderId);
-        setShowSearchModal(false);
-      } else {
-        throw new Error(addProductData.message || "Failed to add product.");
-      }
-    } catch (error) {
-      setError(error.message || "Failed to add product.");
-      Toast.show({ 
-        type: 'error', 
-        text1: 'Error', 
-        text2: error.message 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAllProductsForImages = async () => {
-    try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      if (!token) return;
-      const response = await fetch(`http://${ipAddress}:8091/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      setAllProducts(data);
-    } catch (error) {
-      setAllProducts([]);
-    }
-  };
-
-  // Function to fetch customer name by customer ID
-  const fetchCustomerName = async (customerId) => {
-    try {
-      console.log(`Fetching customer name for ID: ${customerId}`);
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const response = await fetch(`http://${ipAddress}:8091/fetch-names?customer_id=${customerId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(`Failed to fetch customer name for ID ${customerId}, Status: ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-      console.log(`Customer name response for ID ${customerId}:`, data);
-      
-      // Check different possible response formats
-      const customerName = data.username || data.name || data.customer_name || data.customerName || data.Name || data.NAME;
-      console.log(`Extracted customer name for ID ${customerId}:`, customerName);
-      return customerName;
-    } catch (error) {
-      console.error(`Error fetching customer name for ID ${customerId}:`, error);
-      return null;
-    }
-  };
-
-  // Simple function to get customer name and cache it
-  const getCustomerName = async (customerId) => {
-    if (customerNames[customerId]) {
-      return customerNames[customerId];
-    }
-    
-    const name = await fetchCustomerName(customerId);
-    if (name) {
-      setCustomerNames(prev => ({ ...prev, [customerId]: name }));
-    }
-    return name;
+    await addProductToOrder(
+      productToAdd,
+      selectedOrderId,
+      products,
+      setLoading,
+      setError,
+      setProducts,
+      setSelectedOrderId,
+      orders,
+      setShowSearchModal,
+      setOrders,
+      Toast
+    );
   };
 
   const renderOrderItem = ({ item }) => (
@@ -647,51 +218,60 @@ const OwnerOrderUpdate = () => {
           setProducts([]);
           setSelectedOrderCustomerId(null);
         } else {
-          fetchOrderProducts(item.id);
+          fetchOrderProducts(
+            item.id,
+            setLoading,
+            setError,
+            setProducts,
+            setSelectedOrderId,
+            setSelectedOrderCustomerId,
+            orders,
+            Toast
+          );
         }
       }}
     >
       <View style={styles.orderCardContent}>
         <View style={styles.orderLeftSection}>
-          <Text style={styles.orderIdText}>#{item.id}</Text>
-          <Text style={styles.customerNameText}>
+          <Text style={[styles.orderIdText, { fontSize: getScaledSize(16) }]}>#{item.id}</Text>
+          <Text style={[styles.customerNameText, { fontSize: getScaledSize(12) }]}>
             {customerNames[item.customer_id] ? 
               customerNames[item.customer_id] : 
               `ID: ${item.customer_id}`
             }
           </Text>
         </View>
-                  <View style={styles.orderCenterSection}>
-            <Text style={styles.orderAmountText}>{formatCurrency(item.total_amount)}</Text>
-            <View style={styles.statusContainer}>
-              {item.cancelled === 'Yes' && (
-                <Text style={styles.cancelledStatusText}>Cancelled</Text>
-              )}
-              {item.loading_slip === "Yes" && (
-                <Text style={styles.processedStatusText}>Processed</Text>
-              )}
-              {/* Show approval status prominently */}
-              {item.approve_status && item.approve_status !== 'null' && item.approve_status !== 'Null' && item.approve_status !== 'NULL' && (
-                <Text style={[
-                  styles.approvalStatusText,
-                  { color: getApprovalStatusColor(item.approve_status) }
-                ]}>
-                  {getApprovalStatusText(item.approve_status)}
-                </Text>
-              )}
-              {(!item.approve_status || item.approve_status === 'null' || item.approve_status === 'Null' || item.approve_status === 'NULL') && (
-                <Text style={[styles.approvalStatusText, { color: COLORS.warning }]}>
-                  PENDING
-                </Text>
-              )}
-            </View>
+        <View style={styles.orderCenterSection}>
+          <Text style={[styles.orderAmountText, { fontSize: getScaledSize(16) }]}>{formatCurrency(item.total_amount)}</Text>
+          <View style={styles.statusContainer}>
+            {item.cancelled === 'Yes' && (
+              <Text style={[styles.cancelledStatusText, { fontSize: getScaledSize(10) }]}>Cancelled</Text>
+            )}
+            {item.loading_slip === "Yes" && (
+              <Text style={[styles.processedStatusText, { fontSize: getScaledSize(10) }]}>Processed</Text>
+            )}
+            {/* Show approval status prominently */}
+            {item.approve_status && item.approve_status !== 'null' && item.approve_status !== 'Null' && item.approve_status !== 'NULL' && (
+              <Text style={[
+                styles.approvalStatusText,
+                { color: getApprovalStatusColor(item.approve_status, COLORS), fontSize: getScaledSize(10) }
+              ]}>
+                {getApprovalStatusText(item.approve_status)}
+              </Text>
+            )}
+            {(!item.approve_status || item.approve_status === 'null' || item.approve_status === 'Null' || item.approve_status === 'NULL') && (
+              <Text style={[styles.approvalStatusText, { color: COLORS.warning }]}>
+                PENDING
+              </Text>
+            )}
           </View>
+        </View>
         <TouchableOpacity
           style={[
             styles.cancelOrderButton,
             (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected" || item.approve_status === "Accepted" || item.approve_status === "Altered") && styles.disabledCancelButton
           ]}
-          onPress={() => confirmCancelOrder(item.id)}
+          onPress={() => handleConfirmCancelOrder(item.id)}
           disabled={
             orderDeleteLoading || 
             item.loading_slip === "Yes" || 
@@ -722,6 +302,21 @@ const OwnerOrderUpdate = () => {
     const imageUri = imageName ? `http://${ipAddress}:8091/images/products/${imageName}` : null;
     const itemTotal = (item.price || 0) * (item.quantity || 1);
 
+    // Check if order is editable (not cancelled, not processed, not rejected, not accepted, not altered)
+    const isOrderEditable = selectedOrder && 
+      selectedOrder.cancelled !== 'Yes' && 
+      selectedOrder.approve_status !== 'Rejected' &&
+      selectedOrder.approve_status !== 'Accepted' &&  // Don't allow editing if accepted
+      selectedOrder.approve_status !== 'Altered' &&   // Don't allow editing if altered
+      selectedOrder.loading_slip !== "Yes";
+
+    // Check if order is restricted (accepted, rejected, or altered)
+    const isOrderRestricted = selectedOrder && (
+      selectedOrder.approve_status === 'Accepted' || 
+      selectedOrder.approve_status === 'Rejected' || 
+      selectedOrder.approve_status === 'Altered'
+    );
+
     return (
       <View style={[styles.productCard, isOrderRestricted && styles.restrictedProductCard]}>
         <View style={styles.productContent}>
@@ -745,7 +340,7 @@ const OwnerOrderUpdate = () => {
             {item.category && <Text style={[styles.productCategory, isOrderRestricted && styles.restrictedProductText]}>{item.category}</Text>}
             <TouchableOpacity 
               style={[styles.editButton, (!isOrderEditable || isOrderRestricted) && styles.disabledEditButton]}
-              onPress={() => handleEditProduct(item)}
+              onPress={() => handleEditProduct(item, allProducts, setEditProduct, setEditPrice, setEditQty, setEditError, setEditModalVisible)}
               disabled={!isOrderEditable || isOrderRestricted}
             >
               <Icon name="edit" size={16} color={isOrderEditable && !isOrderRestricted ? COLORS.primary : COLORS.text.tertiary} />
@@ -797,30 +392,6 @@ const OwnerOrderUpdate = () => {
     selectedOrder.approve_status === 'Altered'
   );
 
-  // Helper functions for approval status display
-  const getApprovalStatusColor = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return COLORS.warning;
-    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return COLORS.success;
-    if (approveStatus === 'Rejected') return COLORS.error;
-    if (approveStatus === 'Altered') return '#1E40AF'; // Deep blue for Altered
-    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return COLORS.accent;
-    return COLORS.primary;
-  };
-
-  const getApprovalStatusText = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'PENDING';
-    return approveStatus.toUpperCase();
-  };
-
-  const getApprovalStatusIcon = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'schedule';
-    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'check-circle';
-    if (approveStatus === 'Rejected') return 'block';
-    if (approveStatus === 'Altered') return 'edit';
-    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'schedule';
-    return 'info';
-  };
-
   // Filtered orders based on cancelled state
   const filteredOrders = orders.filter(order => {
     if (cancelledFilter === 'All') return true;
@@ -841,10 +412,10 @@ const OwnerOrderUpdate = () => {
         >
           <Icon name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Update Orders</Text>
+        <Text style={[styles.headerTitle, { fontSize: getScaledSize(18) }]}>Update Orders</Text>
         <TouchableOpacity
           style={styles.refreshButton}
-          onPress={fetchOwnerOrders}
+          onPress={() => fetchOwnerOrders(setLoading, setError, setOrders, Toast)}
         >
           <Icon name="refresh" size={24} color={COLORS.primary} />
         </TouchableOpacity>
@@ -867,14 +438,14 @@ const OwnerOrderUpdate = () => {
       {loading && !selectedOrderId && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading your orders...</Text>
+          <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading your orders...</Text>
         </View>
       )}
 
       {error && (
         <View style={styles.errorContainer}>
           <Icon name="error-outline" size={24} color={COLORS.text.light} />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{error}</Text>
         </View>
       )}
 
@@ -886,9 +457,9 @@ const OwnerOrderUpdate = () => {
       >
         <View style={styles.ordersContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Orders</Text>
+            <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Today's Orders</Text>
             <View style={styles.orderCountBadge}>
-              <Text style={styles.orderCountText}>
+              <Text style={[styles.orderCountText, { fontSize: getScaledSize(14) }]}>
                 {orders.length} order{orders.length !== 1 ? "s" : ""}
               </Text>
             </View>
@@ -897,8 +468,8 @@ const OwnerOrderUpdate = () => {
           {orders.length === 0 && !loading ? (
             <View style={styles.emptyContainer}>
               <Icon name="shopping-basket" size={48} color={COLORS.text.tertiary} />
-              <Text style={styles.emptyText}>No orders for today</Text>
-              <Text style={styles.emptySubtext}>Your orders will appear here</Text>
+              <Text style={[styles.emptyText, { fontSize: getScaledSize(18) }]}>No orders for today</Text>
+              <Text style={[styles.emptySubtext, { fontSize: getScaledSize(14) }]}>Your orders will appear here</Text>
             </View>
           ) : (
             <FlatList
@@ -945,11 +516,11 @@ const OwnerOrderUpdate = () => {
                   <Icon 
                     name={getApprovalStatusIcon(selectedOrder.approve_status)} 
                     size={16} 
-                    color={getApprovalStatusColor(selectedOrder.approve_status)} 
+                    color={getApprovalStatusColor(selectedOrder.approve_status, COLORS)} 
                   />
                   <Text style={[
                     styles.orderStatusText,
-                    { color: getApprovalStatusColor(selectedOrder.approve_status) }
+                    { color: getApprovalStatusColor(selectedOrder.approve_status, COLORS) }
                   ]}>
                     {getApprovalStatusText(selectedOrder.approve_status)}
                   </Text>
@@ -1110,7 +681,7 @@ const OwnerOrderUpdate = () => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.editSaveButton}
-                    onPress={saveEditProduct}
+                    onPress={handleSaveEditProduct}
                   >
                     <Text style={styles.editSaveText}>Save</Text>
                   </TouchableOpacity>
@@ -1131,678 +702,5 @@ const OwnerOrderUpdate = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: COLORS.text.primary,
-    marginTop: 16,
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.error,
-    padding: 12,
-    margin: 16,
-    borderRadius: 8,
-  },
-  errorText: {
-    color: COLORS.text.light,
-    marginLeft: 8,
-    fontSize: 14,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  ordersContainer: {
-    padding: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  orderCountBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  orderCountText: {
-    color: COLORS.text.light,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  orderList: {
-    paddingBottom: 12,
-  },
-  orderCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  selectedOrderCard: {
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: "#F0F8FF",
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-  },
-  orderCardContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: 50,
-  },
-  orderLeftSection: {
-    flex: 1,
-  },
-  orderCenterSection: {
-    flex: 1,
-    alignItems: "center",
-  },
-  customerNameText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 2,
-  },
-  statusContainer: {
-    marginTop: 2,
-  },
-  cancelledStatusText: {
-    fontSize: 10,
-    color: COLORS.error,
-    fontWeight: "500",
-  },
-  processedStatusText: {
-    fontSize: 10,
-    color: COLORS.success,
-    fontWeight: "500",
-  },
-  rejectedStatusText: {
-    fontSize: 10,
-    color: COLORS.error,
-    fontWeight: "500",
-  },
-  orderInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  orderIdText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  orderStatusContainer: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  processedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#E6FFED",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  processedText: {
-    color: COLORS.success,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  cancelledBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  cancelledText: {
-    color: COLORS.error,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  rejectedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  rejectedText: {
-    color: COLORS.error,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  orderDetails: {
-    flexDirection: "column",
-    gap: 8,
-  },
-  orderDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  orderDetailText: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginLeft: 8,
-  },
-  orderActionsContainer: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: "100%",
-  },
-  orderAmountText: {
-    fontSize: 16,
-    fontWeight: "600", 
-    color: COLORS.primary,
-  },
-  cancelOrderButton: {
-    backgroundColor: COLORS.warning,
-    padding: 6,
-    borderRadius: 6,
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  disabledCancelButton: {
-    backgroundColor: COLORS.text.tertiary,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  orderSeparator: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginVertical: 8,
-  },
-  editContainer: {
-    backgroundColor: COLORS.surface,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  orderDetailsCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  orderDetailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  orderDetailItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  orderStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  orderStatusText: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  editHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  addProductButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  addProductButtonText: {
-    color: COLORS.text.light,
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    backgroundColor: COLORS.text.tertiary,
-  },
-  productCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  productContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  productImageContainer: {
-    width: 60,
-    height: 60,
-    marginRight: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: COLORS.divider,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  noImageContainer: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productDetails: {
-    flex: 1,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 2,
-  },
-  productCategory: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  editButtonText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginLeft: 4,
-  },
-  disabledEditButton: {
-    opacity: 0.5,
-  },
-  disabledEditButtonText: {
-    color: COLORS.text.tertiary,
-  },
-  productActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-  },
-  productSeparator: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginVertical: 8,
-  },
-  summaryContainer: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    fontWeight: "500",
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  summaryAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-  footer: {
-    marginTop: 16,
-  },
-  updateButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  updateButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 40,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  emptyProductsContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    marginVertical: 12,
-  },
-  emptyProductsText: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginVertical: 12,
-  },
-  addProductsButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  addProductsButtonText: {
-    color: COLORS.text.light,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Modal styles
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalContainer: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  editModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  editModalContent: {
-    padding: 16,
-  },
-  editItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: 16,
-  },
-  editInputRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  editInputContainer: {
-    flex: 1,
-  },
-  editInputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 6,
-  },
-  editTextInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: COLORS.surface,
-    color: COLORS.text.primary,
-  },
-  disabledInput: {
-    backgroundColor: COLORS.divider,
-    color: COLORS.text.tertiary,
-  },
-  priceRangeText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  disabledPriceText: {
-    fontSize: 12,
-    color: COLORS.text.tertiary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  editModalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  editCancelButton: {
-    flex: 1,
-    backgroundColor: COLORS.divider,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editCancelText: {
-    color: COLORS.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  editSaveButton: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editSaveText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelledBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  cancelledText: {
-    color: COLORS.error,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  cancelledStateContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  cancelledBadgeCentered: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  cancelledTextCentered: {
-    color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  cancelledFilterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    justifyContent: 'space-between',
-  },
-  cancelledFilterLabel: {
-    fontSize: 14,
-    color: COLORS.text.primary,
-    fontWeight: '500',
-  },
-  cancelledFilterPicker: {
-    width: 100,
-    height: 28,
-    marginLeft: 8,
-  },
-  // Restricted order styles
-  restrictedProductCard: {
-    opacity: 0.7,
-    backgroundColor: '#F8F9FA',
-  },
-  restrictedProductImage: {
-    opacity: 0.6,
-  },
-  restrictedNoImageContainer: {
-    backgroundColor: '#E9ECEF',
-  },
-  restrictedProductText: {
-    color: COLORS.text.tertiary,
-  },
-  approvalStatusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  restrictionMessageContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.warning,
-  },
-  restrictionMessageText: {
-    fontSize: 14,
-    color: COLORS.warning,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-});
 
 export default OwnerOrderUpdate;

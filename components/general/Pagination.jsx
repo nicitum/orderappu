@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useFontScale } from '../../App';
 
 /**
  * Reusable pagination component for React Native
@@ -23,6 +24,7 @@ const Pagination = ({
   style = {},
   primaryColor = '#003366'
 }) => {
+  const { getScaledSize } = useFontScale();
   const handleNextPage = () => {
     if (currentPage < totalPages) {
       onPageChange(currentPage + 1);
@@ -52,14 +54,14 @@ const Pagination = ({
         ]}
       >
         <Icon name="chevron-left" size={24} color="#fff" />
-        <Text style={styles.paginationButtonText}>Previous</Text>
+        <Text style={[styles.paginationButtonText, { fontSize: getScaledSize(14) }]}>Previous</Text>
       </TouchableOpacity>
       
       <View style={styles.paginationInfo}>
-        <Text style={styles.paginationText}>
+        <Text style={[styles.paginationText, { fontSize: getScaledSize(14) }]}>
           Page {currentPage} of {totalPages}
         </Text>
-        <Text style={styles.totalText}>
+        <Text style={[styles.totalText, { fontSize: getScaledSize(12) }]}>
           Total {itemsLabel}: {totalItems}
         </Text>
       </View>
@@ -72,7 +74,7 @@ const Pagination = ({
           currentPage === totalPages && styles.paginationButtonDisabled
         ]}
       >
-        <Text style={styles.paginationButtonText}>Next</Text>
+        <Text style={[styles.paginationButtonText, { fontSize: getScaledSize(14) }]}>Next</Text>
         <Icon name="chevron-right" size={24} color="#fff" />
       </TouchableOpacity>
     </View>
@@ -113,7 +115,6 @@ const styles = StyleSheet.create({
   },
   paginationButtonText: {
     color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
     marginHorizontal: 4,
   },
@@ -121,12 +122,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   paginationText: {
-    fontSize: 14,
     color: '#003366',
     fontWeight: '500',
   },
   totalText: {
-    fontSize: 12,
     color: '#666',
     marginTop: 4,
   }

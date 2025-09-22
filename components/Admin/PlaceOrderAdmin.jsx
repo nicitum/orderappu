@@ -11,8 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
+import { useFontScale } from '../../App';
 
 const PlaceOrderAdmin = () => {
+  const { getScaledSize } = useFontScale();
   const [assignedUsers, setAssignedUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState(null);
@@ -134,7 +136,7 @@ const PlaceOrderAdmin = () => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#003366" />
-        <Text>Loading users...</Text>
+        <Text style={{ fontSize: getScaledSize(16) }}>Loading users...</Text>
       </View>
     );
   }
@@ -194,7 +196,7 @@ const PlaceOrderAdmin = () => {
 
           {/* Customer Count */}
           <View style={styles.customerCountContainer}>
-            <Text style={styles.customerCountText}>
+            <Text style={[styles.customerCountText, { fontSize: getScaledSize(14) }]}>
               {filteredCustomers.length} of {assignedUsers.length} customers
             </Text>
           </View>
@@ -212,21 +214,21 @@ const PlaceOrderAdmin = () => {
                 <View style={styles.userCardContentColumn}>
                   {/* Name and ID */}
                   <View style={styles.customerNameBlock}>
-                    <Text style={styles.userName}>{item.username}</Text>
-                    <Text style={styles.userId}>ID: {item.cust_id}</Text>
+                    <Text style={[styles.userName, { fontSize: getScaledSize(17) }]}>{item.username}</Text>
+                    <Text style={[styles.userId, { fontSize: getScaledSize(12) }]}>ID: {item.cust_id}</Text>
                   </View>
                   {/* Info Row */}
                   <View style={styles.infoRow}>
                     <View style={styles.infoSectionNew}>
-                      <Text style={styles.infoLabelNew}>Route</Text>
-                      <Text style={styles.infoValueNew}>{item.route || 'N/A'}</Text>
+                      <Text style={[styles.infoLabelNew, { fontSize: getScaledSize(11) }]}>Route</Text>
+                      <Text style={[styles.infoValueNew, { fontSize: getScaledSize(14) }]}>{item.route || 'N/A'}</Text>
                     </View>
                     <View style={styles.infoSectionNew}>
-                      <Text style={styles.infoLabelNew}>Zip Code</Text>
-                      <Text style={styles.infoValueNew}>{item.zip_code || 'N/A'}</Text>
+                      <Text style={[styles.infoLabelNew, { fontSize: getScaledSize(11) }]}>Zip Code</Text>
+                      <Text style={[styles.infoValueNew, { fontSize: getScaledSize(14) }]}>{item.zip_code || 'N/A'}</Text>
                     </View>
                     <View style={styles.infoSectionNew}>
-                      <Text style={styles.infoLabelNew}>Phone</Text>
+                      <Text style={[styles.infoLabelNew, { fontSize: getScaledSize(11) }]}>Phone</Text>
                       <TouchableOpacity
                         style={styles.phoneIconButton}
                         onPress={() => handlePhoneCall(item.phone)}
@@ -243,8 +245,8 @@ const PlaceOrderAdmin = () => {
             ListEmptyComponent={() => (
               <View style={styles.emptySearchContainer}>
                 <Icon name="search-off" size={48} color="#ccc" />
-                <Text style={styles.emptySearchText}>No customers found</Text>
-                <Text style={styles.emptySearchSubtext}>
+                <Text style={[styles.emptySearchText, { fontSize: getScaledSize(18) }]}>No customers found</Text>
+                <Text style={[styles.emptySearchSubtext, { fontSize: getScaledSize(14) }]}>
                   Try adjusting your search terms
                 </Text>
               </View>
@@ -287,13 +289,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   userName: {
-    fontSize: 17,
     fontWeight: '700',
     color: '#003366',
     marginBottom: 2,
   },
   userId: {
-    fontSize: 12,
     color: '#666',
     fontWeight: '500',
   },
@@ -310,13 +310,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   infoLabelNew: {
-    fontSize: 11,
     color: '#888',
     fontWeight: '500',
     marginBottom: 1,
   },
   infoValueNew: {
-    fontSize: 14,
     color: '#222',
     fontWeight: '600',
   },
@@ -348,7 +346,6 @@ const styles = StyleSheet.create({
   },
   errorText: { 
     color: '#dc3545', 
-    fontSize: 16, 
     textAlign: 'center' 
   },
 
@@ -377,7 +374,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 12,
-    fontSize: 16,
     color: '#333'
   },
   clearButton: {
@@ -390,7 +386,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa'
   },
   customerCountText: {
-    fontSize: 14,
     color: '#666',
     fontStyle: 'italic'
   },
@@ -401,13 +396,11 @@ const styles = StyleSheet.create({
     paddingVertical: 40
   },
   emptySearchText: {
-    fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginTop: 12
   },
   emptySearchSubtext: {
-    fontSize: 14,
     color: '#666',
     marginTop: 4
   },
@@ -431,7 +424,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   routePickerItem: {
-    fontSize: 15,
     color: '#003366',
   },
   phoneIconButton: {

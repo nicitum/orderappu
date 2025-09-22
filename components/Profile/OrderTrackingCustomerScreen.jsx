@@ -12,8 +12,10 @@ import Geolocation from '@react-native-community/geolocation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import { ipAddress } from '../../services/urls';
+import { useFontScale } from '../../App';
 
 const OrderTrackingCustomerScreen = () => {
+  const { getScaledSize } = useFontScale();
   const [isUpdating, setIsUpdating] = useState(false);
 
   const requestLocationPermission = async () => {
@@ -146,7 +148,7 @@ const OrderTrackingCustomerScreen = () => {
         onPress={updateLocation}
         disabled={isUpdating}
       >
-        <Text style={styles.buttonText}>
+        <Text style={[styles.buttonText, { fontSize: getScaledSize(16) }]}>
           {isUpdating ? 'Updating...' : 'Update Location'}
         </Text>
       </TouchableOpacity>
@@ -171,7 +173,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
-    fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
   }

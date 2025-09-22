@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Animated } from 'react-native';
 import { ipAddress } from "../../services/urls"
+import { useFontScale } from '../../App';
 
 // Color Constants
 const COLORS = {
@@ -35,6 +36,7 @@ const COLORS = {
 };
 
 const PlaceOrderAdmin = () => {
+  const { getScaledSize } = useFontScale();
   const [assignedUsers, setAssignedUsers] = useState([])
   const [error, setError] = useState(null)
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -437,17 +439,17 @@ const PlaceOrderAdmin = () => {
                                     <Icon name="account-circle" size={32} color={COLORS.primary} />
                                 </View>
                                 <View style={styles.userDetails}>
-                                    <Text style={styles.userName}>{user.name}</Text>
+                                    <Text style={[styles.userName, { fontSize: getScaledSize(18) }]}>{user.name}</Text>
                                     <View style={styles.userMeta}>
                                         <Icon name="map-marker" size={16} color={COLORS.text.secondary} />
-                                        <Text style={styles.userRoute}>{user.route}</Text>
+                                        <Text style={[styles.userRoute, { fontSize: getScaledSize(14) }]}>{user.route}</Text>
                                     </View>
                                 </View>
                             </View>
                       {placementError[user.cust_id] && (
                                 <View style={styles.errorContainer}>
                                     <Icon name="alert" size={16} color={COLORS.error} />
-                                    <Text style={styles.errorText}>{placementError[user.cust_id]}</Text>
+                                    <Text style={[styles.errorText, { fontSize: getScaledSize(12) }]}>{placementError[user.cust_id]}</Text>
                         </View>
                       )}
                     </View>
@@ -457,10 +459,10 @@ const PlaceOrderAdmin = () => {
                     <View style={styles.orderSection}>
                       <View style={styles.orderHeader}>
                                 <Icon name="weather-sunny" size={20} color={COLORS.accent} />
-                        <Text style={styles.orderType}>AM Order</Text>
+                        <Text style={[styles.orderType, { fontSize: getScaledSize(16) }]}>AM Order</Text>
                       </View>
                             <View style={styles.orderStatusContainer}>
-                      <Text style={styles.orderStatus}>{getOrderStatusDisplay(amOrderStatus)}</Text>
+                      <Text style={[styles.orderStatus, { fontSize: getScaledSize(14) }]}>{getOrderStatusDisplay(amOrderStatus)}</Text>
                       <View style={[
                         styles.todayStatus,
                         getHasOrderTodayDisplay(amOrderStatus, "AM") === "Yes" 
@@ -472,7 +474,7 @@ const PlaceOrderAdmin = () => {
                           size={16} 
                                         color={getHasOrderTodayDisplay(amOrderStatus, "AM") === "Yes" ? COLORS.success : COLORS.error} 
                         />
-                        <Text style={styles.todayStatusText}>
+                        <Text style={[styles.todayStatusText, { fontSize: getScaledSize(14) }]}>
                           Today: {getHasOrderTodayDisplay(amOrderStatus, "AM")}
                         </Text>
                                 </View>
@@ -481,7 +483,7 @@ const PlaceOrderAdmin = () => {
                         mode="outlined"
                         onPress={() => placeAdminOrder(user.cust_id, "AM")}
                         style={styles.orderButton}
-                        labelStyle={styles.orderButtonLabel}
+                        labelStyle={[styles.orderButtonLabel, { fontSize: getScaledSize(14) }]}
                         disabled={placingOrder[user.cust_id]}
                         loading={placingOrder[user.cust_id]}
                         icon="send"
@@ -495,10 +497,10 @@ const PlaceOrderAdmin = () => {
                     <View style={styles.orderSection}>
                       <View style={styles.orderHeader}>
                                 <Icon name="weather-night" size={20} color={COLORS.primary} />
-                        <Text style={styles.orderType}>PM Order</Text>
+                        <Text style={[styles.orderType, { fontSize: getScaledSize(16) }]}>PM Order</Text>
                       </View>
                             <View style={styles.orderStatusContainer}>
-                      <Text style={styles.orderStatus}>{getOrderStatusDisplay(pmOrderStatus)}</Text>
+                      <Text style={[styles.orderStatus, { fontSize: getScaledSize(14) }]}>{getOrderStatusDisplay(pmOrderStatus)}</Text>
                       <View style={[
                         styles.todayStatus,
                         getHasOrderTodayDisplay(pmOrderStatus, "PM") === "Yes" 
@@ -510,7 +512,7 @@ const PlaceOrderAdmin = () => {
                           size={16} 
                                         color={getHasOrderTodayDisplay(pmOrderStatus, "PM") === "Yes" ? COLORS.success : COLORS.error} 
                         />
-                        <Text style={styles.todayStatusText}>
+                        <Text style={[styles.todayStatusText, { fontSize: getScaledSize(14) }]}>
                           Today: {getHasOrderTodayDisplay(pmOrderStatus, "PM")}
                         </Text>
                                 </View>
@@ -519,7 +521,7 @@ const PlaceOrderAdmin = () => {
                         mode="outlined"
                         onPress={() => placeAdminOrder(user.cust_id, "PM")}
                         style={styles.orderButton}
-                        labelStyle={styles.orderButtonLabel}
+                        labelStyle={[styles.orderButtonLabel, { fontSize: getScaledSize(14) }]}
                         disabled={placingOrder[user.cust_id]}
                         loading={placingOrder[user.cust_id]}
                         icon="send"
@@ -545,14 +547,14 @@ const PlaceOrderAdmin = () => {
                                     onPress={handleSelectAllCheckbox}
                                     color={COLORS.primary}
                                 />
-                                <Text style={styles.selectAllText}>Select All Users</Text>
+                                <Text style={[styles.selectAllText, { fontSize: getScaledSize(16) }]}>Select All Users</Text>
                             </View>
                             <View style={styles.bulkActionButtons}>
                                 <Button
                                     mode="contained"
                                     onPress={() => handleBulkPlaceOrder("AM")}
                                     style={[styles.bulkActionButton, styles.amButton]}
-                                    labelStyle={styles.bulkActionButtonLabel}
+                                    labelStyle={[styles.bulkActionButtonLabel, { fontSize: getScaledSize(14) }]}
                                     disabled={selectedUsers.length === 0 || placingOrder["AM"]}
                                     loading={placingOrder["AM"]}
                                     icon="weather-sunny"
@@ -563,7 +565,7 @@ const PlaceOrderAdmin = () => {
                                     mode="contained"
                                     onPress={() => handleBulkPlaceOrder("PM")}
                                     style={[styles.bulkActionButton, styles.pmButton]}
-                                    labelStyle={styles.bulkActionButtonLabel}
+                                    labelStyle={[styles.bulkActionButtonLabel, { fontSize: getScaledSize(14) }]}
                                     disabled={selectedUsers.length === 0 || placingOrder["PM"]}
                                     loading={placingOrder["PM"]}
                                     icon="weather-night"
@@ -581,7 +583,7 @@ const PlaceOrderAdmin = () => {
                     value={searchQuery}
                     style={styles.searchBar}
                     iconColor={COLORS.primary}
-                    inputStyle={styles.searchInput}
+                    inputStyle={[styles.searchInput, { fontSize: getScaledSize(16) }]}
                 />
 
                 <ScrollView 
@@ -606,8 +608,8 @@ const PlaceOrderAdmin = () => {
                         <Card style={styles.emptyCard}>
                             <Card.Content style={styles.emptyContent}>
                                 <Icon name="account-question" size={48} color={COLORS.primary} />
-                                <Text style={styles.emptyText}>No users found</Text>
-                                <Text style={styles.emptySubtext}>
+                                <Text style={[styles.emptyText, { fontSize: getScaledSize(18) }]}>No users found</Text>
+                                <Text style={[styles.emptySubtext, { fontSize: getScaledSize(14) }]}>
                                     {searchQuery ? 'Try a different search term' : 'No users assigned to you'}
                                 </Text>
                             </Card.Content>
@@ -623,21 +625,21 @@ const PlaceOrderAdmin = () => {
             <Animated.View style={[styles.header, { height: headerHeight, opacity: headerOpacity }]}>
                 <View style={styles.headerContent}>
                     <Icon name="account-group" size={28} color={COLORS.text.light} />
-                    <Text style={styles.headerTitle}>Order Management</Text>
+                    <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Order Management</Text>
                 </View>
             </Animated.View>
 
             {loadingToken || loadingUsers ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={COLORS.primary} />
-                    <Text style={styles.loadingText}>Loading user data...</Text>
+                    <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading user data...</Text>
                 </View>
             ) : error ? (
                 <Card style={styles.errorCard}>
                     <Card.Content>
                         <View style={styles.errorContent}>
                             <Icon name="alert-circle" size={24} color={COLORS.error} />
-                            <Text style={styles.errorText}>{error}</Text>
+                            <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                         </View>
                     </Card.Content>
                 </Card>
@@ -671,7 +673,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-        fontSize: 24,
     fontWeight: '600',
         color: COLORS.text.light,
         marginLeft: 12,
@@ -695,7 +696,6 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     marginLeft: 8,
-    fontSize: 16,
         color: COLORS.primary,
     fontWeight: '500',
   },
@@ -765,7 +765,6 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     userName: {
-        fontSize: 18,
     fontWeight: '600',
         color: COLORS.text.primary,
   },
@@ -775,7 +774,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
     userRoute: {
-        fontSize: 14,
         color: COLORS.text.secondary,
         marginLeft: 4,
     },
@@ -789,7 +787,6 @@ const styles = StyleSheet.create({
     },
     errorText: {
         color: COLORS.error,
-    fontSize: 12,
     marginLeft: 4,
   },
     orderSections: {
@@ -803,7 +800,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderType: {
-    fontSize: 16,
     fontWeight: '600',
         color: COLORS.text.primary,
         marginLeft: 8,
@@ -813,7 +809,6 @@ const styles = StyleSheet.create({
         gap: 8,
   },
   orderStatus: {
-    fontSize: 14,
         color: COLORS.text.secondary,
   },
   todayStatus: {
@@ -825,7 +820,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   todayStatusText: {
-    fontSize: 14,
     fontWeight: '500',
         marginLeft: 4,
   },
@@ -842,7 +836,6 @@ const styles = StyleSheet.create({
   },
   orderButtonLabel: {
         color: COLORS.primary,
-        fontSize: 14,
   },
   divider: {
     height: 1,
@@ -865,7 +858,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
         color: COLORS.primary,
   },
   emptyCard: {
@@ -880,14 +872,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
     fontWeight: '600',
         color: COLORS.text.primary,
         marginTop: 16,
     textAlign: 'center',
   },
   emptySubtext: {
-        fontSize: 14,
         color: COLORS.text.secondary,
     marginTop: 8,
     textAlign: 'center',

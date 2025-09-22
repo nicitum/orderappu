@@ -149,18 +149,11 @@ export const generateInvoiceNumber = async () => {
             console.warn('Client status failed, using default prefix INV');
             const invPrefix = "INV";
             
-            // Get today's date in YYYY-MM-DD format
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = (today.getMonth() + 1).toString().padStart(2, '0');
-            const day = today.getDate().toString().padStart(2, '0');
-            const dateString = `${year}-${month}-${day}`;
+            // Generate unique sequential number without date
+            const sequentialNumber = await generateUniqueSequentialNumber(invPrefix);
             
-            // Generate unique sequential number
-            const sequentialNumber = await generateUniqueSequentialNumber(invPrefix, dateString);
-            
-            // Format: PREFIX-D-YYYY-MM-DD-001
-            const invoiceNumber = `${invPrefix}-D-${dateString}-${sequentialNumber}`;
+            // Format: PREFIX-D-001 (no date concatenation)
+            const invoiceNumber = `${invPrefix}-D-${sequentialNumber}`;
             
             console.log('Generated invoice number with default prefix:', invoiceNumber);
             return { success: true, data: invoiceNumber };
@@ -168,18 +161,11 @@ export const generateInvoiceNumber = async () => {
 
         const { invPrefix } = clientStatusResult.data;
         
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = (today.getMonth() + 1).toString().padStart(2, '0');
-        const day = today.getDate().toString().padStart(2, '0');
-        const dateString = `${year}-${month}-${day}`;
+        // Generate unique sequential number without date
+        const sequentialNumber = await generateUniqueSequentialNumber(invPrefix);
         
-        // Generate unique sequential number
-        const sequentialNumber = await generateUniqueSequentialNumber(invPrefix, dateString);
-        
-        // Format: PREFIX-D-YYYY-MM-DD-001
-        const invoiceNumber = `${invPrefix}-D-${dateString}-${sequentialNumber}`;
+        // Format: PREFIX-D-001 (no date concatenation)
+        const invoiceNumber = `${invPrefix}-D-${sequentialNumber}`;
         
         console.log('Generated invoice number:', invoiceNumber);
         return { success: true, data: invoiceNumber };
@@ -190,12 +176,12 @@ export const generateInvoiceNumber = async () => {
 };
 
 // Generate unique sequential number for invoice
-const generateUniqueSequentialNumber = async (prefix, dateString) => {
+const generateUniqueSequentialNumber = async (prefix) => {
     try {
         const authToken = await getToken();
         
-        // Call API to get the next sequential number for today's date
-        const response = await fetch(`http://${ipAddress}:8091/get_next_invoice_number?prefix=${encodeURIComponent(prefix)}&date=${encodeURIComponent(dateString)}`, {
+        // Call API to get the next sequential number without date dependency
+        const response = await fetch(`http://${ipAddress}:8091/get_next_invoice_number?prefix=${encodeURIComponent(prefix)}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${authToken}`,
@@ -213,19 +199,19 @@ const generateUniqueSequentialNumber = async (prefix, dateString) => {
         } else {
             // Fallback: use local storage-based sequential number
             console.warn('Failed to get sequential number from API, using local storage fallback');
-            return await generateLocalSequentialNumber(prefix, dateString);
+            return await generateLocalSequentialNumber(prefix);
         }
     } catch (error) {
         console.error('Error generating sequential number:', error);
         // Fallback: use local storage-based sequential number
-        return await generateLocalSequentialNumber(prefix, dateString);
+        return await generateLocalSequentialNumber(prefix);
     }
 };
 
 // Generate sequential number using local storage (fallback method)
-const generateLocalSequentialNumber = async (prefix, dateString) => {
+const generateLocalSequentialNumber = async (prefix) => {
     try {
-        const storageKey = `invoice_counter_${prefix}_${dateString}`;
+        const storageKey = `invoice_counter_${prefix}`;
         
         // Get current counter from AsyncStorage
         const currentCounter = await AsyncStorage.getItem(storageKey);
@@ -481,12 +467,12 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
         page.drawText(gstTypeText, { x: 50, y: 770, size: 10, font: helveticaFont, color: secondaryColor });
         
         // Company and Customer Info - Side by side with more space
-        page.drawText("From:", { x: 50, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
+        page.drawText("Invoice From:", { x: 50, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
         page.drawText("Order Appu", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
         page.drawText("Bangalore - 560068", { x: 50, y: 705, size: 10, font: helveticaFont, color: secondaryColor });
         page.drawText("GST: 29XXXXX1234Z1Z5", { x: 50, y: 690, size: 10, font: helveticaFont, color: secondaryColor });
         
-        page.drawText("To:", { x: 300, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
+        page.drawText("Invoice To:", { x: 300, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
         if (customerData) {
             page.drawText(customerData.username || "Customer", { x: 300, y: 720, size: 14, font: helveticaFont, color: textColor });
             const address = customerData.route || customerData.delivery_address || "";
@@ -636,16 +622,22 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
     }
 };
 
-// Share PDF file directly from base64 data
+// Share PDF file directly from base64 data with improved error handling
 export const shareInvoicePDF = async (base64PDF, fileName) => {
     try {
         console.log('Sharing PDF directly:', fileName);
+        
+        // Validate inputs
+        if (!base64PDF || !fileName) {
+            throw new Error('Invalid PDF data or filename');
+        }
         
         const shareOptions = {
             title: 'Share Invoice',
             message: `Invoice: ${fileName}`,
             url: `data:application/pdf;base64,${base64PDF}`,
             type: 'application/pdf',
+            subject: `Invoice - ${fileName}`, // Add subject for email sharing
         };
         
         const result = await Share.open(shareOptions);
@@ -654,10 +646,15 @@ export const shareInvoicePDF = async (base64PDF, fileName) => {
         
     } catch (error) {
         console.error('Error sharing PDF:', error);
-        if (error.message !== 'User did not share') {
-            return { success: false, error: error.message };
+        
+        // Handle user cancellation gracefully
+        if (error.message === 'User did not share' || 
+            error.message.includes('cancelled') ||
+            error.message.includes('Cancel')) {
+            return { success: true, cancelled: true };
         }
-        return { success: true, cancelled: true };
+        
+        return { success: false, error: error.message };
     }
 };
 

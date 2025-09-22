@@ -15,7 +15,9 @@ import { checkTokenAndRedirect } from "../../services/auth";
 import { jwtDecode } from 'jwt-decode';
 import { ipAddress } from "../../services/urls";
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { Card, Button } from 'react-native-paper';
+import { Button } from 'react-native-paper';
+import { useFontScale } from '../../App';
+import TestNotification from '../TestNotification';
 
 const COLORS = {
   primary: '#003366',
@@ -34,17 +36,10 @@ const COLORS = {
 };
 
 const OwnerHomePage = () => {
+  const { getScaledSize } = useFontScale();
   const [userDetails, setUserDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [totalAmountDue, setTotalAmountDue] = useState(null);
-  const [totalAmountPaid, setTotalAmountPaid] = useState(null);
-  const [totalAmountPaidCash, setTotalAmountPaidCash] = useState(null);
-  const [totalAmountPaidOnline, setTotalAmountPaidOnline] = useState(null);
-  const [isTotalDueLoading, setIsTotalDueLoading] = useState(false);
-  const [isTotalPaidLoading, setIsTotalPaidLoading] = useState(false);
-  const [totalDueError, setTotalDueError] = useState(null);
-  const [totalPaidError, setTotalPaidError] = useState(null);
   const navigation = useNavigation();
 
   // Fetch user details from API
@@ -85,58 +80,6 @@ const OwnerHomePage = () => {
     }
   }, [navigation]);
 
-  const fetchTotalAmountDue = useCallback(async () => {
-    setIsTotalDueLoading(true);
-    setTotalDueError(null);
-    try {
-      const token = await checkTokenAndRedirect(navigation);
-      const response = await fetch(`http://${ipAddress}:8091/admin/total-amount-due`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        const message = `Failed to fetch total amount due. Status: ${response.status}`;
-        throw new Error(message);
-      }
-      const data = await response.json();
-      setTotalAmountDue(data.totalAmountDue);
-    } catch (error) {
-      console.error("Error fetching total amount due:", error);
-      setTotalDueError("Error fetching total amount due.");
-      setTotalAmountDue('Error');
-    } finally {
-      setIsTotalDueLoading(false);
-    }
-  }, [navigation]);
-
-  const fetchTotalAmountPaid = useCallback(async () => {
-    setIsTotalPaidLoading(true);
-    setTotalPaidError(null);
-    try {
-      const token = await checkTokenAndRedirect(navigation);
-      const response = await fetch(`http://${ipAddress}:8091/admin/total-amount-paid`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        const message = `Failed to fetch total amount paid. Status: ${response.status}`;
-        throw new Error(message);
-      }
-      const data = await response.json();
-      setTotalAmountPaid(data.totalAmountPaid);
-      setTotalAmountPaidCash(data.totalAmountPaidCash);
-      setTotalAmountPaidOnline(data.totalAmountPaidOnline);
-    } catch (error) {
-      console.error("Error fetching total amount paid:", error);
-      setTotalPaidError("Error fetching total amount paid.");
-      setTotalAmountPaid('Error');
-    } finally {
-      setIsTotalPaidLoading(false);
-    }
-  }, [navigation]);
-
   // Fetch data and update state
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -144,11 +87,9 @@ const OwnerHomePage = () => {
     const userData = await userDetailsData1();
     if (userData) {
       setUserDetails(userData);
-      await fetchTotalAmountDue();
-      await fetchTotalAmountPaid();
     }
     setIsLoading(false);
-  }, [userDetailsData1, fetchTotalAmountDue, fetchTotalAmountPaid]);
+  }, [userDetailsData1]);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,40 +100,6 @@ const OwnerHomePage = () => {
 
   const { customerName, role } = userDetails || {};
 
-  // Enhanced MetricCard component with better styling
-  const MetricCard = ({ title, value, icon, isLoading, error, color = COLORS.primary }) => (
-    <Card style={styles.metricCard}>
-      <Card.Content style={styles.metricContent}>
-        <View style={[styles.metricIconContainer, { backgroundColor: `${color}20` }]}>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
-        </View>
-        <View style={styles.metricTextContainer}>
-          <Text style={styles.metricTitle}>{title}</Text>
-          {isLoading ? (
-            <ActivityIndicator size="small" color={color} />
-          ) : error ? (
-            <Text style={styles.errorTextSmall}>{error}</Text>
-          ) : value === 'Error' ? (
-            <Text style={styles.errorTextSmall}>Failed to load data</Text>
-          ) : (
-            <Text style={[styles.metricValue, { color }]}>₹ {value}</Text>
-          )}
-        </View>
-      </Card.Content>
-    </Card>
-  );
-
-  // Enhanced ActionButton component
-  const ActionButton = ({ icon, label, onPress, color = COLORS.primary }) => (
-    <TouchableOpacity
-      style={[styles.actionButton, { backgroundColor: `${color}10` }]}
-      onPress={onPress}
-    >
-      <MaterialCommunityIcons name={icon} size={24} color={color} />
-      <Text style={[styles.actionText, { color }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.mainContainer}>
       {/* Enhanced Header */}
@@ -200,8 +107,8 @@ const OwnerHomePage = () => {
         <View style={styles.headerContent}>
           <Image source={require("../../assets/logo.jpg")} style={styles.logo} resizeMode="contain" />
           <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>Order Appu</Text>
-            <Text style={styles.headerSubtitle}>Owner's Dashboard</Text>
+            <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Order Appu</Text>
+            <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}>Owner's Dashboard</Text>
           </View>
         </View>
       </Animated.View>
@@ -209,23 +116,44 @@ const OwnerHomePage = () => {
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading dashboard data...</Text>
+          <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading dashboard data...</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
           <MaterialCommunityIcons name="alert-circle-outline" size={48} color={COLORS.error} />
-          <Text style={styles.errorText}>Error: {error}</Text>
+          <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>Error: {error}</Text>
           <Button
             mode="contained"
             onPress={fetchData}
             style={styles.retryButton}
-            labelStyle={styles.retryButtonText}
+            labelStyle={[styles.retryButtonText, { fontSize: getScaledSize(14) }]}
           >
             Retry
           </Button>
         </View>
       ) : (
-        <View style={styles.scrollContent} />
+        <ScrollView style={styles.scrollContent}>
+          {/* Welcome Section */}
+          <View style={styles.welcomeSection}>
+            <Text style={[styles.welcomeText, { fontSize: getScaledSize(20) }]}>
+              Welcome back, {customerName}!
+            </Text>
+            <Text style={[styles.roleText, { fontSize: getScaledSize(14) }]}>
+              Role: {role}
+            </Text>
+          </View>
+
+          {/* Test Notification Section */}
+          <View style={styles.testSection}>
+            <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>
+              Push Notification Test
+            </Text>
+            <Text style={[styles.sectionDescription, { fontSize: getScaledSize(14) }]}>
+              Test the push notification system to ensure it's working properly
+            </Text>
+            <TestNotification />
+          </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -305,110 +233,50 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
-  welcomeCard: {
-    marginBottom: 20,
-    elevation: 2,
+  welcomeSection: {
+    backgroundColor: COLORS.surface,
+    padding: 20,
     borderRadius: 12,
-  },
-  welcomeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  welcomeTextContainer: {
-    flex: 1,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   welcomeText: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginVertical: 4,
-  },
-  roleBadge: {
-    backgroundColor: `${COLORS.primary}20`,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-  },
-  roleText: {
-    color: COLORS.primary,
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  welcomeIconContainer: {
-    marginLeft: 16,
-  },
-  sectionContainer: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 16,
-  },
-  metricsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  metricCard: {
-    width: '48%',
-    marginBottom: 16,
-    elevation: 2,
-    borderRadius: 12,
-  },
-  metricContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  metricIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  metricTextContainer: {
-    flex: 1,
-  },
-  metricTitle: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
+    color: COLORS.text.primary,
     marginBottom: 4,
   },
-  metricValue: {
+  roleText: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    fontWeight: '500',
+  },
+  testSection: {
+    backgroundColor: COLORS.surface,
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 8,
   },
-  errorTextSmall: {
-    fontSize: 12,
-    color: COLORS.error,
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    width: '31%',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderWidth: 0,
-  },
-  actionText: {
-    marginTop: 8,
-    fontWeight: '500',
+  sectionDescription: {
     fontSize: 14,
-    textAlign: 'center',
+    color: COLORS.text.secondary,
+    marginBottom: 16,
+    lineHeight: 20,
   },
 });
 

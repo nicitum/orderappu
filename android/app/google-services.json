@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "558966543834",
+    "project_id": "appu-8fce6",
+    "storage_bucket": "appu-8fce6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:558966543834:android:59de5f8c30a27080cc5ce3",
+        "android_client_info": {
+          "package_name": "com.orderappu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbD335-k1j1vvCeU-gPM2cMlyp7tYahg4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

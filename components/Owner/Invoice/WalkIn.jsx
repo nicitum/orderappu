@@ -41,6 +41,7 @@ import {
     styles
 } from './InvoiceDirectComponents';
 import Toast from 'react-native-toast-message';
+import { useFontScale } from '../../../App';
 
 // Helper to convert Uint8Array to base64 (for RNFS)
 function uint8ToBase64(uint8) {
@@ -109,6 +110,7 @@ const savePDFToDownloads = async (pdfBytes, fileName) => {
 };
 
 const WalkIn = () => {
+    const { getScaledSize } = useFontScale();
     const navigation = useNavigation();
     
     // Customer details state
@@ -460,6 +462,7 @@ const WalkIn = () => {
                 item={item}
                 onQuantityChange={updateProductQuantityHandler}
                 styles={styles}
+                getScaledSize={getScaledSize}
             />
         );
     };
@@ -479,12 +482,12 @@ const WalkIn = () => {
                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
                 </TouchableOpacity>
                 <View style={styles.headerContent}>
-                    <Text style={styles.headerTitle}>
+                    <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}>
                         {retrievedInvoice && generatedPDFData ? 'Invoice PDF Ready' :
                          showInvoiceCreation ? 'Create Invoice' : 
                          'Walk-In Customer'}
                     </Text>
-                    <Text style={styles.headerSubtitle}>
+                    <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}>
                         {retrievedInvoice && generatedPDFData ? 'Share or cancel to continue' :
                          showInvoiceCreation ? `Invoice for ${customerName} (${customerPhone})` :
                          'Enter customer details to create invoice'
@@ -517,32 +520,32 @@ const WalkIn = () => {
                     // PDF Ready View (after invoice creation)
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Invoice PDF Generated</Text>
+                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice PDF Generated</Text>
                             
                             {/* Invoice Info */}
                             <View style={styles.invoiceInfoContainer}>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Invoice Number: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
                                     {retrievedInvoice.invoice_info.invoice_number}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Customer: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Customer: </Text>
                                     {customerName}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Phone: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Phone: </Text>
                                     {customerPhone}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Amount: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
                                     Rs {retrievedInvoice.invoice_info.invoice_amount}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Total Items: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
                                     {retrievedInvoice.invoice_info.total_items}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Created: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
                                     {new Date(retrievedInvoice.invoice_info.created_at).toLocaleDateString()}
                                 </Text>
                             </View>
@@ -560,7 +563,7 @@ const WalkIn = () => {
                                     ) : (
                                         <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={styles.shareButtonText}>
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}>
                                         {isSharingPDF ? 'Downloading...' : 'Download PDF'}
                                     </Text>
                                 </TouchableOpacity>
@@ -576,7 +579,7 @@ const WalkIn = () => {
                                     ) : (
                                         <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={styles.shareButtonText}>
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}>
                                         {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
                                     </Text>
                                 </TouchableOpacity>
@@ -587,7 +590,7 @@ const WalkIn = () => {
                                     activeOpacity={0.8}
                                 >
                                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
-                                    <Text style={styles.cancelButtonText}>Back to Menu</Text>
+                                    <Text style={[styles.cancelButtonText, { fontSize: getScaledSize(16) }]}>Back to Menu</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -602,22 +605,23 @@ const WalkIn = () => {
                         >
                             <View style={styles.content}>
                                 <View style={styles.card}>
-                                    <Text style={styles.title}>Create Direct Invoice</Text>
+                                    <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Create Direct Invoice</Text>
                                     
                                     {/* Customer Info Display */}
                                     <View style={styles.customerInfoContainer}>
-                                        <Text style={styles.customerInfoLabel}>Customer Name:</Text>
-                                        <Text style={styles.customerInfoText}>{customerName}</Text>
+                                        <Text style={[styles.customerInfoLabel, { fontSize: getScaledSize(12) }]}>Customer Name:</Text>
+                                        <Text style={[styles.customerInfoText, { fontSize: getScaledSize(16) }]}>{customerName}</Text>
                                     </View>
                                     <View style={styles.customerInfoContainer}>
-                                        <Text style={styles.customerInfoLabel}>Customer Phone:</Text>
-                                        <Text style={styles.customerInfoText}>{customerPhone}</Text>
+                                        <Text style={[styles.customerInfoLabel, { fontSize: getScaledSize(12) }]}>Customer Phone:</Text>
+                                        <Text style={[styles.customerInfoText, { fontSize: getScaledSize(16) }]}>{customerPhone}</Text>
                                     </View>
                                     
                                     {/* Invoice Number Display */}
                                     <InvoiceNumberDisplay
                                         invoiceNumber={invoiceNumber}
                                         styles={styles}
+                                        getScaledSize={getScaledSize}
                                     />
 
                                     {/* Add More Products Button */}
@@ -626,18 +630,19 @@ const WalkIn = () => {
                                         onPress={() => setShowSearchModal(true)}
                                     >
                                         <MaterialIcons name="add" size={24} color={COLORS.text.light} />
-                                        <Text style={styles.addProductButtonText}>Add More Products</Text>
+                                        <Text style={[styles.addProductButtonText, { fontSize: getScaledSize(16) }]}>Add More Products</Text>
                                     </TouchableOpacity>
 
                                     {/* Selected Products */}
                                     <View style={styles.selectedProductsContainer}>
-                                        <Text style={styles.sectionTitle}>Selected Products ({selectedProducts.length})</Text>
+                                        <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Selected Products ({selectedProducts.length})</Text>
                                         {selectedProducts.map((item, index) => (
                                             <SelectedProductItem
                                                 key={item.product_id.toString()}
                                                 item={item}
                                                 onQuantityChange={updateProductQuantityHandler}
                                                 styles={styles}
+                                                getScaledSize={getScaledSize}
                                             />
                                         ))}
                                     </View>
@@ -646,6 +651,7 @@ const WalkIn = () => {
                                     <TotalAmountDisplay
                                         totalAmount={calculateTotalAmount(selectedProducts)}
                                         styles={styles}
+                                        getScaledSize={getScaledSize}
                                     />
                                 </View>
                             </View>
@@ -657,6 +663,7 @@ const WalkIn = () => {
                                 onPress={createDirectInvoiceHandler}
                                 isLoading={isCreatingInvoice}
                                 styles={styles}
+                                getScaledSize={getScaledSize}
                             />
                         </View>
                     </View>
@@ -664,16 +671,16 @@ const WalkIn = () => {
                     // Customer Name Input View
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Walk-In Customer</Text>
-                            <Text style={styles.subtitle}>
+                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Walk-In Customer</Text>
+                            <Text style={[styles.subtitle, { fontSize: getScaledSize(16) }]}>
                                 Enter customer name to create invoice
                             </Text>
                             
                             {/* Customer Name Input */}
                             <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Customer Name</Text>
+                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(16) }]}>Customer Name</Text>
                                 <TextInput
-                                    style={styles.textInput}
+                                    style={[styles.textInput, { fontSize: getScaledSize(16) }]}
                                     placeholder="Enter customer name..."
                                     value={customerName}
                                     onChangeText={setCustomerName}
@@ -683,9 +690,9 @@ const WalkIn = () => {
                             
                             {/* Customer Phone Input */}
                             <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Customer Phone</Text>
+                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(16) }]}>Customer Phone</Text>
                                 <TextInput
-                                    style={styles.textInput}
+                                    style={[styles.textInput, { fontSize: getScaledSize(16) }]}
                                     placeholder="Enter customer phone..."
                                     value={customerPhone}
                                     onChangeText={setCustomerPhone}
@@ -710,12 +717,12 @@ const WalkIn = () => {
                                 disabled={!customerName.trim() || !customerPhone.trim()}
                             >
                                 <MaterialIcons name="add" size={24} color={COLORS.text.light} />
-                                <Text style={styles.addProductButtonText}>Add Products</Text>
+                                <Text style={[styles.addProductButtonText, { fontSize: getScaledSize(16) }]}>Add Products</Text>
                             </TouchableOpacity>
                             
                             {selectedProducts.length > 0 && (
                                 <View style={styles.selectedProductsContainer}>
-                                    <Text style={styles.sectionTitle}>Selected Products ({selectedProducts.length})</Text>
+                                    <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Selected Products ({selectedProducts.length})</Text>
                                     <FlatList
                                         data={selectedProducts}
                                         renderItem={renderSelectedProduct}

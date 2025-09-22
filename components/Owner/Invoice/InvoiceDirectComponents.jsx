@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { ipAddress } from '../../../services/urls';
-
 // COLORS constant
 export const COLORS = {
   primary: "#003366",
@@ -85,13 +84,14 @@ export const ProductItem = ({
 export const SelectedProductItem = ({ 
     item, 
     onQuantityChange, 
-    styles 
+    styles,
+    getScaledSize
 }) => {
     return (
         <View style={styles.selectedProductItem}>
             <View style={styles.selectedProductInfo}>
-                <Text style={styles.selectedProductName}>{item.name}</Text>
-                <Text style={styles.selectedProductPrice}>Rs.{item.price}</Text>
+                <Text style={[styles.selectedProductName, { fontSize: getScaledSize(14) }]}>{item.name}</Text>
+                <Text style={[styles.selectedProductPrice, { fontSize: getScaledSize(12) }]}>{item.price}</Text>
             </View>
             <View style={styles.quantityContainer}>
                 <TouchableOpacity
@@ -105,6 +105,7 @@ export const SelectedProductItem = ({
                     value={item.quantity.toString()}
                     onChangeText={(text) => onQuantityChange(item.product_id, parseInt(text) || 0)}
                     keyboardType="numeric"
+                    textAlign="center"
                 />
                 <TouchableOpacity
                     style={styles.quantityButton}
@@ -113,6 +114,14 @@ export const SelectedProductItem = ({
                     <MaterialIcons name="add" size={16} color={COLORS.primary} />
                 </TouchableOpacity>
             </View>
+            {/* Delete Item Button */}
+            <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => onQuantityChange(item.product_id, 0)}
+                activeOpacity={0.7}
+            >
+                <MaterialIcons name="delete" size={18} color={COLORS.error} />
+            </TouchableOpacity>
         </View>
     );
 };
@@ -121,7 +130,8 @@ export const SelectedProductItem = ({
 export const UserCard = ({ 
     item, 
     onPress, 
-    styles 
+    styles,
+    getScaledSize
 }) => {
     return (
         <TouchableOpacity
@@ -134,10 +144,10 @@ export const UserCard = ({
                     <MaterialIcons name="person" size={24} color={COLORS.primary} />
                 </View>
                 <View style={styles.userInfo}>
-                    <Text style={styles.userName}>
+                    <Text style={[styles.userName, { fontSize: getScaledSize(17) }]}>
                         {item.username || `Customer ${item.customer_id}`}
                     </Text>
-                    <Text style={styles.userId}>
+                    <Text style={[styles.userId, { fontSize: getScaledSize(14) }]}>
                         ID: {item.customer_id}
                     </Text>
                 </View>
@@ -211,13 +221,14 @@ export const FilterPicker = ({
     label, 
     value, 
     icon, 
-    styles 
+    styles,
+    getScaledSize
 }) => (
     <View style={styles.pickerContainer}>
-        <Text style={styles.pickerLabel}>{label}</Text>
+        <Text style={[styles.pickerLabel, { fontSize: getScaledSize(12) }]}>{label}</Text>
         <View style={styles.pickerWrapper}>
             <MaterialIcons name={icon} size={16} color={COLORS.primary} style={styles.pickerIcon} />
-            <Text style={styles.pickerText}>{value}</Text>
+            <Text style={[styles.pickerText, { fontSize: getScaledSize(14) }]}>{value}</Text>
         </View>
     </View>
 );
@@ -225,12 +236,13 @@ export const FilterPicker = ({
 // Invoice number display component
 export const InvoiceNumberDisplay = ({ 
     invoiceNumber, 
-    styles 
+    styles,
+    getScaledSize
 }) => (
     <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Invoice Number</Text>
+        <Text style={[styles.inputLabel, { fontSize: getScaledSize(16) }]}>Invoice Number</Text>
         <View style={styles.readOnlyInputContainer}>
-            <Text style={styles.readOnlyInputText}>{invoiceNumber}</Text>
+            <Text style={[styles.readOnlyInputText, { fontSize: getScaledSize(16) }]}>{invoiceNumber}</Text>
         </View>
     </View>
 );
@@ -238,13 +250,12 @@ export const InvoiceNumberDisplay = ({
 // Total amount display component
 export const TotalAmountDisplay = ({ 
     totalAmount, 
-    styles 
+    styles,
+    getScaledSize
 }) => (
     <View style={styles.totalContainer}>
-        <Text style={styles.totalLabel}>Total Amount:</Text>
-        <Text style={styles.totalAmount}>
-            Rs.{totalAmount.toFixed(2)}
-        </Text>
+        <Text style={[styles.totalLabel, { fontSize: getScaledSize(18) }]}>Total Amount:</Text>
+        <Text style={[styles.totalAmount, { fontSize: getScaledSize(20) }]}>Rs.{totalAmount.toFixed(2)}</Text>
     </View>
 );
 
@@ -252,7 +263,8 @@ export const TotalAmountDisplay = ({
 export const CreateButton = ({ 
     onPress, 
     isLoading, 
-    styles 
+    styles,
+    getScaledSize
 }) => (
     <TouchableOpacity
         style={[styles.createButton, isLoading && styles.createButtonDisabled]}
@@ -264,7 +276,7 @@ export const CreateButton = ({
         ) : (
             <>
                 <MaterialIcons name="receipt" size={20} color={COLORS.text.light} />
-                <Text style={styles.createButtonText}>Create Invoice</Text>
+                <Text style={[styles.createButtonText, { fontSize: getScaledSize(16) }]}>Create Invoice</Text>
             </>
         )}
     </TouchableOpacity>
@@ -593,13 +605,21 @@ export const styles = StyleSheet.create({
         marginBottom: 8,
     },
     textInput: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F5F7FA',
+        borderRadius: 12,
+        paddingHorizontal: 15,
+        height: 56,
+        fontSize: 16,
+        color: '#333333',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
         borderWidth: 1,
         borderColor: COLORS.border,
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: COLORS.text.primary,
-        backgroundColor: COLORS.surface,
     },
     readOnlyInputContainer: {
         flexDirection: 'row',
@@ -668,17 +688,31 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
     },
     quantityInput: {
-        width: 50,
-        height: 32,
+        width: 60,
+        height: 40,
         textAlign: 'center',
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '600',
         color: COLORS.text.primary,
         marginHorizontal: 8,
         borderWidth: 1,
         borderColor: COLORS.border,
-        borderRadius: 4,
+        borderRadius: 6,
         backgroundColor: COLORS.surface,
+        paddingVertical: 8,
+        includeFontPadding: false,
+        textAlignVertical: 'center',
+    },
+    deleteButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(220, 38, 38, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8,
     },
     totalContainer: {
         flexDirection: 'row',

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Plat
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useFontScale } from '../../App';
 
 const COLORS = {
   primary: "#003366",
@@ -30,6 +31,7 @@ const COLORS = {
 };
 
 const ReportsOwner = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
 
   const handleOrderHistory = () => {
@@ -63,10 +65,10 @@ const ReportsOwner = () => {
                 <MaterialIcons name="history" size={24} color="#F59E0B" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Order History</Text>
-            <Text style={styles.cardSubtitle}>View all order history and reports</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order History</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View all order history and reports</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View history</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View history</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -78,10 +80,10 @@ const ReportsOwner = () => {
                 <MaterialIcons name="assessment" size={24} color="#3B82F6" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Order Status</Text>
-            <Text style={styles.cardSubtitle}>Track order approval and delivery status</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order Status</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Track order approval and delivery status</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View status</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View status</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -108,13 +110,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text.light,
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
   },
@@ -153,13 +153,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12,
     color: COLORS.text.secondary,
     lineHeight: 16,
     marginBottom: 10,
@@ -173,10 +171,9 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
 });
 
-export default ReportsOwner; 
+export default ReportsOwner;

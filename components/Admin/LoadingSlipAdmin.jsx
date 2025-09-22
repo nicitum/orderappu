@@ -21,6 +21,7 @@ import { Picker } from '@react-native-picker/picker';
 import * as XLSX from 'xlsx';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import { useFontScale } from '../../App';
 
 // Helper function to convert Uint8Array to base64
 const uint8ToBase64 = (uint8) => {
@@ -85,6 +86,7 @@ const saveFileToDownloads = async (fileData, fileName, mimeType) => {
 };
 
 const LoadingSlipAdmin = () => {
+    const { getScaledSize } = useFontScale();
     const [users, setUsers] = useState([]);
     const [adminOrders, setAdminOrders] = useState([]);
     const [adminUsersWithOrdersToday, setAdminUsersWithOrdersToday] = useState([]);
@@ -235,11 +237,11 @@ const LoadingSlipAdmin = () => {
         })();
         return (
             <View style={styles.dataRow}>
-                <Text style={[styles.dataCell, { flex: 1.1 }]}>{item?.name || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 1.6 }]}>{item?.route || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.id || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 2.1 }]}><Text>₹</Text><Text>{amount}</Text></Text>
-                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.approve_status || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.1, fontSize: getScaledSize(14) }]}>{item?.name || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.6, fontSize: getScaledSize(14) }]}>{item?.route || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.5, fontSize: getScaledSize(14) }]}>{orderForUser?.id || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 2.1, fontSize: getScaledSize(14) }]}><Text>₹</Text><Text>{amount}</Text></Text>
+                <Text style={[styles.dataCell, { flex: 1.5, fontSize: getScaledSize(14) }]}>{orderForUser?.approve_status || 'N/A'}</Text>
             </View>
         );
     };
@@ -247,7 +249,7 @@ const LoadingSlipAdmin = () => {
     return (
         <View style={styles.container}>
             <View style={styles.filterContainer}>
-                <Text style={styles.filterLabel}>Select Route:</Text>
+                <Text style={[styles.filterLabel, { fontSize: getScaledSize(16) }]}>Select Route:</Text>
                 <View style={{ flex: 1, marginLeft: 10, backgroundColor: '#fff', borderRadius: 8 }}>
                     <Picker
                         selectedValue={selectedRoute}
@@ -263,20 +265,20 @@ const LoadingSlipAdmin = () => {
                     style={{ marginLeft: 10, backgroundColor: '#003366', padding: 10, borderRadius: 8 }}
                     onPress={exportExcel}
                 >
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Export Excel</Text>
+                    <Text style={[{ color: '#fff', fontWeight: 'bold' }, { fontSize: getScaledSize(14) }]}>Export Excel</Text>
                 </TouchableOpacity>
             </View>
             <View style={styles.columnHeader}>
-                <Text style={[styles.columnHeaderText, { flex: 1.1 }]}>Name</Text>
-                <Text style={[styles.columnHeaderText, { flex: 1.6 }]}>Route</Text>
-                <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Order ID</Text>
-                <Text style={[styles.columnHeaderText, { flex: 2.1 }]}>Amount</Text>
-                <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Approval</Text>
+                <Text style={[styles.columnHeaderText, { flex: 1.1, fontSize: getScaledSize(15) }]}>Name</Text>
+                <Text style={[styles.columnHeaderText, { flex: 1.6, fontSize: getScaledSize(15) }]}>Route</Text>
+                <Text style={[styles.columnHeaderText, { flex: 1.5, fontSize: getScaledSize(15) }]}>Order ID</Text>
+                <Text style={[styles.columnHeaderText, { flex: 2.1, fontSize: getScaledSize(15) }]}>Amount</Text>
+                <Text style={[styles.columnHeaderText, { flex: 1.5, fontSize: getScaledSize(15) }]}>Approval</Text>
             </View>
             {loading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color="#003366" />
-                    <Text style={styles.loadingText}>Loading orders...</Text>
+                    <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -286,7 +288,7 @@ const LoadingSlipAdmin = () => {
                     ListEmptyComponent={() => (
                         <View style={styles.emptyListContainer}>
                             <Ionicons name="alert-circle-outline" size={40} color="#6B7280" />
-                            <Text style={styles.emptyListText}>No orders for this route.</Text>
+                            <Text style={[styles.emptyListText, { fontSize: getScaledSize(16) }]}>No orders for this route.</Text>
                         </View>
                     )}
                 />
@@ -316,7 +318,6 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     filterLabel: {
-        fontSize: 16,
         fontWeight: '600',
         color: '#003366',
         marginRight: 16,
@@ -361,7 +362,6 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     columnHeaderText: {
-        fontSize: 15,
         fontWeight: '700',
         color: '#FFFFFF',
         textAlign: 'center',
@@ -374,7 +374,6 @@ const styles = StyleSheet.create({
         borderBottomColor: '#D6DEEB',
     },
     dataCell: {
-        fontSize: 14,
         fontWeight: '500',
         color: '#1F2937',
         textAlign: 'center',
@@ -384,7 +383,6 @@ const styles = StyleSheet.create({
         marginTop: 32,
     },
     emptyListText: {
-        fontSize: 16,
         fontWeight: '500',
         color: '#6B7280',
         textAlign: 'center',
@@ -398,7 +396,6 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 12,
-        fontSize: 16,
         fontWeight: '600',
         color: '#003366',
     },

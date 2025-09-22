@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Plat
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useFontScale } from '../../App';
 
 const COLORS = {
   primary: "#003366",
@@ -30,6 +31,7 @@ const COLORS = {
 };
 
 const TransactionsOwner = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
 
   const handlePlaceOrder = () => {
@@ -69,10 +71,10 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="assignment-turned-in" size={24} color="#2563EB" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Order Acceptance</Text>
-            <Text style={styles.cardSubtitle}>View and manage order acceptance</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order Acceptance</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View and manage order acceptance</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Go to status</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Go to status</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -84,10 +86,10 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="playlist-add" size={24} color="#3B82F6" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Place Order</Text>
-            <Text style={styles.cardSubtitle}>Create new orders for customers</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Place Order</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Create new orders for customers</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Tap to start</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Tap to start</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -100,10 +102,10 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="edit" size={24} color="#F59E0B" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Update Orders</Text>
-            <Text style={styles.cardSubtitle}>Edit and modify existing orders</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Update Orders</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Edit and modify existing orders</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Manage orders</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Manage orders</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -115,10 +117,10 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="receipt" size={24} color="#10B981" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Invoice Against Orders</Text>
-            <Text style={styles.cardSubtitle}>View and manage invoices</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoice Against Orders</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View and manage invoices</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>View all</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View all</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -130,10 +132,10 @@ const TransactionsOwner = () => {
                 <MaterialIcons name="receipt-long" size={24} color="#F59E0B" />
               </View>
             </View>
-            <Text style={styles.cardTitle}>Direct Invoice</Text>
-            <Text style={styles.cardSubtitle}>Select customer for direct invoice access</Text>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Direct Invoice</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Select customer for direct invoice access</Text>
             <View style={styles.cardFooter}>
-              <Text style={styles.cardAction}>Select customer</Text>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Select customer</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -158,13 +160,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text.light,
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
   },
@@ -204,13 +204,11 @@ const styles = StyleSheet.create({
   },
 
   cardTitle: {
-    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12,
     color: COLORS.text.secondary,
     lineHeight: 16,
     marginBottom: 10,
@@ -224,10 +222,9 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
 });
 
-export default TransactionsOwner; 
+export default TransactionsOwner;

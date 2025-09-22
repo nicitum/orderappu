@@ -1,11 +1,15 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { useFontScale } from '../../App';
 
-const ErrorMessage = ({ message }) => (
-  <View style={styles.errorContainer}>
-    <Text style={styles.errorText}>{message}</Text>
-  </View>
-);
+const ErrorMessage = ({ message }) => {
+  const { getScaledSize } = useFontScale();
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{message}</Text>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   errorContainer: {
@@ -14,7 +18,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    fontSize: 16,
     color: "red",
   },
 });

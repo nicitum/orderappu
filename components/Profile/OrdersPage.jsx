@@ -20,10 +20,12 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
+import { useFontScale } from '../../App';
 
 const { width } = Dimensions.get('window');
 
 const OrdersPage = () => {
+  const { getScaledSize } = useFontScale();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
@@ -128,23 +130,23 @@ const OrdersPage = () => {
       <View style={styles.orderDetailsContainer}>
         <View style={styles.orderDetailsHeader}>
           <MaterialCommunityIcons name="shopping" size={20} color="#003366" />
-          <Text style={styles.orderDetailsTitle}>Order Items</Text>
+          <Text style={[styles.orderDetailsTitle, { fontSize: getScaledSize(16) }]}>Order Items</Text>
         </View>
         
         {products.length > 0 ? (
           products.map((product, index) => (
             <View key={`${orderId}-${product.product_id}-${index}`} style={styles.productItem}>
               <View style={styles.productInfo}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productQuantity}>Qty: {product.quantity}</Text>
+                <Text style={[styles.productName, { fontSize: getScaledSize(14) }]}>{product.name}</Text>
+                <Text style={[styles.productQuantity, { fontSize: getScaledSize(13) }]}>Qty: {product.quantity}</Text>
               </View>
-              <Text style={styles.productPrice}>₹{product.price}</Text>
+              <Text style={[styles.productPrice, { fontSize: getScaledSize(14) }]}>₹{product.price}</Text>
             </View>
           ))
         ) : (
           <View style={styles.emptyProductsContainer}>
             <MaterialCommunityIcons name="inbox" size={24} color="#666" />
-            <Text style={styles.noProductsText}>No products found</Text>
+            <Text style={[styles.noProductsText, { fontSize: getScaledSize(14) }]}>No products found</Text>
           </View>
         )}
       </View>
@@ -155,7 +157,7 @@ const OrdersPage = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#003366" />
-        <Text style={styles.loadingText}>Loading orders...</Text>
+        <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
       </View>
     );
   }
@@ -165,13 +167,13 @@ const OrdersPage = () => {
       <StatusBar backgroundColor="#003366" barStyle="light-content" />
       
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}>My Orders</Text>
         <TouchableOpacity
           style={styles.dateButton}
           onPress={showDatePicker}
         >
           <MaterialCommunityIcons name="calendar" size={20} color="#FFFFFF" />
-          <Text style={styles.dateText}>
+          <Text style={[styles.dateText, { fontSize: getScaledSize(14) }]}>
             {moment(selectedDate).format("MMM D")}
           </Text>
         </TouchableOpacity>
@@ -193,8 +195,8 @@ const OrdersPage = () => {
         {orders.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons name="receipt" size={64} color="#003366" />
-            <Text style={styles.emptyStateTitle}>No Orders Found</Text>
-            <Text style={styles.emptyStateSubtitle}>
+            <Text style={[styles.emptyStateTitle, { fontSize: getScaledSize(20) }]}>No Orders Found</Text>
+            <Text style={[styles.emptyStateSubtitle, { fontSize: getScaledSize(14) }]}>
               We couldn't find any orders for {moment(selectedDate).format("MMMM D, YYYY")}
             </Text>
           </View>
@@ -203,8 +205,8 @@ const OrdersPage = () => {
             <View key={order.id} style={styles.orderCard}>
               <View style={styles.orderHeader}>
                 <View style={styles.orderInfo}>
-                  <Text style={styles.orderId}>Order #{order.id}</Text>
-                  <Text style={styles.orderDate}>
+                  <Text style={[styles.orderId, { fontSize: getScaledSize(16) }]}>Order #{order.id}</Text>
+                  <Text style={[styles.orderDate, { fontSize: getScaledSize(13) }]}>
                     {moment.unix(order.placed_on).format("MMM D, YYYY [at] h:mm A")}
                   </Text>
                 </View>
@@ -214,7 +216,7 @@ const OrdersPage = () => {
                 ]}>
                   <Text style={[
                     styles.statusText,
-                    { color: getStatusColor(order.delivery_status).text }
+                    { color: getStatusColor(order.delivery_status).text, fontSize: getScaledSize(12) }
                   ]}>
                     {(order.delivery_status || "pending").toUpperCase()}
                   </Text>
@@ -223,15 +225,15 @@ const OrdersPage = () => {
 
               <View style={styles.orderSummary}>
                 <View style={styles.totalContainer}>
-                  <Text style={styles.totalLabel}>Total Amount</Text>
-                  <Text style={styles.totalAmount}>₹{order.total_amount}</Text>
+                  <Text style={[styles.totalLabel, { fontSize: getScaledSize(12) }]}>Total Amount</Text>
+                  <Text style={[styles.totalAmount, { fontSize: getScaledSize(18) }]}>₹{order.total_amount}</Text>
                 </View>
                 
                 <TouchableOpacity
                   style={styles.detailsButton}
                   onPress={() => handleOrderDetailsPress(order.id)}
                 >
-                  <Text style={styles.detailsButtonText}>
+                  <Text style={[styles.detailsButtonText, { fontSize: getScaledSize(14) }]}>
                     {expandedOrderDetailsId === order.id ? "Hide Details" : "View Details"}
                   </Text>
                   <MaterialCommunityIcons
@@ -269,7 +271,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   headerTitle: {
-    fontSize: 20,
     fontWeight: "600",
     color: "#FFFFFF",
   },
@@ -283,7 +284,6 @@ const styles = StyleSheet.create({
   dateText: {
     color: "#FFFFFF",
     marginLeft: 4,
-    fontSize: 14,
     fontWeight: "500",
   },
   scrollView: {
@@ -301,7 +301,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
     color: "#666666",
   },
   emptyState: {
@@ -310,13 +309,11 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyStateTitle: {
-    fontSize: 20,
     fontWeight: "600",
     color: "#003366",
     marginTop: 16,
   },
   emptyStateSubtitle: {
-    fontSize: 14,
     color: "#666666",
     marginTop: 8,
     textAlign: "center",
@@ -344,12 +341,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: 16,
     fontWeight: "600",
     color: "#003366",
   },
   orderDate: {
-    fontSize: 13,
     color: "#666666",
     marginTop: 4,
   },
@@ -359,7 +354,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusText: {
-    fontSize: 12,
     fontWeight: "600",
   },
   orderSummary: {
@@ -372,11 +366,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   totalLabel: {
-    fontSize: 12,
     color: "#666666",
   },
   totalAmount: {
-    fontSize: 18,
     fontWeight: "700",
     color: "#003366",
     marginTop: 2,
@@ -388,7 +380,6 @@ const styles = StyleSheet.create({
   },
   detailsButtonText: {
     color: "#003366",
-    fontSize: 14,
     fontWeight: "600",
     marginRight: 4,
   },
@@ -404,7 +395,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   orderDetailsTitle: {
-    fontSize: 16,
     fontWeight: "600",
     color: "#003366",
     marginLeft: 8,
@@ -422,17 +412,14 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   productName: {
-    fontSize: 14,
     color: "#333333",
     fontWeight: "500",
   },
   productQuantity: {
-    fontSize: 13,
     color: "#666666",
     marginTop: 4,
   },
   productPrice: {
-    fontSize: 14,
     fontWeight: "600",
     color: "#003366",
   },
@@ -441,7 +428,6 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   noProductsText: {
-    fontSize: 14,
     color: "#666666",
     marginTop: 8,
   },

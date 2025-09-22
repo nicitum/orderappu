@@ -18,16 +18,21 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from 'react-native-toast-message';
 import { ipAddress } from "../services/urls";
 import FirstTimePasswordChangeModal from "./FirstTimePasswordChangeModal";
 import LoadingIndicator from "./general/Loader";
 import ErrorMessage from "./general/errorMessage";
 import { useNavigation } from '@react-navigation/native';
+import { useFontScale } from '../App';
+import NotificationService from '../services/NotificationService';
+// Remove the test button import
 
 const { width, height } = Dimensions.get('window');
 
 const LoginPage = () => {
   const navigation = useNavigation();
+  const { getScaledSize } = useFontScale();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -45,6 +50,7 @@ const LoginPage = () => {
       try {
         const [customerId, userAuthToken] = await AsyncStorage.multiGet(["customerId", "userAuthToken"]);
         if (customerId[1] && userAuthToken[1]) {
+          // Notification service is already initialized in App.jsx
           navigation.reset({
             index: 0,
             routes: [{ name: 'TabNavigator' }],
@@ -127,6 +133,40 @@ const LoginPage = () => {
     }
   };
 
+  // Get FCM token and send to backend with customerId
+  const handleFcmTokenRegistration = async (customerId) => {
+    try {
+      // Request permission first
+      const permissionGranted = await NotificationService.requestNotificationPermission();
+      
+      if (permissionGranted) {
+        // Get FCM token
+        const token = await NotificationService.getFCMToken();
+        
+        if (token && customerId) { 
+          // Send token and customerId to backend
+          const success = await NotificationService.sendTokenToBackend(token, customerId);
+          if (success) {
+            console.log('FCM token registered successfully for customer:', customerId);
+            return true;
+          } else {
+            console.error('Failed to register FCM token for customer:', customerId);
+            return false;
+          }
+        } else {
+          console.error('Missing token or customerId:', { token: !!token, customerId });
+          return false;
+        }
+      } else {
+        console.log('Notification permission not granted');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error in FCM token registration:', error);
+      return false;
+    }
+  };
+
   const handleLogin = async () => {
     Keyboard.dismiss();
     setError("");
@@ -165,10 +205,24 @@ const LoginPage = () => {
         setTempToken(data.token);
         setShowPasswordModal(true);
       } else {
+        // Save user data to AsyncStorage
         await AsyncStorage.multiSet([
           ["customerId", decoded.id],
           ["userAuthToken", data.token]
         ]);
+        
+        // Register FCM token with customerId and wait for confirmation
+        const tokenRegistered = await handleFcmTokenRegistration(decoded.id);
+        
+        if (tokenRegistered) {
+            // Token registration completed
+          
+          // Show login success notification from backend
+          await showLoginSuccessNotification();
+        } else {
+          console.warn('FCM token registration failed, skipping login notification');
+        }
+        
         navigation.reset({
           index: 0,
           routes: [{ name: 'TabNavigator' }],
@@ -184,6 +238,55 @@ const LoginPage = () => {
     }
   };
 
+  // Show login success notification via backend
+  const showLoginSuccessNotification = async () => {
+    try {
+      console.log('=== SENDING LOGIN SUCCESS NOTIFICATION ===');
+      
+      const customerId = await AsyncStorage.getItem('customerId');
+      console.log('Customer ID for notification:', customerId);
+      
+      if (!customerId) {
+        console.log('No customer ID found, skipping notification');
+        return;
+      }
+
+      const notificationPayload = {
+        targetUserId: customerId,  // Changed to match the expected format
+        title: 'Login Successful',
+        body: 'Happy Navaratri . Welcome to our application.',
+        data: {
+          type: 'login_success',
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      console.log('Notification payload:', JSON.stringify(notificationPayload, null, 2));
+      console.log('Sending to URL:', `http://${ipAddress}:8091/send-notification`);
+
+      const response = await fetch(`http://${ipAddress}:8091/send-notification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(notificationPayload),
+      });
+
+      console.log('Backend response status:', response.status);
+      
+      if (response.ok) {
+        const responseData = await response.text();
+        console.log('Login success notification sent successfully. Response:', responseData);
+      } else {
+        const errorText = await response.text();
+        console.log('Failed to send login success notification:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('Error sending login success notification:', error);
+      // Notification is optional, so we don't block the login flow
+    }
+  };
+
   const handlePasswordChangeSuccess = async () => {
     setShowPasswordModal(false);
     try {
@@ -192,6 +295,16 @@ const LoginPage = () => {
         ["customerId", decoded.id],
         ["userAuthToken", tempToken]
       ]);
+      
+      // Register FCM token with customerId
+      await handleFcmTokenRegistration(decoded.id);
+      
+      // Small delay to ensure token is registered before sending notification
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Show login success notification from backend
+      await showLoginSuccessNotification();
+      
       navigation.reset({
         index: 0,
         routes: [{ name: 'TabNavigator' }],
@@ -208,7 +321,7 @@ const LoginPage = () => {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: '#FFFFFF' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 24}
     >
@@ -225,6 +338,7 @@ const LoginPage = () => {
 
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
+          style={{ backgroundColor: '#FFFFFF' }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -246,10 +360,10 @@ const LoginPage = () => {
               }}
             />
             )}
-            <Text style={styles.tagline}>Streamline Your Business Orders</Text>
-            <Text style={styles.taglineSubtext}>Fast • Reliable • Efficient</Text>
-            <Text style={styles.welcomeText}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Please sign in to continue</Text>
+            <Text style={[styles.tagline, { fontSize: getScaledSize(20) }]}>Streamline Your Business Orders</Text>
+            <Text style={[styles.taglineSubtext, { fontSize: getScaledSize(14) }]}>Fast • Reliable • Efficient</Text>
+            <Text style={[styles.welcomeText, { fontSize: getScaledSize(28) }]}>Welcome Back</Text>
+            <Text style={[styles.subtitle, { fontSize: getScaledSize(16) }]}>Please sign in to continue</Text>
           </View>
 
           {error ? <ErrorMessage message={error} /> : null}
@@ -258,7 +372,7 @@ const LoginPage = () => {
             <View style={styles.inputContainer}>
               <Icon name="person" size={20} color="#666666" style={styles.inputIcon} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Username"
                 placeholderTextColor="#999999"
                 value={username}
@@ -276,7 +390,7 @@ const LoginPage = () => {
               <Icon name="lock" size={20} color="#666666" style={styles.inputIcon} />
               <TextInput
                 ref={passwordInput}
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Password"
                 placeholderTextColor="#999999"
                 value={password}
@@ -309,7 +423,7 @@ const LoginPage = () => {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <View style={styles.buttonContent}>
-                  <Text style={styles.buttonText}>SIGN IN</Text>
+                  <Text style={[styles.buttonText, { fontSize: getScaledSize(16) }]}>SIGN IN</Text>
                   <Icon name="arrow-forward" size={20} color="#FFFFFF" />
                 </View>
               )}
@@ -324,6 +438,9 @@ const LoginPage = () => {
           username={username}
           tempToken={tempToken}
         />
+        
+        {/* Toast Component */}
+        <Toast />
       </View>
     </KeyboardAvoidingView>
   );
@@ -336,6 +453,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    backgroundColor: '#FFFFFF', // Ensure consistent white background
   },
   topLogoContainer: {
     position: 'absolute',
@@ -368,14 +486,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tagline: {
-    fontSize: 20,
     fontWeight: '600',
     color: '#003366',
     marginBottom: 4,
     textAlign: 'center',
   },
   taglineSubtext: {
-    fontSize: 14,
     color: '#003366',
     opacity: 0.8,
     marginBottom: 20,
@@ -383,19 +499,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   welcomeText: {
-    fontSize: 28,
     fontWeight: 'bold',
     color: '#003366',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
     color: '#666666',
     opacity: 0.8,
   },
   formContainer: {
     padding: 20,
     marginTop: 20,
+    backgroundColor: '#FFFFFF', // Ensure white background
+    flex: 1, // Take remaining space
   },
   inputContainer: {
     flexDirection: 'row',
@@ -417,7 +533,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 16,
     color: '#333333',
   },
   eyeButton: {
@@ -445,7 +560,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: 'bold',
     marginRight: 8,
   },

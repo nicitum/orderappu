@@ -17,51 +17,40 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { ipAddress } from '../../services/urls';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { checkTokenAndRedirect } from '../../services/auth';
-import { jwtDecode } from 'jwt-decode';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import moment from 'moment';
+import { useFontScale } from '../../App';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Modern Color Palette
-const COLORS = {
-  primary: "#003366",
-  primaryLight: "#004488",
-  primaryDark: "#002244",
-  secondary: "#10B981",
-  accent: "#F59E0B",
-  success: "#059669",
-  error: "#DC2626",
-  warning: "#D97706",
-  background: "#F3F4F6",
-  surface: "#FFFFFF",
-  text: {
-    primary: "#111827",
-    secondary: "#4B5563",
-    tertiary: "#9CA3AF",
-    light: "#FFFFFF",
-  },
-  border: "#E5E7EB",
-  divider: "#F3F4F6",
-  card: {
-    background: "#FFFFFF",
-    shadow: "rgba(0, 0, 0, 0.1)",
-  },
-};
+// Import from services
+import { ipAddress } from '../../services/urls';
+import { checkTokenAndRedirect } from '../../services/auth';
 
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(amount);
-};
+// Import from cartutils
+import { COLORS, formatCurrency, styles } from './cartutils';
+import { 
+  fetchClientStatus,
+  loadCartAndProducts,
+  upsertCartItemMeta,
+  placeOrder,
+  getOrderType,
+  calculateTotalAmount
+} from './cartutils/apiHelpers';
+import { 
+  handleIncreaseQuantity,
+  handleDecreaseQuantity,
+  handleQuantityChange,
+  handleQuantityBlur,
+  clearCart,
+  deleteCartItem,
+  applyFilters,
+  handlePlaceOrderClick,
+  handleConfirmDueDate
+} from './cartutils/utils';
 
 const CartCustomer = ({ hideHeader = false }) => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const route = useRoute();
   const [cart, setCart] = useState({});
@@ -91,61 +80,10 @@ const CartCustomer = ({ hideHeader = false }) => {
   const [maxDueOn, setMaxDueOn] = useState(30);
 
   // Fetch client status for due date configuration
-  const fetchClientStatus = async () => {
-    try {
-      console.log('Fetching client status...');
-      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-
-      console.log('Response status:', response.status);
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('API Response data:', responseData);
-        
-        // Extract data from the nested structure
-        const data = responseData.data && responseData.data[0];
-        console.log('Extracted client data:', data);
-        
-        if (data) {
-          // Update due date configuration based on API response
-          const newDefaultDueOn = data.default_due_on || 1;
-          const newMaxDueOn = data.max_due_on || 30;
-          
-          console.log('Setting defaultDueOn to:', newDefaultDueOn);
-          console.log('Setting maxDueOn to:', newMaxDueOn);
-          
-          setDefaultDueOn(newDefaultDueOn);
-          setMaxDueOn(newMaxDueOn);
-          
-          // Update selected due date based on default_due_on
-          const newDefaultDate = new Date();
-          if (newDefaultDueOn > 0) {
-            newDefaultDate.setDate(newDefaultDate.getDate() + newDefaultDueOn);
-          }
-          console.log('Setting selectedDueDate to:', newDefaultDate);
-          setSelectedDueDate(newDefaultDate);
-        } else {
-          console.log('No client data found in response');
-        }
-      } else {
-        console.log('API response not ok:', response.status);
-      }
-    } catch (error) {
-      console.error('Error fetching client status:', error);
-      // Keep default values if API fails
-    }
-  };
-
-  // Load cart and products on mount and focus
   useFocusEffect(
     useCallback(() => {
-      loadCartAndProducts();
-      fetchClientStatus(); // Fetch due date configuration
+      loadCartAndProducts(setCart, setCartProducts, setProducts, setFilteredProducts, setBrands, setCategories, setLoading, navigation, Alert, console);
+      fetchClientStatus(setDefaultDueOn, setMaxDueOn, console); // Fetch due date configuration
     }, [])
   );
 
@@ -161,87 +99,6 @@ const CartCustomer = ({ hideHeader = false }) => {
     }
   }, []);
 
-  const loadCartAndProducts = async () => {
-    setLoading(true);
-    try {
-      // Load cart from AsyncStorage
-      const savedCart = await AsyncStorage.getItem('catalogueCart');
-      const savedCartItems = await AsyncStorage.getItem('cartItems');
-      if (savedCart) {
-        setCart(JSON.parse(savedCart));
-      }
-      if (savedCartItems) {
-        const items = Object.values(JSON.parse(savedCartItems));
-        setCartProducts(items);
-      } else {
-        setCartProducts([]);
-      }
-
-      // Fetch products
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) return;
-
-      const response = await fetch(`http://${ipAddress}:8091/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Filter by enable_product - handle new backend values
-        // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
-        const enabledProducts = data.filter(p => p.enable_product !== "Mask");
-        
-        setProducts(enabledProducts);
-        setFilteredProducts(enabledProducts);
-        
-        // Extract unique brands and categories from enabled products only
-        const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
-        const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
-        setBrands(uniqueBrands);
-        setCategories(uniqueCategories);
-      }
-    } catch (error) {
-      console.error('Error loading cart and products:', error);
-      Alert.alert('Error', 'Failed to load cart and products');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Persist/merge product metadata for items added from this screen
-  const upsertCartItemMeta = async (product) => {
-    try {
-      const saved = await AsyncStorage.getItem('cartItems');
-      const existing = saved ? JSON.parse(saved) : {};
-      const merged = {
-        ...existing,
-        [product.id]: { ...product, price: product.discountPrice || product.price }
-      };
-      await AsyncStorage.setItem('cartItems', JSON.stringify(merged));
-      setCartProducts(Object.values(merged));
-    } catch (e) {
-      console.error('Failed to persist cart item meta:', e);
-    }
-  };
-
-  // Remove product metadata when deleting a specific item
-  const removeCartItemMeta = async (productId) => {
-    try {
-      const saved = await AsyncStorage.getItem('cartItems');
-      if (!saved) return;
-      const existing = JSON.parse(saved);
-      delete existing[productId];
-      await AsyncStorage.setItem('cartItems', JSON.stringify(existing));
-      setCartProducts(Object.values(existing));
-    } catch (e) {
-      console.error('Failed to remove cart item meta:', e);
-    }
-  };
-
   // Save cart to AsyncStorage whenever it changes
   useEffect(() => {
     const saveCart = async () => {
@@ -253,72 +110,6 @@ const CartCustomer = ({ hideHeader = false }) => {
     };
     saveCart();
   }, [cart]);
-
-  const handleIncreaseQuantity = (productId) => {
-    setCart(prevCart => ({
-      ...prevCart,
-      [productId]: (prevCart[productId] || 0) + 1
-    }));
-  };
-
-  const handleDecreaseQuantity = (productId) => {
-    setCart(prevCart => {
-      const currentQuantity = prevCart[productId] || 0;
-      if (currentQuantity <= 1) return prevCart;
-      return {
-        ...prevCart,
-        [productId]: currentQuantity - 1
-      };
-    });
-  };
-
-  const handleQuantityChange = (productId, newQuantity) => {
-    // Allow empty string or any input during editing
-    if (newQuantity === '') {
-      setCart(prevCart => ({
-        ...prevCart,
-        [productId]: 0
-      }));
-      return;
-    }
-
-    // Convert to number and allow any value during editing, including 0
-    const quantity = parseInt(newQuantity);
-    if (isNaN(quantity)) {
-      return;
-    }
-
-    setCart(prevCart => ({
-      ...prevCart,
-      [productId]: quantity
-    }));
-  };
-
-  const handleQuantityBlur = (productId, value) => {
-    // On blur, if empty or invalid or 0, revert to the previous value or set to 1 if none exists
-    const quantity = parseInt(value);
-    if (isNaN(quantity) || quantity < 1) {
-      setCart(prevCart => ({
-        ...prevCart,
-        [productId]: prevCart[productId] || 1
-      }));
-    }
-  };
-
-  // Update total calculation to use only discountPrice
-  const calculateTotalAmount = () => {
-    return Object.entries(cart).reduce((sum, [productId, quantity]) => {
-      const item = cartProducts.find(i => i.id === parseInt(productId));
-      if (!item || !item.discountPrice) return sum;
-      const discountPrice = Number(item.discountPrice) || 0;
-      return sum + discountPrice * quantity;
-    }, 0);
-  };
-
-  const getOrderType = () => {
-    const currentHour = new Date().getHours();
-    return currentHour < 12 ? 'AM' : 'PM';
-  };
 
   const showDatePicker = () => {
     setIsDatePickerVisible(true);
@@ -333,99 +124,18 @@ const CartCustomer = ({ hideHeader = false }) => {
     setSelectedDueDate(date);
   };
 
-  const handlePlaceOrderClick = () => {
-    console.log('handlePlaceOrderClick called');
-    console.log('Current defaultDueOn value:', defaultDueOn);
-    console.log('Current maxDueOn value:', maxDueOn);
-    
-    // Reset due date based on API default_due_on value
-    const newDefaultDate = new Date();
-    if (defaultDueOn > 0) {
-      newDefaultDate.setDate(newDefaultDate.getDate() + defaultDueOn);
-      console.log('Setting due date to:', newDefaultDate, '(+', defaultDueOn, 'days)');
-    } else {
-      console.log('defaultDueOn is 0, keeping today as due date');
-    }
-    setSelectedDueDate(newDefaultDate);
-    // Show due date modal first
-    setShowDueDateModal(true);
+  const handlePlaceOrderClickWrapper = () => {
+    handlePlaceOrderClick(defaultDueOn, setSelectedDueDate, setShowDueDateModal, console);
   };
 
-  const handleConfirmDueDate = () => {
+  const handleConfirmDueDateWrapper = () => {
     // Close modal and proceed with order placement
-    setShowDueDateModal(false);
-    placeOrder();
+    handleConfirmDueDate(setShowDueDateModal, placeOrderWrapper);
   };
 
-  const placeOrder = async () => {
-    try {
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) {
-        Alert.alert('Error', 'Please login to place an order');
-        return;
-      }
-
-      setIsPlacingOrder(true);
-
-      const orderItems = Object.entries(cart).map(([productId, quantity]) => {
-        const item = cartProducts.find(i => i.id === parseInt(productId));
-        const discountPrice = Number(item.discountPrice) || 0;
-        return {
-          product_id: parseInt(productId),
-          quantity: quantity,
-          price: discountPrice
-        };
-      });
-
-      const now = new Date();
-      const orderData = {
-        products: orderItems,
-        orderType: getOrderType(),
-        orderDate: now.toISOString(),
-        total_amount: calculateTotalAmount(),
-        entered_by: jwtDecode(token).username,
-        due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
-      };
-
-      const response = await fetch(`http://${ipAddress}:8091/place`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(orderData)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Clear cart before navigating
-        setCart({});
-        await AsyncStorage.removeItem('catalogueCart');
-        Alert.alert(
-          'Success',
-          'Order placed successfully!',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.navigate('Home');
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Error', data.message || 'Failed to place order');
-      }
-    } catch (error) {
-      console.error('Error placing order:', error);
-      Alert.alert('Error', 'An error occurred while placing your order');
-    } finally {
-      setIsPlacingOrder(false);
-    }
+  const placeOrderWrapper = async () => {
+    await placeOrder(cart, cartProducts, selectedDueDate, navigation, setIsPlacingOrder, setCart, Alert, console);
   };
-
- 
 
   const renderCartItem = ({ item }) => {
     const quantity = cart[item.id];
@@ -455,18 +165,18 @@ const CartCustomer = ({ hideHeader = false }) => {
         </View>
         
         <View style={styles.cartItemDetails}>
-          <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.cartItemName, { fontSize: getScaledSize(16) }]} numberOfLines={2}>{item.name}</Text>
           {/* Show MRP scratched, then Selling Price, no GST calculation */}
           {item.price ? (
-            <Text style={styles.originalPrice}>{formatCurrency(price)}</Text>
+            <Text style={[styles.originalPrice, { fontSize: getScaledSize(12) }]}>{formatCurrency(price)}</Text>
           ) : null}
-          <Text style={styles.cartItemPrice}>
+          <Text style={[styles.cartItemPrice, { fontSize: getScaledSize(14) }]}>
             {formatCurrency(discountPrice)} x {quantity} = {formatCurrency(totalPrice)}
           </Text>
           <View style={styles.quantityContainer}>
             <TouchableOpacity 
               style={styles.quantityButton} 
-              onPress={() => handleDecreaseQuantity(item.id)}
+              onPress={() => handleDecreaseQuantity(item.id, setCart)}
               disabled={quantity <= 0}
             >
               <Icon name="remove" size={18} color={COLORS.text.light} />
@@ -474,15 +184,15 @@ const CartCustomer = ({ hideHeader = false }) => {
             <TextInput
               style={styles.quantityInput}
               value={quantity.toString()}
-              onChangeText={(value) => handleQuantityChange(item.id, value)}
-              onBlur={() => handleQuantityBlur(item.id, quantity.toString())}
+              onChangeText={(value) => handleQuantityChange(item.id, value, setCart)}
+              onBlur={() => handleQuantityBlur(item.id, quantity.toString(), setCart)}
               keyboardType="numeric"
               selectTextOnFocus={true}
               maxLength={3}
             />
             <TouchableOpacity 
               style={styles.quantityButton} 
-              onPress={() => handleIncreaseQuantity(item.id)}
+              onPress={() => handleIncreaseQuantity(item.id, setCart)}
             >
               <Icon name="add" size={18} color={COLORS.text.light} />
             </TouchableOpacity>
@@ -490,7 +200,7 @@ const CartCustomer = ({ hideHeader = false }) => {
         </View>
         <TouchableOpacity
           style={styles.cartItemDeleteButton}
-          onPress={() => deleteCartItem(item.id)}
+          onPress={() => deleteCartItem(item.id, cart, setCart, setCartProducts)}
         >
           <Icon name="delete" size={20} style={styles.cartItemDeleteIcon} color={COLORS.error} />
         </TouchableOpacity>
@@ -522,7 +232,7 @@ const CartCustomer = ({ hideHeader = false }) => {
             setCart(prev => ({ ...prev, [item.id]: inCartQuantity + 1 }));
           }
           // Ensure product metadata is saved so totals and rendering work
-          upsertCartItemMeta(item);
+          upsertCartItemMeta(item, setCartProducts, AsyncStorage, console);
           // Close modal
           setShowAddMoreModal(false);
         }}
@@ -549,19 +259,21 @@ const CartCustomer = ({ hideHeader = false }) => {
         <View style={styles.productInfo}>
           <Text style={[
             styles.productName,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(14) }
           ]} numberOfLines={2}>{item.name}</Text>
           <Text style={[
             styles.productPrice,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(14) }
           ]}>{formatCurrency(item.discountPrice || item.price || 0)}</Text>
           {isInactive ? (
             <View style={styles.inactiveBadge}>
-              <Text style={styles.inactiveBadgeText}>UNAVAILABLE</Text>
+              <Text style={[styles.inactiveBadgeText, { fontSize: getScaledSize(12) }]}>UNAVAILABLE</Text>
             </View>
           ) : inCartQuantity > 0 && (
             <View style={styles.inCartBadge}>
-              <Text style={styles.inCartText}>In Cart: {inCartQuantity}</Text>
+              <Text style={[styles.inCartText, { fontSize: getScaledSize(12) }]}>In Cart: {inCartQuantity}</Text>
             </View>
           )}
         </View>
@@ -569,66 +281,18 @@ const CartCustomer = ({ hideHeader = false }) => {
     );
   };
 
-  const totalAmount = calculateTotalAmount();
+  const totalAmount = calculateTotalAmount(cart, cartProducts);
   const cartItemCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const isCartEmpty = cartItemCount === 0;
 
-  const clearCart = () => {
-    Alert.alert(
-      'Clear Cart',
-      'Are you sure you want to remove all items from your cart?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear', 
-          style: 'destructive',
-          onPress: () => {
-            setCart({});
-            AsyncStorage.removeItem('catalogueCart');
-            AsyncStorage.removeItem('cartItems');
-            setCartProducts([]);
-          }
-        }
-      ]
-    );
-  };
-
-  const deleteCartItem = (productId) => {
-    Alert.alert(
-      'Remove Item',
-      'Are you sure you want to remove this item from your cart?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            // Compute and persist updated cart synchronously
-            const currentCart = { ...cart };
-            delete currentCart[productId];
-            setCart(currentCart);
-            await AsyncStorage.setItem('catalogueCart', JSON.stringify(currentCart));
-            removeCartItemMeta(productId);
-          }
-        }
-      ]
-    );
+  const clearCartWrapper = () => {
+    clearCart(setCart, setCartProducts);
   };
 
   // Apply filters
-  function applyFilters(brand, category) {
-    let filtered = products;
-    if (brand !== 'All') {
-      filtered = filtered.filter(p => p.brand === brand);
-    }
-    if (category !== 'All') {
-      filtered = filtered.filter(p => p.category === category);
-    }
-    if (searchTerm) {
-      filtered = filtered.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    }
-    setFilteredProducts(filtered);
-  }
+  const applyFiltersWrapper = (brand, category) => {
+    applyFilters(brand, category, searchTerm, products, setFilteredProducts);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -643,7 +307,7 @@ const CartCustomer = ({ hideHeader = false }) => {
             <Icon name="arrow-back" size={24} color={COLORS.text.light} />
           </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>Your Cart</Text>
+          <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}>Your Cart</Text>
           
           <TouchableOpacity 
             style={styles.searchButton}
@@ -658,30 +322,30 @@ const CartCustomer = ({ hideHeader = false }) => {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading your cart...</Text>
+            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading your cart...</Text>
           </View>
         ) : isCartEmpty ? (
           <View style={styles.emptyCartContainer}>
             <Icon name="shopping-cart" size={80} color={COLORS.text.tertiary} />
-            <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
-            <Text style={styles.emptyCartMessage}>Add items to start shopping</Text>
+            <Text style={[styles.emptyCartTitle, { fontSize: getScaledSize(20) }]}>Your cart is empty</Text>
+            <Text style={[styles.emptyCartMessage, { fontSize: getScaledSize(16) }]}>Add items to start shopping</Text>
             <TouchableOpacity 
               style={styles.shopNowButton}
               onPress={() => setShowAddMoreModal(true)}
             >
-              <Text style={styles.shopNowButtonText}>Shop Now</Text>
+              <Text style={[styles.shopNowButtonText, { fontSize: getScaledSize(16) }]}>Shop Now</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
             <View style={styles.cartHeader}>
-              <Text style={styles.cartItemCountText}>{cartItemCount} item(s) in cart</Text>
+              <Text style={[styles.cartItemCountText, { fontSize: getScaledSize(16) }]}>{cartItemCount} item(s) in cart</Text>
               <TouchableOpacity 
                 style={styles.clearCartButton}
-                onPress={clearCart}
+                onPress={clearCartWrapper}
               >
                 <Icon name="delete" size={16} color={COLORS.error} />
-                <Text style={styles.clearCartButtonText}>Clear Cart</Text>
+                <Text style={[styles.clearCartButtonText, { fontSize: getScaledSize(14) }]}>Clear Cart</Text>
               </TouchableOpacity>
             </View>
             
@@ -695,8 +359,8 @@ const CartCustomer = ({ hideHeader = false }) => {
             
             <View style={styles.footerContainer}>
               <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total Amount (incl. GST):</Text>
-                <Text style={styles.totalAmount}>{formatCurrency(totalAmount)}</Text>
+                <Text style={[styles.totalLabel, { fontSize: getScaledSize(18) }]}>Total Amount (incl. GST):</Text>
+                <Text style={[styles.totalAmount, { fontSize: getScaledSize(20) }]}>{formatCurrency(totalAmount)}</Text>
               </View>
               
               <View style={styles.actionButtonsContainer}>
@@ -704,18 +368,18 @@ const CartCustomer = ({ hideHeader = false }) => {
                   style={styles.addMoreButton}
                   onPress={() => setShowAddMoreModal(true)}
                 >
-                  <Text style={styles.addMoreButtonText}>Add More Items</Text>
+                  <Text style={[styles.addMoreButtonText, { fontSize: getScaledSize(16) }]}>Add More Items</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
                   style={styles.checkoutButton}
-                  onPress={handlePlaceOrderClick}
+                  onPress={handlePlaceOrderClickWrapper}
                   disabled={isPlacingOrder}
                 >
                   {isPlacingOrder ? (
                     <ActivityIndicator size="small" color={COLORS.text.light} />
                   ) : (
-                    <Text style={styles.checkoutButtonText}>Place Order</Text>
+                    <Text style={[styles.checkoutButtonText, { fontSize: getScaledSize(16) }]}>Place Order</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -733,7 +397,7 @@ const CartCustomer = ({ hideHeader = false }) => {
       >
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add More Items</Text>
+            <Text style={[styles.modalTitle, { fontSize: getScaledSize(18) }]}>Add More Items</Text>
             <TouchableOpacity 
               style={styles.closeModalButton}
               onPress={() => setShowAddMoreModal(false)}
@@ -772,7 +436,7 @@ const CartCustomer = ({ hideHeader = false }) => {
                 onValueChange={(itemValue) => {
                   setSelectedBrand(itemValue);
                   // Apply brand filter
-                  applyFilters(itemValue, selectedCategory);
+                  applyFiltersWrapper(itemValue, selectedCategory);
                 }}
                 style={styles.picker}
                 dropdownIconColor={COLORS.text.primary}
@@ -789,7 +453,7 @@ const CartCustomer = ({ hideHeader = false }) => {
                 onValueChange={(itemValue) => {
                   setSelectedCategory(itemValue);
                   // Apply category filter
-                  applyFilters(selectedBrand, itemValue);
+                  applyFiltersWrapper(selectedBrand, itemValue);
                 }}
                 style={styles.picker}
                 dropdownIconColor={COLORS.text.primary}
@@ -822,7 +486,7 @@ const CartCustomer = ({ hideHeader = false }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.dueDateModal}>
             <View style={styles.dueDateModalHeader}>
-              <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+              <Text style={[styles.dueDateModalTitle, { fontSize: getScaledSize(18) }]}>Select Due Date</Text>
               <TouchableOpacity
                 onPress={() => setShowDueDateModal(false)}
                 style={styles.closeDueDateButton}
@@ -832,7 +496,7 @@ const CartCustomer = ({ hideHeader = false }) => {
             </View>
             
             <View style={styles.dueDateContent}>
-              <Text style={styles.dueDateLabel}>
+              <Text style={[styles.dueDateLabel, { fontSize: getScaledSize(16) }]}>
                 When would you like this order to be delivered?
               </Text>
               
@@ -841,13 +505,13 @@ const CartCustomer = ({ hideHeader = false }) => {
                 onPress={showDatePicker}
               >
                 <Icon name="calendar-today" size={20} color={COLORS.primary} />
-                <Text style={styles.datePickerButtonText}>
+                <Text style={[styles.datePickerButtonText, { fontSize: getScaledSize(16) }]}>
                   {moment(selectedDueDate).format('DD MMM, YYYY')}
                 </Text>
                 <Icon name="keyboard-arrow-down" size={20} color={COLORS.primary} />
               </TouchableOpacity>
               
-              <Text style={styles.dueDateNote}>
+              <Text style={[styles.dueDateNote, { fontSize: getScaledSize(14) }]}>
                 Note: This date will be used by our delivery team to schedule your order delivery.
               </Text>
             </View>
@@ -857,14 +521,14 @@ const CartCustomer = ({ hideHeader = false }) => {
                 style={styles.cancelDueDateButton}
                 onPress={() => setShowDueDateModal(false)}
               >
-                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+                <Text style={[styles.cancelDueDateButtonText, { fontSize: getScaledSize(16) }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={styles.confirmDueDateButton}
-                onPress={handleConfirmDueDate}
+                onPress={handleConfirmDueDateWrapper}
               >
-                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Order</Text>
+                <Text style={[styles.confirmDueDateButtonText, { fontSize: getScaledSize(16) }]}>Confirm & Place Order</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -897,546 +561,5 @@ const CartCustomer = ({ hideHeader = false }) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerContainer: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  backButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.light,
-  },
-  searchButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: COLORS.text.secondary,
-  },
-  emptyCartContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  emptyCartTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginTop: 20,
-  },
-  emptyCartMessage: {
-    fontSize: 16,
-    color: COLORS.text.tertiary,
-    marginTop: 8,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  shopNowButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  shopNowButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  cartItemCountText: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginBottom: 16,
-    fontWeight: '500',
-  },
-  cartList: {
-    paddingBottom: 100, // Space for footer
-  },
-  cartItemContainer: {
-    backgroundColor: COLORS.card.background,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: COLORS.card.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  cartItemImageWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  cartItemImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
-  imagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 10,
-  },
-  cartItemDetails: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  cartItemName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  cartItemPrice: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 8,
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: COLORS.text.tertiary,
-    textDecorationLine: 'line-through',
-    marginBottom: 4,
-  },
-  quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quantityButton: {
-    backgroundColor: COLORS.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-  },
-  quantityInput: {
-    backgroundColor: COLORS.background,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 8,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    minWidth: 50,
-  },
-  cartItemDeleteButton: {
-    marginLeft: 10,
-    padding: 5,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartItemDeleteIcon: {
-    margin: 0,
-  },
-  footerContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-  },
-  totalAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  addMoreButton: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 30,
-    flex: 1,
-    marginRight: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-  },
-  addMoreButtonText: {
-    color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  checkoutButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 30,
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  checkoutButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-  },
-  closeModalButton: {
-    padding: 8,
-  },
-  searchContainer: {
-    padding: 16,
-    backgroundColor: COLORS.surface,
-  },
-  searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: COLORS.text.primary,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  pickerWrapper: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  picker: {
-    flex: 1,
-    color: COLORS.text.primary,
-    fontSize: 16,
-  },
-  productList: {
-    padding: 16,
-  },
-  productCard: {
-    backgroundColor: COLORS.card.background,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    marginRight: 16,
-    width: '46.5%',
-    elevation: 2,
-    shadowColor: COLORS.card.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  productImageWrapper: {
-    width: '100%',
-    height: 120,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  productImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-  },
-  productInfo: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  productName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  inCartBadge: {
-    marginTop: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  inCartText: {
-    fontSize: 12,
-    color: COLORS.secondary,
-    fontWeight: '500',
-  },
-  cartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  clearCartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.error,
-    backgroundColor: COLORS.surface,
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-  },
-  clearCartButtonText: {
-    color: COLORS.error,
-    fontWeight: 'bold',
-    marginLeft: 6,
-    fontSize: 14,
-  },
-  // Inactive product styles
-  inactiveProductCard: {
-    opacity: 0.6,
-    backgroundColor: '#F5F5F5',
-  },
-  inactiveProductImage: {
-    opacity: 0.5,
-  },
-  inactiveProductText: {
-    color: '#999999',
-  },
-  inactiveBadge: {
-    marginTop: 8,
-    backgroundColor: '#CCCCCC',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  inactiveBadgeText: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  
-  // New styles for due date modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dueDateModal: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  dueDateModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  dueDateModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-  },
-  closeDueDateButton: {
-    padding: 5,
-  },
-  dueDateContent: {
-    padding: 20,
-  },
-  dueDateLabel: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.background,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  datePickerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    flex: 1,
-    textAlign: 'center',
-  },
-  dueDateNote: {
-    fontSize: 14,
-    color: COLORS.text.tertiary,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontStyle: 'italic',
-  },
-  dueDateModalFooter: {
-    flexDirection: 'row',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    gap: 12,
-  },
-  cancelDueDateButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  cancelDueDateButtonText: {
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  confirmDueDateButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-  },
-  confirmDueDateButtonText: {
-    color: COLORS.text.light,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-});
 
 export default CartCustomer;

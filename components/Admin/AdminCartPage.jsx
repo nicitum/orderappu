@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   Image,
   TouchableOpacity,
   FlatList,
@@ -12,59 +11,25 @@ import {
   Alert,
   Modal,
   TextInput,
-  ScrollView,
-  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { ipAddress } from '../../services/urls.js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { checkTokenAndRedirect } from '../../services/auth.js';
-import { jwtDecode } from 'jwt-decode';
-import { Picker } from '@react-native-picker/picker';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import moment from 'moment';
-
 import Toast from 'react-native-toast-message';
 import SearchProductModal_1 from './searchProductModal_1.jsx';
+import { useFontScale } from '../../App';
+import { ipAddress } from '../../services/urls';
 
-// Modern Color Palette
-const COLORS = {
-  primary: "#003366",
-  primaryLight: "#004488",
-  primaryDark: "#002244",
-  secondary: "#10B981",
-  accent: "#F59E0B",
-  success: "#059669",
-  error: "#DC2626",
-  warning: "#D97706",
-  background: "#F3F4F6",
-  surface: "#FFFFFF",
-  text: {
-    primary: "#111827",
-    secondary: "#4B5563",
-    tertiary: "#9CA3AF",
-    light: "#FFFFFF",
-  },
-  border: "#E5E7EB",
-  divider: "#F3F4F6",
-  card: {
-    background: "#FFFFFF",
-    shadow: "rgba(0, 0, 0, 0.1)",
-  },
-};
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(amount);
-};
+// Import helpers
+import { COLORS } from './cartutils/constants';
+import { formatCurrency, getOrderType, generateInitialDueDate, calculateMaxDate } from './cartutils/utils';
+import { CartManager } from './cartutils/cartHelpers';
+import { AdminCartAPI, ProductFilter } from './cartutils/apiHelpers';
+import { adminCartStyles as styles } from './cartutils/styles';
 
 const AdminCartPage = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const route = useRoute();
   const [products, setProducts] = useState([]);
@@ -104,9 +69,17 @@ const AdminCartPage = () => {
 
   // Load cart from storage on mount
   useEffect(() => {
-    loadCartFromStorage();
+    const initializeCart = async () => {
+      const { cartItems: savedCartItems, customer: savedCustomer } = await CartManager.loadCartFromStorage();
+      setCartItems(savedCartItems);
+      if (savedCustomer && !selectedCustomer) {
+        setSelectedCustomer(savedCustomer);
+      }
+    };
+    
+    initializeCart();
     fetchUserPermissions();
-    fetchClientStatus(); // Call the new function here
+    fetchClientStatus();
   }, []);
 
   // Monitor state changes for debugging
@@ -116,7 +89,7 @@ const AdminCartPage = () => {
 
   // Save cart to storage whenever it changes
   useEffect(() => {
-    saveCartToStorage();
+    CartManager.saveCartToStorage(cartItems);
   }, [cartItems]);
 
   useEffect(() => {
@@ -126,7 +99,7 @@ const AdminCartPage = () => {
     if (route.params?.products) {
       // Add all products from the order to cart
       route.params.products.forEach(product => {
-        addToCart({
+        setCartItems(prevItems => CartManager.addToCart(prevItems, {
           product_id: product.product_id,
           id: product.product_id,
           name: product.name,
@@ -135,149 +108,45 @@ const AdminCartPage = () => {
           image: product.image || null,
           category: product.category || '',
           gst_rate: product.gst_rate || 0
-        });
+        }));
       });
     }
   }, [route.params]);
 
-  const loadCartFromStorage = async () => {
-    try {
-      const savedCart = await AsyncStorage.getItem('adminCart');
-      if (savedCart) {
-        setCartItems(JSON.parse(savedCart));
-      }
-      
-      // Also load customer info if available
-      const savedCustomer = await AsyncStorage.getItem('adminCartCustomer');
-      if (savedCustomer && !selectedCustomer) {
-        setSelectedCustomer(JSON.parse(savedCustomer));
-      }
-    } catch (error) {
-      console.error('Error loading admin cart:', error);
-    }
-  };
-
-  const saveCartToStorage = async () => {
-    try {
-      await AsyncStorage.setItem('adminCart', JSON.stringify(cartItems));
-    } catch (error) {
-      console.error('Error saving admin cart:', error);
-    }
-  };
-
   const fetchUserPermissions = async () => {
-    try {
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) return;
-
-      const response = await fetch(`http://${ipAddress}:8091/userDetails`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const user = data.user;
-        
-        // Set allowProductEdit based on userDetails API response
-        setAllowProductEdit(user.allow_product_edit === 'Yes');
-      } else {
-        setAllowProductEdit(false);
-      }
-    } catch (error) {
-      console.error('Error fetching user details:', error);
-      // Default to false if API fails
-      setAllowProductEdit(false);
-    }
+    const { allowProductEdit } = await AdminCartAPI.fetchUserPermissions(navigation);
+    setAllowProductEdit(allowProductEdit);
   };
 
   const fetchClientStatus = useCallback(async () => {
-    try {
-      console.log('Fetching client status...');
-      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-
-      console.log('Response status:', response.status);
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('API Response data:', responseData);
-        
-        // Extract data from the nested structure
-        const data = responseData.data && responseData.data[0];
-        console.log('Extracted client data:', data);
-        
-        if (data) {
-          // Update due date configuration based on API response
-          const newDefaultDueOn = data.default_due_on || 1;
-          const newMaxDueOn = data.max_due_on || 30;
-          
-          console.log('Setting defaultDueOn to:', newDefaultDueOn);
-          console.log('Setting maxDueOn to:', newMaxDueOn);
-          
-          setDefaultDueOn(newDefaultDueOn);
-          setMaxDueOn(newMaxDueOn);
-          
-          // Update selected due date based on default_due_on
-          const newDefaultDate = new Date();
-          if (newDefaultDueOn > 0) {
-            newDefaultDate.setDate(newDefaultDate.getDate() + newDefaultDueOn);
-          }
-          console.log('Setting selectedDueDate to:', newDefaultDate);
-          setSelectedDueDate(newDefaultDate);
-        } else {
-          console.log('No client data found in response');
-        }
-      } else {
-        console.log('API response not ok:', response.status);
-      }
-    } catch (error) {
-      console.error('Error fetching client status:', error);
-      // Keep default values if API fails
-    }
+    const { defaultDueOn: newDefaultDueOn, maxDueOn: newMaxDueOn } = await AdminCartAPI.fetchClientStatus();
+    setDefaultDueOn(newDefaultDueOn);
+    setMaxDueOn(newMaxDueOn);
+    
+    // Update selected due date based on default_due_on
+    const newDefaultDate = generateInitialDueDate(newDefaultDueOn);
+    setSelectedDueDate(newDefaultDate);
   }, []);
 
   const addToCart = (product) => {
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.product_id === product.product_id);
-      
-      if (existingItem) {
-        // Update quantity if product already exists
-        return prevItems.map(item =>
-          item.product_id === product.product_id
-            ? { ...item, quantity: item.quantity + (product.quantity || 1) }
-            : item
-        );
-      } else {
-        // Add new product
-        return [...prevItems, { ...product, quantity: product.quantity || 1 }];
-      }
-    });
+    setCartItems(prevItems => CartManager.addToCart(prevItems, product));
   };
 
   const removeFromCart = (productId) => {
-    setCartItems(prevItems => prevItems.filter(item => item.product_id !== productId));
+    setCartItems(prevItems => CartManager.removeFromCart(prevItems, productId));
   };
 
   const updateQuantity = (productId, quantity) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.product_id === productId
-          ? { ...item, quantity }
-          : item
-      )
-    );
+    setCartItems(prevItems => CartManager.updateQuantity(prevItems, productId, quantity));
+  };
+
+  const clearCart = () => {
+    setCartItems(CartManager.clearCart());
+    setSelectedCustomer(null);
+  };
+
+  const getCartTotal = () => {
+    return CartManager.getCartTotal(cartItems);
   };
 
   const saveEditCartItem = () => {
@@ -286,39 +155,24 @@ const AdminCartPage = () => {
     const newPrice = parseFloat(editCartPrice);
     const newQty = parseInt(editCartQty);
     
-    // Only validate price if allowProductEdit is true
-    if (allowProductEdit) {
-      // Get the full product data from products array to get correct price range
-      const fullProductData = products.find(p => p.id === editCartProduct.product_id || p.id === editCartProduct.id);
-      const minPrice = fullProductData?.min_selling_price || editCartProduct.min_selling_price || 0;
-      const maxPrice = fullProductData?.discountPrice || editCartProduct.discountPrice || editCartProduct.price || 0;
-      
-      if (isNaN(newPrice) || newPrice <= 0) {
-        setEditCartError('Please enter a valid price');
-        return;
-      }
-      
-      if (newPrice < minPrice || newPrice > maxPrice) {
-        setEditCartError(`Price must be between ₹${minPrice} and ₹${maxPrice}`);
-        return;
-      }
-    }
+    // Validate using helper
+    const errors = CartManager.validateEditCartItem(
+      editCartProduct, 
+      newPrice, 
+      newQty, 
+      allowProductEdit, 
+      products
+    );
     
-    if (isNaN(newQty) || newQty <= 0) {
-      setEditCartError('Please enter a valid quantity');
+    if (errors.length > 0) {
+      setEditCartError(errors[0]);
       return;
     }
     
     // If price editing is disabled, keep the original price
     const finalPrice = allowProductEdit ? newPrice : editCartProduct.price;
     
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.product_id === editCartProduct.product_id
-          ? { ...item, price: finalPrice, quantity: newQty }
-          : item
-      )
-    );
+    setCartItems(prevItems => CartManager.updateCartItem(prevItems, editCartProduct.product_id, finalPrice, newQty));
     
     setEditCartModalVisible(false);
     setEditCartProduct(null);
@@ -331,19 +185,6 @@ const AdminCartPage = () => {
       text1: 'Item Updated',
       text2: 'Cart item has been updated successfully'
     });
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-    setSelectedCustomer(null);
-  };
-
-  const getCartTotal = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  const getCartItemCount = () => {
-    return cartItems.reduce((count, item) => count + item.quantity, 0);
   };
 
   const addOrderToCart = (orderProducts) => {
@@ -363,45 +204,17 @@ const AdminCartPage = () => {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      // Fetch products
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) return;
-
-      const response = await fetch(`http://${ipAddress}:8091/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Filter by enable_product - handle new backend values
-        // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
-        const enabledProducts = data.filter(p => p.enable_product !== "Mask");
-        
-        setProducts(enabledProducts);
-        setFilteredProducts(enabledProducts);
-        
-        // Extract unique brands and categories from enabled products only
-        const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
-        const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
-        setBrands(uniqueBrands);
-        setCategories(uniqueCategories);
-      }
+      const { products: loadedProducts, brands: loadedBrands, categories: loadedCategories } = await AdminCartAPI.loadProducts(navigation);
+      setProducts(loadedProducts);
+      setFilteredProducts(loadedProducts);
+      setBrands(loadedBrands);
+      setCategories(loadedCategories);
     } catch (error) {
       console.error('Error loading products:', error);
       Alert.alert('Error', 'Failed to load products');
     } finally {
       setLoading(false);
     }
-  };
-
-  const getOrderType = () => {
-    const now = new Date();
-    const hour = now.getHours();
-    return hour < 12 ? 'AM' : 'PM';
   };
 
   const showDatePicker = () => {
@@ -419,24 +232,17 @@ const AdminCartPage = () => {
 
   const handlePlaceOrderClick = () => {
     // Reset due date based on API default_due_on value
-    const newDefaultDate = new Date();
-    if (defaultDueOn > 0) {
-      newDefaultDate.setDate(newDefaultDate.getDate() + defaultDueOn);
-    }
+    const newDefaultDate = generateInitialDueDate(defaultDueOn);
     setSelectedDueDate(newDefaultDate);
-    // Show due date modal first
     setShowDueDateModal(true);
   };
 
   const handleConfirmDueDate = () => {
-    // Close modal and proceed with order placement
     setShowDueDateModal(false);
     placeOrder();
   };
 
   const placeOrder = async () => {
-   
-  
     if (cartItems.length === 0) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Please add products to the order' });
       return;
@@ -445,36 +251,10 @@ const AdminCartPage = () => {
       Toast.show({ type: 'error', text1: 'Error', text2: 'No customer selected' });
       return;
     }
+    
     setIsPlacingOrder(true);
     try {
-      const token = await AsyncStorage.getItem('userAuthToken');
-      if (!token) throw new Error('No auth token found');
-      // Prepare products for API
-      const productsPayload = cartItems.map((item) => ({
-        product_id: item.product_id || item.id,
-        quantity: item.quantity || 1,
-        price: item.price,
-        name: item.name,
-        category: item.category || '',
-        gst_rate: item.gst_rate || 0
-      }));
-      // Call /on-behalf-2 API for fresh orders
-      const res = await fetch(`http://${ipAddress}:8091/on-behalf-2`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          customer_id: selectedCustomer.cust_id,
-          order_type: getOrderType(),
-          products: productsPayload,
-          entered_by: jwtDecode(token).username,
-          due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to place custom order.');
+      await AdminCartAPI.placeOrder(cartItems, selectedCustomer, selectedDueDate, navigation);
       Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Admin custom order placed successfully!' });
       clearCart();
       navigation.goBack();
@@ -486,24 +266,7 @@ const AdminCartPage = () => {
   };
 
   const filterProducts = (text, brand, category) => {
-    let filtered = products;
-    
-    if (text) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(text.toLowerCase()) ||
-        product.brand?.toLowerCase().includes(text.toLowerCase()) ||
-        product.category?.toLowerCase().includes(text.toLowerCase())
-      );
-    }
-    
-    if (brand && brand !== 'All') {
-      filtered = filtered.filter(product => product.brand === brand);
-    }
-    
-    if (category && category !== 'All') {
-      filtered = filtered.filter(product => product.category === category);
-    }
-    
+    const filtered = ProductFilter.filterProducts(products, text, brand, category);
     setFilteredProducts(filtered);
   };
 
@@ -532,9 +295,9 @@ const AdminCartPage = () => {
           </View>
           
           <View style={styles.cartItemDetails}>
-            <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
-            <Text style={styles.cartItemPrice}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
-            {item.size && <Text style={styles.cartItemVolume}>{item.size}</Text>}
+            <Text style={[styles.cartItemName, { fontSize: getScaledSize(16) }]} numberOfLines={2}>{item.name}</Text>
+            <Text style={[styles.cartItemPrice, { fontSize: getScaledSize(14) }]}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
+            {item.size && <Text style={[styles.cartItemVolume, { fontSize: getScaledSize(12) }]}>{item.size}</Text>}
             <TouchableOpacity 
               style={styles.editButton}
               onPress={() => {
@@ -551,7 +314,7 @@ const AdminCartPage = () => {
               }}
             >
               <Icon name="edit" size={16} color={COLORS.primary} />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Text style={[styles.editButtonText, { fontSize: getScaledSize(12) }]}>Edit</Text>
             </TouchableOpacity>
           </View>
           
@@ -563,7 +326,7 @@ const AdminCartPage = () => {
               >
                 <Icon name="remove" size={20} color="#FFF" />
               </TouchableOpacity>
-              <Text style={styles.quantityText}>{item.quantity || 1}</Text>
+              <Text style={[styles.quantityText, { fontSize: getScaledSize(14) }]}>{item.quantity || 1}</Text>
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={() => updateQuantity(item.product_id, (item.quantity || 1) + 1)}
@@ -641,12 +404,12 @@ const AdminCartPage = () => {
           {isInactive ? (
             <View style={styles.inactiveIndicator}>
               <Icon name="block" size={16} color="#999999" />
-              <Text style={styles.inactiveText}>UNAVAILABLE</Text>
+              <Text style={[styles.inactiveText, { fontSize: getScaledSize(10) }]}>UNAVAILABLE</Text>
             </View>
           ) : isInCart && (
             <View style={styles.inCartIndicator}>
               <Icon name="check-circle" size={16} color={COLORS.success} />
-              <Text style={styles.inCartText}>In Cart</Text>
+              <Text style={[styles.inCartText, { fontSize: getScaledSize(10) }]}>In Cart</Text>
             </View>
           )}
         </View>
@@ -710,7 +473,7 @@ const AdminCartPage = () => {
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading products...</Text>
+          <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading products...</Text>
         </View>
       </SafeAreaView>
     );
@@ -728,7 +491,7 @@ const AdminCartPage = () => {
         >
           <Icon name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Admin Cart</Text>
+        <Text style={[styles.headerTitle, { fontSize: getScaledSize(18) }]}>Admin Cart</Text>
         <TouchableOpacity
           style={styles.clearButton}
           onPress={clearCartHandler}
@@ -740,9 +503,9 @@ const AdminCartPage = () => {
       {/* Customer Info */}
       {selectedCustomer && (
         <View style={styles.customerInfo}>
-          <Text style={styles.customerLabel}>Order for:</Text>
-          <Text style={styles.customerName}>{selectedCustomer.username || selectedCustomer.name}</Text>
-          <Text style={styles.customerId}>ID: {selectedCustomer.cust_id}</Text>
+          <Text style={[styles.customerLabel, { fontSize: getScaledSize(14) }]}>Order for:</Text>
+          <Text style={[styles.customerName, { fontSize: getScaledSize(16) }]}>{selectedCustomer.username || selectedCustomer.name}</Text>
+          <Text style={[styles.customerId, { fontSize: getScaledSize(12) }]}>ID: {selectedCustomer.cust_id}</Text>
         </View>
       )}
 
@@ -750,11 +513,11 @@ const AdminCartPage = () => {
       {cartItems.length > 0 ? (
         <View style={styles.cartSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Cart Items ({cartItems.length})</Text>
+            <Text style={[styles.sectionTitle, { fontSize: getScaledSize(16) }]}>Cart Items ({cartItems.length})</Text>
             {/* Grand total styled like CartCustomer */}
             <View style={styles.totalContainer}>
-              <Text style={styles.totalLabel}>Total Amount:</Text>
-              <Text style={styles.totalAmount}>{formatCurrency(getCartTotal())}</Text>
+              <Text style={[styles.totalLabel, { fontSize: getScaledSize(14) }]}>Total Amount:</Text>
+              <Text style={[styles.totalAmount, { fontSize: getScaledSize(18) }]}>{formatCurrency(getCartTotal())}</Text>
             </View>
           </View>
           
@@ -776,7 +539,7 @@ const AdminCartPage = () => {
             ) : (
               <>
                 <Icon name="shopping-cart-checkout" size={20} color="#FFF" />
-                <Text style={styles.placeOrderText}>Place Order</Text>
+                <Text style={[styles.placeOrderText, { fontSize: getScaledSize(16) }]}>Place Order</Text>
               </>
             )}
           </TouchableOpacity>
@@ -784,15 +547,15 @@ const AdminCartPage = () => {
       ) : (
         <View style={styles.emptyCartContainer}>
           <Icon name="shopping-cart-outlined" size={64} color={COLORS.text.tertiary} />
-          <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
-          <Text style={styles.emptyCartSubtitle}>Add products to get started</Text>
+          <Text style={[styles.emptyCartTitle, { fontSize: getScaledSize(20) }]}>Your cart is empty</Text>
+          <Text style={[styles.emptyCartSubtitle, { fontSize: getScaledSize(14) }]}>Add products to get started</Text>
           
           <TouchableOpacity
             style={styles.addProductsButton}
             onPress={() => setShowSearchModal(true)}
           >
             <Icon name="add" size={20} color="#FFF" />
-            <Text style={styles.addProductsText}>Add Products</Text>
+            <Text style={[styles.addProductsText, { fontSize: getScaledSize(14) }]}>Add Products</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -834,7 +597,7 @@ const AdminCartPage = () => {
         <View style={styles.modalBackground}>
           <View style={styles.editModalContainer}>
             <View style={styles.editModalHeader}>
-              <Text style={styles.editModalTitle}>Edit Item</Text>
+              <Text style={[styles.editModalTitle, { fontSize: getScaledSize(18) }]}>Edit Item</Text>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setEditCartModalVisible(false)}
@@ -845,11 +608,11 @@ const AdminCartPage = () => {
             
             {editCartProduct && (
               <View style={styles.editModalContent}>
-                <Text style={styles.editItemName}>{editCartProduct.name}</Text>
+                <Text style={[styles.editItemName, { fontSize: getScaledSize(16) }]}>{editCartProduct.name}</Text>
                 
                 <View style={styles.editInputRow}>
                   <View style={styles.editInputContainer}>
-                    <Text style={styles.editInputLabel}>Price (₹)</Text>
+                    <Text style={[styles.editInputLabel, { fontSize: getScaledSize(12) }]}>Price (₹)</Text>
                     <TextInput
                       style={[styles.editTextInput, !allowProductEdit && styles.disabledInput]}
                       value={editCartPrice}
@@ -866,20 +629,20 @@ const AdminCartPage = () => {
                       const maxPrice = fullProductData?.discountPrice || editCartProduct.discountPrice || editCartProduct.price || 0;
                       
                       return (
-                        <Text style={styles.priceRangeText}>
+                        <Text style={[styles.priceRangeText, { fontSize: getScaledSize(11) }]}>
                           Range: ₹{minPrice} - ₹{maxPrice}
                         </Text>
                       );
                     })()}
                     {!allowProductEdit && (
-                      <Text style={styles.disabledPriceText}>
+                      <Text style={[styles.disabledPriceText, { fontSize: getScaledSize(11) }]}>
                         Price editing disabled
                       </Text>
                     )}
                   </View>
                   
                   <View style={styles.editInputContainer}>
-                    <Text style={styles.editInputLabel}>Quantity</Text>
+                    <Text style={[styles.editInputLabel, { fontSize: getScaledSize(12) }]}>Quantity</Text>
                     <TextInput
                       style={styles.editTextInput}
                       value={editCartQty}
@@ -892,7 +655,7 @@ const AdminCartPage = () => {
                 </View>
                 
                 {editCartError && (
-                  <Text style={styles.errorText}>{editCartError}</Text>
+                  <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{editCartError}</Text>
                 )}
                 
                 <View style={styles.editModalButtons}>
@@ -900,13 +663,13 @@ const AdminCartPage = () => {
                     style={styles.editCancelButton}
                     onPress={() => setEditCartModalVisible(false)}
                   >
-                    <Text style={styles.editCancelText}>Cancel</Text>
+                    <Text style={[styles.editCancelText, { fontSize: getScaledSize(14) }]}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.editSaveButton}
                     onPress={saveEditCartItem}
                   >
-                    <Text style={styles.editSaveText}>Save</Text>
+                    <Text style={[styles.editSaveText, { fontSize: getScaledSize(14) }]}>Save</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -925,7 +688,7 @@ const AdminCartPage = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.dueDateModal}>
             <View style={styles.dueDateModalHeader}>
-              <Text style={styles.dueDateModalTitle}>Select Due Date</Text>
+              <Text style={[styles.dueDateModalTitle, { fontSize: getScaledSize(18) }]}>Select Due Date</Text>
               <TouchableOpacity
                 onPress={() => setShowDueDateModal(false)}
                 style={styles.closeDueDateButton}
@@ -935,7 +698,7 @@ const AdminCartPage = () => {
             </View>
             
             <View style={styles.dueDateContent}>
-              <Text style={styles.dueDateLabel}>
+              <Text style={[styles.dueDateLabel, { fontSize: getScaledSize(14) }]}>
                 When should this order be delivered to {selectedCustomer?.username || selectedCustomer?.name}?
               </Text>
               
@@ -944,13 +707,13 @@ const AdminCartPage = () => {
                 onPress={showDatePicker}
               >
                 <Icon name="calendar-today" size={20} color={COLORS.primary} />
-                <Text style={styles.datePickerButtonText}>
+                <Text style={[styles.datePickerButtonText, { fontSize: getScaledSize(16) }]}>
                   {moment(selectedDueDate).format('DD MMM, YYYY')}
                 </Text>
                 <Icon name="keyboard-arrow-down" size={20} color={COLORS.primary} />
               </TouchableOpacity>
               
-              <Text style={styles.dueDateNote}>
+              <Text style={[styles.dueDateNote, { fontSize: getScaledSize(12) }]}>
                 Note: This date will be used by our delivery team to schedule the order delivery.
               </Text>
             </View>
@@ -960,14 +723,14 @@ const AdminCartPage = () => {
                 style={styles.cancelDueDateButton}
                 onPress={() => setShowDueDateModal(false)}
               >
-                <Text style={styles.cancelDueDateButtonText}>Cancel</Text>
+                <Text style={[styles.cancelDueDateButtonText, { fontSize: getScaledSize(14) }]}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={styles.confirmDueDateButton}
                 onPress={handleConfirmDueDate}
               >
-                <Text style={styles.confirmDueDateButtonText}>Confirm & Place Order</Text>
+                <Text style={[styles.confirmDueDateButtonText, { fontSize: getScaledSize(14) }]}>Confirm & Place Order</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1000,634 +763,5 @@ const AdminCartPage = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: COLORS.text.secondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  clearButton: {
-    padding: 8,
-  },
-  customerInfo: {
-    backgroundColor: COLORS.surface,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  customerLabel: {
-    fontSize: 12,
-    color: COLORS.text.tertiary,
-    marginBottom: 4,
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: 2,
-  },
-  customerId: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-  },
-  cartSection: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  totalAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  cartList: {
-    flex: 1,
-  },
-  cartItemCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  cartItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cartItemImageContainer: {
-    width: 60,
-    height: 60,
-    marginRight: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: COLORS.divider,
-  },
-  cartItemImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cartItemDetails: {
-    flex: 1,
-  },
-  cartItemName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  cartItemPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 2,
-  },
-  cartItemVolume: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-  },
-  cartItemActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.divider,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  quantityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    paddingHorizontal: 12,
-    minWidth: 30,
-    textAlign: 'center',
-  },
-  removeButton: {
-    padding: 8,
-  },
-  placeOrderButton: {
-    backgroundColor: COLORS.success,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    marginBottom: 12,
-    alignSelf: 'center',
-    minWidth: 140,
-  },
-  placeOrderButtonDisabled: {
-    backgroundColor: COLORS.text.tertiary,
-  },
-  placeOrderText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  emptyCartContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyCartTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyCartSubtitle: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  addProductsButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  addProductsText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-
-  floatingAddButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalCloseButton: {
-    padding: 8,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  modalSpacer: {
-    width: 40,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text.primary,
-    paddingVertical: 12,
-  },
-  filtersContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  filterPicker: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  picker: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  productsList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  productCard: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 12,
-    margin: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  productCardInCart: {
-    borderColor: COLORS.success,
-    backgroundColor: COLORS.success + '10',
-  },
-  productImageContainer: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: COLORS.divider,
-    marginBottom: 8,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  noImageContainer: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.divider,
-  },
-  productDetails: {
-    flex: 1,
-  },
-  productName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 2,
-  },
-  productVolume: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-  },
-  inCartIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  inCartText: {
-    fontSize: 12,
-    color: COLORS.success,
-    marginLeft: 4,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: COLORS.primary + '10',
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  editButtonText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalContainer: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    width: '85%',
-    maxWidth: 400,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  editModalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  editModalContent: {
-    padding: 16,
-  },
-  editItemName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  editInputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  editInputContainer: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  editInputLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.text.secondary,
-    marginBottom: 4,
-  },
-  editTextInput: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: COLORS.text.primary,
-  },
-  priceRangeText: {
-    fontSize: 11,
-    color: COLORS.text.tertiary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  disabledInput: {
-    backgroundColor: COLORS.divider,
-    color: COLORS.text.tertiary,
-  },
-  disabledPriceText: {
-    fontSize: 11,
-    color: COLORS.error,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 12,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  editModalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  editCancelButton: {
-    flex: 1,
-    backgroundColor: COLORS.text.tertiary,
-    borderRadius: 6,
-    paddingVertical: 10,
-    marginRight: 6,
-    alignItems: 'center',
-  },
-  editCancelText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  editSaveButton: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-    borderRadius: 6,
-    paddingVertical: 10,
-    marginLeft: 6,
-    alignItems: 'center',
-  },
-  editSaveText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-  },
-  // Inactive product styles
-  inactiveProductCard: {
-    opacity: 0.6,
-    backgroundColor: '#F5F5F5',
-  },
-  inactiveProductImage: {
-    opacity: 0.5,
-  },
-  inactiveProductText: {
-    color: '#999999',
-  },
-  inactiveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  inactiveText: {
-    fontSize: 12,
-    color: '#999999',
-    marginLeft: 4,
-  },
-  
-  // New styles for due date modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dueDateModal: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  dueDateModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  dueDateModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-  },
-  closeDueDateButton: {
-    padding: 5,
-  },
-  dueDateContent: {
-    padding: 20,
-  },
-  dueDateLabel: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginBottom: 20,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.background,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  datePickerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    flex: 1,
-    textAlign: 'center',
-  },
-  dueDateNote: {
-    fontSize: 14,
-    color: COLORS.text.tertiary,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontStyle: 'italic',
-  },
-  dueDateModalFooter: {
-    flexDirection: 'row',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    gap: 12,
-  },
-  cancelDueDateButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  cancelDueDateButtonText: {
-    color: COLORS.text.secondary,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  confirmDueDateButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-  },
-  confirmDueDateButtonText: {
-    color: COLORS.text.light,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-});
 
 export default AdminCartPage; 

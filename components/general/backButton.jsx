@@ -1,16 +1,20 @@
 import React from "react";
 import { TouchableOpacity, Text, StyleSheet } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
+import { useFontScale } from '../../App';
 
-const BackButton = ({ navigation }) => (
-  <TouchableOpacity
-    style={styles.headerText}
-    onPress={() => navigation.goBack()}
-  >
-    <Icon name="arrow-back" size={24} color="#003366" />
-    <Text style={styles.backButtonText}>Back</Text>
-  </TouchableOpacity>
-);
+const BackButton = ({ navigation }) => {
+  const { getScaledSize } = useFontScale();
+  return (
+    <TouchableOpacity
+      style={styles.headerText}
+      onPress={() => navigation.goBack()}
+    >
+      <Icon name="arrow-back" size={24} color="#003366" />
+      <Text style={[styles.backButtonText, { fontSize: getScaledSize(18) }]}>Back</Text>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   headerText: {
@@ -22,7 +26,6 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#003366",
-    fontSize: 18,
     fontWeight: "600",
     marginLeft: 8,
   },

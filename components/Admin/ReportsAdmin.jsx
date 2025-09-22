@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../services/urls';
+import { useFontScale } from '../../App';
 
 const COLORS = {
   primary: "#003366",
@@ -33,6 +34,7 @@ const COLORS = {
 };
 
 const ReportsAdmin = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const [allowOrderSummary, setAllowOrderSummary] = useState(false);
   const [allowOrderStatus, setAllowOrderStatus] = useState(false);
@@ -102,8 +104,8 @@ const ReportsAdmin = () => {
           {!allowOrderSummary && !allowOrderStatus ? (
             <View style={styles.noOptionsContainer}>
               <MaterialIcons name="report-problem" size={60} color={COLORS.text.secondary} />
-              <Text style={styles.noOptionsTitle}>No Reporting Options Available</Text>
-              <Text style={styles.noOptionsSubtitle}>Please contact your Owner to get access to reporting features.</Text>
+              <Text style={[styles.noOptionsTitle, { fontSize: getScaledSize(18) }]}>No Reporting Options Available</Text>
+              <Text style={[styles.noOptionsSubtitle, { fontSize: getScaledSize(14) }]}>Please contact your Owner to get access to reporting features.</Text>
             </View>
           ) : (
             <>
@@ -115,10 +117,10 @@ const ReportsAdmin = () => {
                   <MaterialIcons name="history" size={24} color="#F59E0B" />
                 </View>  
               </View>
-              <Text style={styles.cardTitle}>Order Summary</Text>
-              <Text style={styles.cardSubtitle}>View all order history and reports</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order Summary</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View all order history and reports</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>View history</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View history</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -132,10 +134,10 @@ const ReportsAdmin = () => {
                   <MaterialIcons name="assignment" size={24} color="#0288D1" />
                 </View>
               </View>
-              <Text style={styles.cardTitle}>Order Status</Text>
-              <Text style={styles.cardSubtitle}>Track order status and delivery information</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order Status</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Track order status and delivery information</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>View status</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View status</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -163,13 +165,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text.light,
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
   },
@@ -208,13 +208,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12,
     color: COLORS.text.secondary,
     lineHeight: 16,
     marginBottom: 10,
@@ -228,7 +226,6 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
@@ -239,7 +236,6 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   noOptionsTitle: {
-    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginTop: 20,
@@ -247,7 +243,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   noOptionsSubtitle: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     textAlign: 'center',
     lineHeight: 20,

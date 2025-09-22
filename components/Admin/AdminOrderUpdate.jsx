@@ -14,7 +14,6 @@ import {
   Platform,
   Modal,
   Image,
-
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
@@ -24,58 +23,34 @@ import { jwtDecode } from 'jwt-decode';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import SearchProductModal_1 from './searchProductModal_1';
 import moment from 'moment';
-import { checkTokenAndRedirect } from '../../services/auth';
-import { ipAddress } from '../../services/urls';
-import axios from 'axios';
+import { useFontScale } from '../../App';
 
-// Clean Color Palette
-const COLORS = {
-  primary: "#003366",
-  primaryLight: "#004488",
-  primaryDark: "#002244",
-  secondary: "#10B981",
-  accent: "#F59E0B",
-  success: "#059669",
-  error: "#DC2626",
-  warning: "#D97706",
-  background: "#F3F4F6",
-  surface: "#FFFFFF",
-  text: {
-    primary: "#111827",
-    secondary: "#4B5563",
-    tertiary: "#9CA3AF",
-    light: "#FFFFFF",
-  },
-  border: "#E5E7EB",
-  divider: "#F3F4F6",
-  card: {
-    background: "#FFFFFF",
-    shadow: "rgba(0, 0, 0, 0.1)",
-  },
-};
-
-// Format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(amount);
-};
-
-// Format date
-const formatDate = (epochTime) => {
-  if (!epochTime) return "N/A";
-  const date = new Date(epochTime * 1000);
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-};
+// Import utilities from the new oupdateutils folder
+import { 
+  COLORS, 
+  formatCurrency, 
+  formatDate, 
+  styles,
+  fetchUserPermissions,
+  fetchAdminOrders,
+  fetchOrderProducts,
+  updateOrder,
+  deleteProductItem,
+  deleteOrder,
+  addProductToOrder,
+  fetchAllProductsForImages,
+  fetchCustomerName,
+  getApprovalStatusColor,
+  getApprovalStatusText,
+  calculateTotalAmount,
+  isOrderEditable,
+  filterOrders,
+  OrderItem,
+  ProductItem
+} from './oupdateutils';
 
 const AdminOrderUpdate = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const [orders, setOrders] = useState([]);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
@@ -109,9 +84,9 @@ const AdminOrderUpdate = () => {
   const [editError, setEditError] = useState(null);
 
   useEffect(() => {
-    fetchAdminOrders();
-    fetchUserPermissions();
-    fetchAllProductsForImages();
+    fetchAdminOrdersData();
+    fetchUserPermissionsData();
+    fetchAllProductsForImagesData();
   }, []);
 
   // Fetch customer names when orders change
@@ -149,27 +124,11 @@ const AdminOrderUpdate = () => {
     }
   }, [selectedOrderId]);
 
-  const fetchUserPermissions = async () => {
+  const fetchUserPermissionsData = async () => {
     try {
-      const token = await checkTokenAndRedirect(navigation);
-      if (!token) return;
-
-      const response = await fetch(`http://${ipAddress}:8091/userDetails`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const user = data.user;
-        setAllowProductEdit(user.allow_product_edit === 'Yes');
-        setAllowCancelOrder(user.allow_cancel_order === 'Yes');
-      } else {
-        setAllowProductEdit(false);
-        setAllowCancelOrder(false);
-      }
+      const permissions = await fetchUserPermissions(navigation);
+      setAllowProductEdit(permissions.allowProductEdit);
+      setAllowCancelOrder(permissions.allowCancelOrder);
     } catch (error) {
       console.error('Error fetching user details:', error);
       setAllowProductEdit(false);
@@ -177,38 +136,12 @@ const AdminOrderUpdate = () => {
     }
   };
 
-  const fetchAdminOrders = async () => {
+  const fetchAdminOrdersData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      if (!token) throw new Error("No authentication token found");
-
-      const decodedToken = jwtDecode(token);
-      const adminId = decodedToken.id1;
-
-      const todayFormatted = moment().format("YYYY-MM-DD");
-      const url = `http://${ipAddress}:8091/get-admin-orders/${adminId}?date=${todayFormatted}`;
-
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      };
-
-      const ordersResponse = await fetch(url, { headers });
-
-      if (!ordersResponse.ok) {
-        const errorText = await ordersResponse.text();
-        throw new Error(`Failed to fetch admin orders: ${ordersResponse.status}, ${errorText}`);
-      }
-
-      const ordersData = await ordersResponse.json();
-      if (!ordersData.success) {
-        throw new Error(ordersData.message || "Failed to fetch admin orders");
-      }
-
-      setOrders(ordersData.orders);
+      const ordersData = await fetchAdminOrders();
+      setOrders(ordersData);
     } catch (fetchOrdersError) {
       const errorMessage = fetchOrdersError.message || "Failed to fetch admin orders.";
       setError(errorMessage);
@@ -222,35 +155,11 @@ const AdminOrderUpdate = () => {
     }
   };
 
-  const fetchOrderProducts = async (orderIdToFetch) => {
+  const fetchOrderProductsData = async (orderIdToFetch) => {
     setLoading(true);
     setError(null);
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const url = `http://${ipAddress}:8091/order-products?orderId=${orderIdToFetch}`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-
-      const productsResponse = await fetch(url, { headers });
-
-      if (!productsResponse.ok) {
-        const errorText = await productsResponse.text();
-        if (productsResponse.status !== 404) {
-          throw new Error(`Failed to fetch order products. Status: ${productsResponse.status}, Text: ${errorText}`);
-        } else {
-          setProducts([]);
-          setSelectedOrderId(orderIdToFetch);
-          const selectedOrder = orders.find(order => order.id === orderIdToFetch);
-          if (selectedOrder) {
-            setSelectedOrderCustomerId(selectedOrder.customer_id);
-          }
-          return;
-        }
-      }
-
-      const productsData = await productsResponse.json();
+      const productsData = await fetchOrderProducts(orderIdToFetch);
       setProducts(productsData);
       setSelectedOrderId(orderIdToFetch);
       
@@ -258,7 +167,6 @@ const AdminOrderUpdate = () => {
       if (selectedOrder) {
         setSelectedOrderCustomerId(selectedOrder.customer_id);
       }
-
     } catch (error) {
       setError(error.message || "Failed to fetch order products.");
       Toast.show({ 
@@ -351,46 +259,22 @@ const AdminOrderUpdate = () => {
       const decodedToken = jwtDecode(token);
       const alteredBy = decodedToken.username;
 
-      const productsToUpdate = products.map(p => ({
-        order_id: selectedOrderId,
-        product_id: p.product_id,
-        name: p.name,
-        category: p.category,
-        price: p.price,
-        quantity: p.quantity,
-        gst_rate: p.gst_rate,
-      }));
+      const response = await updateOrder(selectedOrderId, products, alteredBy);
 
-      const totalAmount = productsToUpdate.reduce((sum, p) => sum + p.price * p.quantity, 0);
-
-      const response = await axios.post(`http://${ipAddress}:8091/order_update`, {
-        orderId: selectedOrderId,
-        products: productsToUpdate,
-        total_amount: totalAmount,
-        totalAmount: totalAmount,
-        altered_by: alteredBy,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
+      Toast.show({
+        type: 'success',
+        text1: 'Order Updated Successfully',
+        text2: `Order #${selectedOrderId} has been updated.`,
       });
-
-      if (response.data.success) {
-        Toast.show({
-          type: 'success',
-          text1: 'Order Updated Successfully',
-          text2: `Order #${selectedOrderId} has been updated.`,
-        });
-        // Optionally, refresh data
-        fetchOrderProducts(selectedOrderId);
-        fetchAdminOrders(); // To update total amount in the list
-      } else {
-        throw new Error(response.data.message || 'Failed to update order.');
-      }
+      // Optionally, refresh data
+      fetchOrderProductsData(selectedOrderId);
+      fetchAdminOrdersData(); // To update total amount in the list
     } catch (error) {
       console.error('Error updating order:', error);
       Toast.show({
         type: 'error',
         text1: 'Update Failed',
-        text2: error.response?.data?.message || error.message || 'An unknown error occurred.',
+        text2: error.message || 'An unknown error occurred.',
       });
     } finally {
       setLoading(false);
@@ -413,25 +297,7 @@ const AdminOrderUpdate = () => {
     setError(null);
 
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const orderProductIdToDelete = productToDelete.product_id;
-
-      const url = `http://${ipAddress}:8091/delete_order_product/${orderProductIdToDelete}`;
-      const headers = {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-      const deleteResponse = await fetch(url, {
-        method: 'DELETE',
-        headers: headers,
-      });
-
-      if (!deleteResponse.ok) {
-        const errorText = await deleteResponse.text();
-        throw new Error(`Failed to delete order product. Status: ${deleteResponse.status}, Text: ${errorText}`);
-      }
-
-      const deleteData = await deleteResponse.json();
+      const deleteData = await deleteProductItem(productToDelete);
 
       // Do NOT cancel the order if last product is deleted. Just update products state.
       const updatedProducts = products.filter((_, index) => index !== indexToDelete);
@@ -456,38 +322,17 @@ const AdminOrderUpdate = () => {
     }
   };
 
-
-
   const handleDeleteOrder = async (orderIdToDelete) => {
     setOrderDeleteLoading(true);
     setOrderDeleteLoadingId(orderIdToDelete);
     setError(null);
 
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-
-      const deleteOrderResponse = await fetch(
-        `http://${ipAddress}:8091/cancel_order/${orderIdToDelete}`,
-        { method: "POST", headers }
-      );
-
-      if (!deleteOrderResponse.ok) {
-        const errorText = await deleteOrderResponse.text();
-        throw new Error(`Failed to delete order. Status: ${deleteOrderResponse.status}, Text: ${errorText}`);
-      }
-
-      const deleteOrderData = await deleteOrderResponse.json();
-      if (!deleteOrderData.success) {
-        throw new Error(deleteOrderData.message || "Failed to cancel the order.");
-      }
-
+      const deleteOrderData = await deleteOrder(orderIdToDelete);
+      
       setSelectedOrderId(null);
       setProducts([]);
-      await fetchAdminOrders();
+      await fetchAdminOrdersData();
 
       Toast.show({
         type: "success",
@@ -545,54 +390,15 @@ const AdminOrderUpdate = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const orderToCheck = orders.find(order => order.id === selectedOrderId);
-      if (!orderToCheck) {
-        Toast.show({ 
-          type: 'error', 
-          text1: 'Order Not Found', 
-          text2: "The selected order no longer exists. Please select or create a new order." 
-        });
-        setSelectedOrderId(null);
-        setProducts([]);
-        await fetchAdminOrders();
-        return;
-      }
-
-      // Use price and quantity from modal/productToAdd
-      const payload = {
-        orderId: selectedOrderId,
-        productId: productToAdd.id,
-        quantity: productToAdd.quantity ?? 1,
-        price: productToAdd.price,
-        name: productToAdd.name,
-        category: productToAdd.category,
-        gst_rate: productToAdd.gst_rate !== undefined ? productToAdd.gst_rate : 0
-      };
-
-      const response = await fetch(`http://${ipAddress}:8091/add-product-to-order`, {
-        method: 'POST',
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      const addProductData = await addProductToOrder(selectedOrderId, productToAdd, orders);
+      
+      Toast.show({ 
+        type: 'success', 
+        text1: 'Product Added', 
+        text2: `${productToAdd.name} added with price ₹${productToAdd.price}.` 
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to add product: ${response.status}, ${errorText}`);
-      }
-
-      const addProductData = await response.json();
-      if (addProductData.success) {
-        Toast.show({ 
-          type: 'success', 
-          text1: 'Product Added', 
-          text2: `${productToAdd.name} added with price ₹${productToAdd.price}.` 
-        });
-        fetchOrderProducts(selectedOrderId);
-        setShowSearchModal(false);
-      } else {
-        throw new Error(addProductData.message || "Failed to add product.");
-      }
+      fetchOrderProductsData(selectedOrderId);
+      setShowSearchModal(false);
     } catch (error) {
       setError(error.message || "Failed to add product.");
       Toast.show({ 
@@ -605,18 +411,9 @@ const AdminOrderUpdate = () => {
     }
   };
 
-  const fetchAllProductsForImages = async () => {
+  const fetchAllProductsForImagesData = async () => {
     try {
-      const token = await AsyncStorage.getItem("userAuthToken");
-      if (!token) return;
-      const response = await fetch(`http://${ipAddress}:8091/products`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) return;
-      const data = await response.json();
+      const data = await fetchAllProductsForImages();
       setAllProducts(data);
     } catch (error) {
       setAllProducts([]);
@@ -624,28 +421,11 @@ const AdminOrderUpdate = () => {
   };
 
   // Function to fetch customer name by customer ID
-  const fetchCustomerName = async (customerId) => {
+  const fetchCustomerNameData = async (customerId) => {
     try {
       console.log(`Fetching customer name for ID: ${customerId}`);
-      const token = await AsyncStorage.getItem("userAuthToken");
-      const response = await fetch(`http://${ipAddress}:8091/fetch-names?customer_id=${customerId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(`Failed to fetch customer name for ID ${customerId}, Status: ${response.status}`);
-        return null;
-      }
-
-      const data = await response.json();
-      console.log(`Customer name response for ID ${customerId}:`, data);
-      
-      // Check different possible response formats
-      const customerName = data.username || data.name || data.customer_name || data.customerName || data.Name || data.NAME;
-      console.log(`Extracted customer name for ID ${customerId}:`, customerName);
+      const customerName = await fetchCustomerName(customerId);
+      console.log(`Customer name response for ID ${customerId}:`, customerName);
       return customerName;
     } catch (error) {
       console.error(`Error fetching customer name for ID ${customerId}:`, error);
@@ -659,7 +439,7 @@ const AdminOrderUpdate = () => {
       return customerNames[customerId];
     }
     
-    const name = await fetchCustomerName(customerId);
+    const name = await fetchCustomerNameData(customerId);
     if (name) {
       setCustomerNames(prev => ({ ...prev, [customerId]: name }));
     }
@@ -667,261 +447,48 @@ const AdminOrderUpdate = () => {
   };
 
   const renderOrderItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.orderCard,
-        selectedOrderId === item.id && styles.selectedOrderCard
-      ]}
-      onPress={() => {
-        if (selectedOrderId === item.id) {
+    <OrderItem
+      item={item}
+      selectedOrderId={selectedOrderId}
+      customerNames={customerNames}
+      orderDeleteLoading={orderDeleteLoading}
+      orderDeleteLoadingId={orderDeleteLoadingId}
+      allowCancelOrder={allowCancelOrder}
+      getScaledSize={getScaledSize}
+      onSelectOrder={(orderId) => {
+        if (orderId === null) {
           setSelectedOrderId(null);
           setProducts([]);
           setSelectedOrderCustomerId(null);
         } else {
-          fetchOrderProducts(item.id);
+          fetchOrderProductsData(orderId);
         }
       }}
-    >
-      <View style={styles.orderCardContent}>
-        <View style={styles.orderLeftSection}>
-          <Text style={styles.orderIdText}>#{item.id}</Text>
-          <Text style={styles.customerNameText}>
-            {customerNames[item.customer_id] ? 
-              customerNames[item.customer_id] : 
-              `ID: ${item.customer_id}`
-            }
-          </Text>
-        </View>
-        <View style={styles.orderCenterSection}>
-          <Text style={styles.orderAmountText}>{formatCurrency(item.total_amount)}</Text>
-          <View style={styles.statusContainer}>
-            {item.cancelled === 'Yes' && (
-              <Text style={styles.cancelledStatusText}>Cancelled</Text>
-            )}
-            {item.loading_slip === "Yes" && (
-              <Text style={styles.processedStatusText}>Processed</Text>
-            )}
-            {/* Show approval status prominently */}
-            {item.approve_status && item.approve_status !== 'null' && item.approve_status !== 'Null' && item.approve_status !== 'NULL' && (
-              <Text style={[
-                styles.approvalStatusText,
-                { color: getApprovalStatusColor(item.approve_status) }
-              ]}>
-                {getApprovalStatusText(item.approve_status)}
-              </Text>
-            )}
-            {(!item.approve_status || item.approve_status === 'null' || item.approve_status === 'Null' || item.approve_status === 'NULL') && (
-              <Text style={[styles.approvalStatusText, { color: COLORS.warning }]}>
-                PENDING
-              </Text>
-            )}
-          </View>
-        </View>
-        <TouchableOpacity
-          style={[
-            styles.cancelOrderButton,
-            (item.loading_slip === "Yes" || item.cancelled === "Yes" || item.approve_status === "Rejected" || !allowCancelOrder) && styles.disabledCancelButton
-          ]}
-          onPress={() => confirmCancelOrder(item.id)}
-          disabled={
-            orderDeleteLoading ||
-            item.loading_slip === "Yes" ||
-            item.cancelled === "Yes" ||
-            item.approve_status === "Rejected" ||
-            !allowCancelOrder
-          }
-        >
-          {orderDeleteLoading && orderDeleteLoadingId === item.id ? (
-            <ActivityIndicator size="small" color={COLORS.text.light} />
-          ) : (
-            <Icon name="cancel" size={16} color={COLORS.text.light} />
-          )}
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+      onCancelOrder={confirmCancelOrder}
+    />
   );
 
-  const renderProductItem = ({ item, index }) => {
-    const prodMeta = allProducts.find(p => p.id === item.product_id || p.id === item.id);
-    const imageName = item.image || prodMeta?.image;
-    const imageUri = imageName ? `http://${ipAddress}:8091/images/products/${imageName}` : null;
-    const itemTotal = (item.price || 0) * (item.quantity || 1);
-
-    const canEditThisOrder = isOrderEditable && allowProductEdit;
-    const isOrderRestricted = selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered');
-
-    return (
-      <View style={[styles.productCard, isOrderRestricted && styles.restrictedProductCard]}>
-        <View style={styles.productContent}>
-          <View style={styles.productImageContainer}>
-            {imageUri ? (
-              <Image
-                source={{ uri: imageUri }}
-                style={[styles.productImage, isOrderRestricted && styles.restrictedProductImage]}
-                resizeMode="cover"
-                onError={() => console.warn(`Failed to load image for ${item.name}`)}
-              />
-            ) : (
-              <View style={[styles.productImage, styles.noImageContainer, isOrderRestricted && styles.restrictedNoImageContainer]}>
-                <Icon name="image-not-supported" size={24} color={isOrderRestricted ? "#999" : "#CCC"} />
-              </View>
-            )}
-          </View>
-          <View style={styles.productDetails}>
-            <Text style={[styles.productName, isOrderRestricted && styles.restrictedProductText]} numberOfLines={2}>{item.name}</Text>
-            <Text style={[styles.productPrice, isOrderRestricted && styles.restrictedProductText]}>{formatCurrency(item.price || 0)} x {item.quantity || 1} = {formatCurrency(itemTotal)}</Text>
-            {item.category && <Text style={[styles.productCategory, isOrderRestricted && styles.restrictedProductText]}>{item.category}</Text>}
-            <TouchableOpacity 
-              style={[styles.editButton, (!canEditThisOrder || isOrderRestricted) && styles.disabledEditButton]}
-              onPress={() => handleEditProduct(item)}
-              disabled={!canEditThisOrder || isOrderRestricted}
-            >
-              <Icon name="edit" size={16} color={canEditThisOrder && !isOrderRestricted ? COLORS.primary : COLORS.text.tertiary} />
-              <Text style={[styles.editButtonText, (!canEditThisOrder || isOrderRestricted) && styles.disabledEditButtonText]}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.productActions}>
-            <TouchableOpacity
-              style={[
-                styles.deleteButton,
-                (!isOrderEditable || isOrderRestricted) && styles.disabledDeleteButton
-              ]}
-              onPress={() => handleDeleteProductItem(index)}
-              disabled={deleteLoading || !isOrderEditable || isOrderRestricted}
-            >
-              {deleteLoading && deleteLoadingIndex === index ? (
-                <ActivityIndicator size="small" color={COLORS.error} />
-              ) : (
-                <Icon
-                  name="delete"
-                  size={20}
-                  color={(!isOrderEditable || isOrderRestricted) ? COLORS.text.tertiary : COLORS.error}
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
+  const renderProductItem = ({ item, index }) => (
+    <ProductItem
+      item={item}
+      index={index}
+      allProducts={allProducts}
+      deleteLoading={deleteLoading}
+      deleteLoadingIndex={deleteLoadingIndex}
+      isOrderEditable={isOrderEditable(orders.find(order => order.id === selectedOrderId))}
+      allowProductEdit={allowProductEdit}
+      selectedOrder={orders.find(order => order.id === selectedOrderId)}
+      getScaledSize={getScaledSize}
+      onEditProduct={handleEditProduct}
+      onDeleteProduct={handleDeleteProductItem}
+    />
+  );
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId);
-  const totalAmount = products.reduce((sum, product) => {
-    return sum + (product.quantity * product.price);
-  }, 0);
-
-  // Centralized order editability check
-  const isOrderEditable = selectedOrder && 
-    selectedOrder.cancelled !== 'Yes' && 
-    selectedOrder.approve_status !== 'Rejected' &&
-    selectedOrder.approve_status !== 'Accepted' &&  // Don't allow editing if accepted
-    selectedOrder.approve_status !== 'Altered' &&   // Don't allow editing if altered
-    selectedOrder.loading_slip !== "Yes";
-
-  const getAcceptanceStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'approved': return '#10B981';
-      case 'pending': return '#F59E0B';
-      case 'rejected': return '#DC2626';
-      default: return '#6B7280';
-    }
-  };
-
-  const getCancellationStatusColor = (cancelled) => {
-    return cancelled === 'Yes' ? '#DC2626' : '#10B981';
-  };
-
-  const getAcceptanceStatusText = (status) => {
-    if (!status) return 'PENDING';
-    return status.toUpperCase();
-  };
-
-  const getCancellationStatusText = (cancelled) => {
-    return cancelled === 'Yes' ? 'CANCELLED' : 'ACTIVE';
-  };
-
-  // Get order status message for better UX
-  const getOrderStatusMessage = (order) => {
-    if (!order) return "Select an order to edit";
-    if (order.cancelled === 'Yes') return "Order Cancelled";
-    if (order.approve_status === 'Rejected') return "Order Rejected";
-    if (order.loading_slip === "Yes") return "Order Processed";
-    // Use actual backend status
-    if (order.approve_status) return `Order ${order.approve_status}`;
-    if (order.delivery_status) return `Order ${order.delivery_status}`;
-    return "Update Order";
-  };
-
-  // Get order status color for visual feedback
-  const getOrderStatusColor = (order) => {
-    if (!order) return COLORS.text.secondary;
-    if (order.cancelled === 'Yes' || order.approve_status === 'Rejected') return COLORS.error;
-    if (order.loading_slip === "Yes") return COLORS.success;
-    // Color based on actual status
-    if (order.approve_status === 'Accepted' || order.approve_status === 'Approved' || order.delivery_status === 'Delivered') return COLORS.success;
-    if (order.approve_status === 'Altered') return '#1E40AF'; // Deep blue for Altered
-    if (order.delivery_status === 'Processing') return COLORS.warning;
-    if (order.approve_status === 'Pending' || order.delivery_status === 'Pending') return COLORS.accent;
-    return COLORS.primary;
-  };
-
-  // Get single status text - Priority: Cancelled > Rejected > Pending
-  const getOrderStatusText = (order) => {
-    if (order.cancelled === 'Yes') return 'CANCELLED';
-    if (order.approve_status === 'Rejected') return 'REJECTED';
-    // Use actual backend status values
-    if (order.approve_status) return order.approve_status.toUpperCase();
-    if (order.delivery_status) return order.delivery_status.toUpperCase();
-    return 'PENDING';
-  };
-
-  // Get appropriate icon for order status
-  const getOrderStatusIcon = (order) => {
-    if (order.cancelled === 'Yes') return 'cancel';
-    if (order.approve_status === 'Rejected') return 'block';
-    if (order.loading_slip === "Yes") return 'check-circle';
-    // Icon based on actual status
-    if (order.approve_status === 'Approved' || order.delivery_status === 'Delivered') return 'check-circle';
-    if (order.approve_status === 'Altered' || order.delivery_status === 'Processing') return 'pending';
-    if (order.approve_status === 'Pending' || order.delivery_status === 'Pending') return 'schedule';
-    return 'info';
-  };
-
-  // Helper functions for approval status display
-  const getApprovalStatusIcon = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'schedule';
-    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'check-circle';
-    if (approveStatus === 'Rejected') return 'block';
-    if (approveStatus === 'Altered') return 'edit';
-    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'schedule';
-    return 'info';
-  };
-
-  const getApprovalStatusColor = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return COLORS.warning;
-    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return COLORS.success;
-    if (approveStatus === 'Rejected') return COLORS.error;
-    if (approveStatus === 'Altered') return COLORS.primary;
-    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return COLORS.warning;
-    return COLORS.text.secondary;
-  };
-
-  const getApprovalStatusText = (approveStatus) => {
-    if (!approveStatus || approveStatus === 'null' || approveStatus === 'Null' || approveStatus === 'NULL') return 'PENDING';
-    if (approveStatus === 'Accepted' || approveStatus === 'Approved') return 'ACCEPTED';
-    if (approveStatus === 'Rejected') return 'REJECTED';
-    if (approveStatus === 'Altered') return 'ALTERED';
-    if (approveStatus === 'Pending' || approveStatus === 'pending' || approveStatus === 'Pendign') return 'PENDING';
-    return 'UNKNOWN';
-  };
+  const totalAmount = calculateTotalAmount(products);
 
   // Filtered orders based on cancelled state
-  const filteredOrders = orders.filter(order => {
-    if (cancelledFilter === 'All') return true;
-    if (cancelledFilter === 'Yes') return order.cancelled === 'Yes';
-    if (cancelledFilter === 'No') return order.cancelled !== 'Yes';
-    return true;
-  });
+  const filteredOrders = filterOrders(orders, cancelledFilter);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -935,17 +502,17 @@ const AdminOrderUpdate = () => {
         >
           <Icon name="arrow-back" size={24} color={COLORS.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Update Orders</Text>
+        <Text style={[styles.headerTitle, { fontSize: getScaledSize(18) }]}>Update Orders</Text>
         <TouchableOpacity
           style={styles.refreshButton}
-          onPress={fetchAdminOrders}
+          onPress={fetchAdminOrdersData}
         >
           <Icon name="refresh" size={24} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
       {/* Cancelled filter dropdown */}
       <View style={styles.cancelledFilterContainer}>
-        <Text style={styles.cancelledFilterLabel}>Show Cancelled:</Text>
+        <Text style={[styles.cancelledFilterLabel, { fontSize: getScaledSize(14) }]}>Show Cancelled:</Text>
         <Picker
           selectedValue={cancelledFilter}
           style={styles.cancelledFilterPicker}
@@ -961,14 +528,14 @@ const AdminOrderUpdate = () => {
       {loading && !selectedOrderId && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading your orders...</Text>
+          <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading your orders...</Text>
         </View>
       )}
 
       {error && (
         <View style={styles.errorContainer}>
           <Icon name="error-outline" size={24} color={COLORS.text.light} />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{error}</Text>
         </View>
       )}
 
@@ -980,9 +547,9 @@ const AdminOrderUpdate = () => {
       >
         <View style={styles.ordersContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Orders</Text>
+            <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Today's Orders</Text>
             <View style={styles.orderCountBadge}>
-              <Text style={styles.orderCountText}>
+              <Text style={[styles.orderCountText, { fontSize: getScaledSize(14) }]}>
                 {orders.length} order{orders.length !== 1 ? "s" : ""}
               </Text>
             </View>
@@ -991,8 +558,8 @@ const AdminOrderUpdate = () => {
           {orders.length === 0 && !loading ? (
             <View style={styles.emptyContainer}>
               <Icon name="shopping-basket" size={48} color={COLORS.text.tertiary} />
-              <Text style={styles.emptyText}>No orders for today</Text>
-              <Text style={styles.emptySubtext}>Your orders will appear here</Text>
+              <Text style={[styles.emptyText, { fontSize: getScaledSize(18) }]}>No orders for today</Text>
+              <Text style={[styles.emptySubtext, { fontSize: getScaledSize(14) }]}>Your orders will appear here</Text>
             </View>
           ) : (
             <FlatList
@@ -1012,14 +579,14 @@ const AdminOrderUpdate = () => {
         {selectedOrderId && selectedOrder && (
           <View style={styles.editContainer}>
             {/* Order Status Banner */}
-            {!isOrderEditable && (
+            {!isOrderEditable(selectedOrder) && (
               <View style={[styles.orderStatusBanner, { backgroundColor: COLORS.success + '15' }]}>
                 <Icon 
                   name="lock" 
                   size={16} 
                   color={COLORS.success} 
                 />
-                <Text style={[styles.orderStatusBannerText, { color: COLORS.success }]}>
+                <Text style={[styles.orderStatusBannerText, { color: COLORS.success, fontSize: getScaledSize(14) }]}>
                   Order cannot be edited
                 </Text>
               </View>
@@ -1029,7 +596,7 @@ const AdminOrderUpdate = () => {
               <View style={styles.orderDetailRow}>
                 <View style={styles.orderDetailItem}>
                   <Icon name="calendar-today" size={16} color={COLORS.text.secondary} />
-                  <Text style={styles.orderDetailText}>
+                  <Text style={[styles.orderDetailText, { fontSize: getScaledSize(12) }]}>
                     {formatDate(selectedOrder.placed_on)}
                   </Text>
                 </View>
@@ -1037,33 +604,33 @@ const AdminOrderUpdate = () => {
             </View>
 
             <View style={styles.editHeader}>
-              <Text style={styles.sectionTitle}>Edit Order #{selectedOrderId}</Text>
+              <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Edit Order #{selectedOrderId}</Text>
               <TouchableOpacity
                 style={[
                   styles.addProductButton,
-                  (!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
+                  (!isOrderEditable(selectedOrder) || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
                 ]}
                 onPress={() => setShowSearchModal(true)}
-                disabled={!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
+                disabled={!isOrderEditable(selectedOrder) || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
               >
                 <Icon name="add" size={20} color={COLORS.text.light} />
-                <Text style={styles.addProductButtonText}>Add Product</Text>
+                <Text style={[styles.addProductButtonText, { fontSize: getScaledSize(14) }]}>Add Product</Text>
               </TouchableOpacity>
             </View>
 
             {products.length === 0 ? (
               <View style={styles.emptyProductsContainer}>
                 <Icon name="box-open" size={48} color={COLORS.text.tertiary} />
-                <Text style={styles.emptyProductsText}>No products in this order</Text>
+                <Text style={[styles.emptyProductsText, { fontSize: getScaledSize(16) }]}>No products in this order</Text>
                 <TouchableOpacity
                   style={[
                     styles.addProductsButton,
-                    (!isOrderEditable) && styles.disabledButton
+                    (!isOrderEditable(selectedOrder)) && styles.disabledButton
                   ]}
                   onPress={() => setShowSearchModal(true)}
-                  disabled={!isOrderEditable}
+                  disabled={!isOrderEditable(selectedOrder)}
                 >
-                  <Text style={styles.addProductsButtonText}>Add Products</Text>
+                  <Text style={[styles.addProductsButtonText, { fontSize: getScaledSize(14) }]}>Add Products</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1078,14 +645,14 @@ const AdminOrderUpdate = () => {
                 />
                 <View style={styles.summaryContainer}>
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Items:</Text>
-                    <Text style={styles.summaryValue}>
+                    <Text style={[styles.summaryLabel, { fontSize: getScaledSize(14) }]}>Items:</Text>
+                    <Text style={[styles.summaryValue, { fontSize: getScaledSize(14) }]}>
                       {products.length} item{products.length !== 1 ? "s" : ""}
                     </Text>
                   </View>
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Total Amount:</Text>
-                    <Text style={styles.summaryAmount}>
+                    <Text style={[styles.summaryLabel, { fontSize: getScaledSize(14) }]}>Total Amount:</Text>
+                    <Text style={[styles.summaryAmount, { fontSize: getScaledSize(18) }]}>
                       {formatCurrency(totalAmount)}
                     </Text>
                   </View>
@@ -1097,12 +664,12 @@ const AdminOrderUpdate = () => {
               <TouchableOpacity
                 style={[
                   styles.updateButton,
-                  (!isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
+                  (!isOrderEditable(selectedOrder) || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))) && styles.disabledButton
                 ]}
                 onPress={handleUpdateOrder}
-                disabled={loading || !isOrderEditable || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
+                disabled={loading || !isOrderEditable(selectedOrder) || (selectedOrder && (selectedOrder.approve_status === 'Accepted' || selectedOrder.approve_status === 'Rejected' || selectedOrder.approve_status === 'Altered'))}
               >
-                <Text style={styles.updateButtonText}>
+                <Text style={[styles.updateButtonText, { fontSize: getScaledSize(16) }]}>
                   Update Order
                 </Text>
               </TouchableOpacity>
@@ -1121,7 +688,7 @@ const AdminOrderUpdate = () => {
         <View style={styles.modalBackground}>
           <View style={styles.editModalContainer}>
             <View style={styles.editModalHeader}>
-              <Text style={styles.editModalTitle}>Edit Product</Text>
+              <Text style={[styles.editModalTitle, { fontSize: getScaledSize(18) }]}>Edit Product</Text>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setEditModalVisible(false)}
@@ -1132,11 +699,11 @@ const AdminOrderUpdate = () => {
             
             {editProduct && (
               <View style={styles.editModalContent}>
-                <Text style={styles.editItemName}>{editProduct.name}</Text>
+                <Text style={[styles.editItemName, { fontSize: getScaledSize(16) }]}>{editProduct.name}</Text>
                 
                 <View style={styles.editInputRow}>
                   <View style={styles.editInputContainer}>
-                    <Text style={styles.editInputLabel}>Price (₹)</Text>
+                    <Text style={[styles.editInputLabel, { fontSize: getScaledSize(14) }]}>Price (₹)</Text>
                     <TextInput
                       style={[styles.editTextInput, !allowProductEdit && styles.disabledInput]}
                       value={editPrice}
@@ -1147,19 +714,19 @@ const AdminOrderUpdate = () => {
                       editable={allowProductEdit}
                     />
                     {editProduct && allowProductEdit && (
-                      <Text style={styles.priceRangeText}>
+                      <Text style={[styles.priceRangeText, { fontSize: getScaledSize(12) }]}>
                         Range: ₹{editProduct.min_selling_price || 0} - ₹{editProduct.discountPrice || editProduct.price || 0}
                       </Text>
                     )}
                     {!allowProductEdit && (
-                      <Text style={styles.disabledPriceText}>
+                      <Text style={[styles.disabledPriceText, { fontSize: getScaledSize(12) }]}>
                         Price editing disabled
                       </Text>
                     )}
                   </View>
                   
                   <View style={styles.editInputContainer}>
-                    <Text style={styles.editInputLabel}>Quantity</Text>
+                    <Text style={[styles.editInputLabel, { fontSize: getScaledSize(14) }]}>Quantity</Text>
                     <TextInput
                       style={styles.editTextInput}
                       value={editQty}
@@ -1172,7 +739,7 @@ const AdminOrderUpdate = () => {
                 </View>
                 
                 {editError && (
-                  <Text style={styles.errorText}>{editError}</Text>
+                  <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{editError}</Text>
                 )}
                 
                 <View style={styles.editModalButtons}>
@@ -1180,13 +747,13 @@ const AdminOrderUpdate = () => {
                     style={styles.editCancelButton}
                     onPress={() => setEditModalVisible(false)}
                   >
-                    <Text style={styles.editCancelText}>Cancel</Text>
+                    <Text style={[styles.editCancelText, { fontSize: getScaledSize(16) }]}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.editSaveButton}
                     onPress={saveEditProduct}
                   >
-                    <Text style={styles.editSaveText}>Save</Text>
+                    <Text style={[styles.editSaveText, { fontSize: getScaledSize(16) }]}>Save</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1205,713 +772,5 @@ const AdminOrderUpdate = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: COLORS.text.primary,
-    marginTop: 16,
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.error,
-    padding: 12,
-    margin: 16,
-    borderRadius: 8,
-  },
-  errorText: {
-    color: COLORS.text.light,
-    marginLeft: 8,
-    fontSize: 14,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  ordersContainer: {
-    padding: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  orderCountBadge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  orderCountText: {
-    color: COLORS.text.light,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  orderList: {
-    paddingBottom: 12,
-  },
-  orderCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  selectedOrderCard: {
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: "#F0F8FF",
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-  },
-  orderCardContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: 50,
-  },
-  orderLeftSection: {
-    flex: 1,
-  },
-  orderCenterSection: {
-    flex: 1,
-    alignItems: "center",
-  },
-  customerNameText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 2,
-  },
-  statusContainer: {
-    marginTop: 2,
-  },
-  cancelledStatusText: {
-    fontSize: 10,
-    color: COLORS.error,
-    fontWeight: "500",
-  },
-  processedStatusText: {
-    fontSize: 10,
-    color: COLORS.success,
-    fontWeight: "500",
-  },
-  rejectedStatusText: {
-    fontSize: 10,
-    color: COLORS.error,
-    fontWeight: "500",
-  },
-  approvalStatusText: {
-    fontSize: 10,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  orderInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  orderIdText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  orderStatusContainer: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  processedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#E6FFED",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  processedText: {
-    color: COLORS.success,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  cancelledBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  cancelledText: {
-    color: COLORS.error,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  rejectedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  rejectedText: {
-    color: COLORS.error,
-    fontSize: 11,
-    fontWeight: "600",
-    marginLeft: 4,
-  },
-  orderDetails: {
-    flexDirection: "column",
-    gap: 8,
-  },
-  orderDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  orderDetailText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginLeft: 6,
-  },
-  orderActionsContainer: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: "100%",
-    minHeight: 50,
-  },
-  orderAmountText: {
-    fontSize: 16,
-    fontWeight: "600", 
-    color: COLORS.primary,
-  },
-  cancelOrderButton: {
-    backgroundColor: COLORS.warning,
-    padding: 6,
-    borderRadius: 6,
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  disabledCancelButton: {
-    backgroundColor: COLORS.text.tertiary,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  orderSeparator: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginVertical: 8,
-  },
-  editContainer: {
-    backgroundColor: COLORS.surface,
-    padding: 16,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  orderStatusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  orderStatusBannerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  orderDetailsCard: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  orderDetailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  orderDetailItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  orderStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  approvalStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  orderStatusText: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  editHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  addProductButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  addProductButtonText: {
-    color: COLORS.text.light,
-    marginLeft: 6,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    backgroundColor: COLORS.text.tertiary,
-  },
-  productCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  productContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  productImageContainer: {
-    width: 60,
-    height: 60,
-    marginRight: 12,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: COLORS.divider,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  noImageContainer: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productDetails: {
-    flex: 1,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 4,
-  },
-  productPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 2,
-  },
-  productCategory: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  disabledEditButton: {
-    opacity: 0.5,
-  },
-  editButtonText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginLeft: 4,
-  },
-  disabledEditButtonText: {
-    color: COLORS.text.tertiary,
-  },
-  productActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-  },
-  productSeparator: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginVertical: 8,
-  },
-  summaryContainer: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    fontWeight: "500",
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-  },
-  summaryAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-  footer: {
-    marginTop: 16,
-  },
-  updateButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  updateButtonText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 40,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.text.primary,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  emptyProductsContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    marginVertical: 12,
-  },
-  emptyProductsText: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginVertical: 12,
-  },
-  addProductsButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  addProductsButtonText: {
-    color: COLORS.text.light,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Modal styles
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalContainer: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    width: '90%',
-    maxWidth: 400,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  editModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  editModalContent: {
-    padding: 16,
-  },
-  editItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text.primary,
-    marginBottom: 16,
-  },
-  editInputRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  editInputContainer: {
-    flex: 1,
-  },
-  editInputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-    marginBottom: 6,
-  },
-  editTextInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: COLORS.surface,
-    color: COLORS.text.primary,
-  },
-  disabledInput: {
-    backgroundColor: COLORS.divider,
-    color: COLORS.text.tertiary,
-  },
-  priceRangeText: {
-    fontSize: 12,
-    color: COLORS.text.secondary,
-    marginTop: 4,
-  },
-  disabledPriceText: {
-    fontSize: 12,
-    color: COLORS.text.tertiary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  editModalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  editCancelButton: {
-    flex: 1,
-    backgroundColor: COLORS.divider,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editCancelText: {
-    color: COLORS.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  editSaveButton: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editSaveText: {
-    color: COLORS.text.light,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelledBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  cancelledText: {
-    color: COLORS.error,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  cancelledStateContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  cancelledBadgeCentered: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  cancelledTextCentered: {
-    color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  rejectedStateContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  rejectedBadgeCentered: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  rejectedTextCentered: {
-    color: COLORS.error,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  cancelledFilterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    justifyContent: 'space-between',
-  },
-  cancelledFilterLabel: {
-    fontSize: 14,
-    color: COLORS.text.primary,
-    fontWeight: '500',
-  },
-  cancelledFilterPicker: {
-    width: 100,
-    height: 28,
-    marginLeft: 8,
-  },
-  // Restricted order styles
-  restrictedProductCard: {
-    opacity: 0.6,
-    backgroundColor: COLORS.divider,
-  },
-  restrictedProductImage: {
-    opacity: 0.7,
-  },
-  restrictedNoImageContainer: {
-    backgroundColor: COLORS.divider,
-  },
-  restrictedProductText: {
-    color: COLORS.text.tertiary,
-  },
-  restrictionText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-});
 
 export default AdminOrderUpdate;

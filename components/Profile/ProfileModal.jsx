@@ -10,10 +10,12 @@ import {
     SafeAreaView
 } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { useFontScale } from '../../App';
 
 const { width, height } = Dimensions.get('window');
 
 const ProfileModal = ({ visible, onClose, content }) => {
+    const { getScaledSize } = useFontScale();
     return (
         <Modal
             visible={visible}
@@ -24,7 +26,7 @@ const ProfileModal = ({ visible, onClose, content }) => {
             <SafeAreaView style={styles.modalContainer}>
                 <View style={styles.modalContent}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Profile Details</Text>
+                        <Text style={[styles.modalTitle, { fontSize: getScaledSize(24) }]}>Profile Details</Text>
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                             <MaterialIcons name="close" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
@@ -76,7 +78,6 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20,
     },
     modalTitle: {
-        fontSize: 24,
         fontWeight: "600",
         color: "#FFFFFF",
     },

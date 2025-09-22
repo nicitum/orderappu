@@ -19,7 +19,7 @@ import Toast from 'react-native-toast-message';
 import Geolocation from '@react-native-community/geolocation';
 import { ipAddress } from '../../services/urls';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-
+import { useFontScale } from '../../App';
 
 // Screen dimensions
 const { width } = Dimensions.get('window');
@@ -31,6 +31,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 3000;
 
 const OrderTrackingScreen = () => {
+  const { getScaledSize } = useFontScale();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -557,9 +558,9 @@ const OrderTrackingScreen = () => {
     >
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item.id}</Text>
+          <Text style={[styles.orderId, { fontSize: getScaledSize(18) }]}>Order #{item.id}</Text>
           <View style={[styles.statusBadge, styles[item.delivery_status.replace(/\s+/g, '')]]}>
-            <Text style={styles.statusText}>{item.delivery_status}</Text>
+            <Text style={[styles.statusText, { fontSize: getScaledSize(12) }]}>{item.delivery_status}</Text>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={24} color="#003366" />
@@ -568,24 +569,24 @@ const OrderTrackingScreen = () => {
       <View style={styles.orderDetails}>
         <View style={styles.detailRow}>
           <Ionicons name="person" size={16} color="#666666" />
-          <Text style={styles.detailText}>{item.customerName || 'Customer'}</Text>
+          <Text style={[styles.detailText, { fontSize: getScaledSize(14) }]}>{item.customerName || 'Customer'}</Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="location" size={16} color="#666666" />
-          <Text style={styles.detailText} numberOfLines={2}>
+          <Text style={[styles.detailText, { fontSize: getScaledSize(14) }]} numberOfLines={2}>
             {decodedAddresses[item.id] || 'Fetching address...'}
           </Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="time" size={16} color="#666666" />
-          <Text style={styles.detailText}>
+          <Text style={[styles.detailText, { fontSize: getScaledSize(14) }]}>
             {moment(item.created_at).format('MMM D, h:mm A')}
           </Text>
         </View>
       </View>
 
       <View style={styles.statusContainer}>
-        <Text style={styles.statusLabel}>Update Status:</Text>
+        <Text style={[styles.statusLabel, { fontSize: getScaledSize(14) }]}>Update Status:</Text>
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={item.delivery_status}
@@ -612,7 +613,7 @@ const OrderTrackingScreen = () => {
           onPress={() => openNavigation(deliveryLocations[item.id])}
         >
           <Ionicons name="navigate" size={20} color="#FFFFFF" />
-          <Text style={styles.navigateButtonText}>Navigate to Delivery</Text>
+          <Text style={[styles.navigateButtonText, { fontSize: getScaledSize(16) }]}>Navigate to Delivery</Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -621,7 +622,7 @@ const OrderTrackingScreen = () => {
   if (Platform.OS === 'web') {
     return (
       <View style={styles.container}>
-        <Text style={styles.webWarningText}>Navigation not supported on web.</Text>
+        <Text style={[styles.webWarningText, { fontSize: getScaledSize(16) }]}>Navigation not supported on web.</Text>
       </View>
     );
   }
@@ -630,7 +631,7 @@ const OrderTrackingScreen = () => {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#003366" />
-        <Text style={styles.loadingText}>Loading orders...</Text>
+        <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
       </View>
     );
   }
@@ -638,9 +639,9 @@ const OrderTrackingScreen = () => {
   if (error && orders.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Error: {error}</Text>
+        <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>Error: {error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchAdminOrders}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={[styles.retryButtonText, { fontSize: getScaledSize(16) }]}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -651,7 +652,7 @@ const OrderTrackingScreen = () => {
       <View style={styles.container}>
         <View style={styles.emptyState}>
           <Ionicons name="cube" size={64} color="#003366" />
-          <Text style={styles.emptyStateText}>No orders for today</Text>
+          <Text style={[styles.emptyStateText, { fontSize: getScaledSize(18) }]}>No orders for today</Text>
         </View>
       </View>
     );
@@ -660,8 +661,8 @@ const OrderTrackingScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.header}>Today's Orders</Text>
-        <Text style={styles.subHeader}>Manage and track your deliveries</Text>
+        <Text style={[styles.header, { fontSize: getScaledSize(24) }]}>Today's Orders</Text>
+        <Text style={[styles.subHeader, { fontSize: getScaledSize(14) }]}>Manage and track your deliveries</Text>
       </View>
 
       <FlatList
@@ -689,12 +690,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   header: {
-    fontSize: 24,
     fontWeight: '700',
     color: '#003366',
   },
   subHeader: {
-    fontSize: 14,
     color: '#666666',
     marginTop: 4,
   },
@@ -726,7 +725,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: 18,
     fontWeight: '600',
     color: '#003366',
   },
@@ -748,7 +746,6 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: '#FFFFFF',
-    fontSize: 12,
     fontWeight: '600',
   },
   orderDetails: {
@@ -761,7 +758,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailText: {
-    fontSize: 14,
     color: '#666666',
     flex: 1,
   },
@@ -772,7 +768,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#E0E0E0',
   },
   statusLabel: {
-    fontSize: 14,
     fontWeight: '500',
     color: '#333333',
     marginBottom: 8,
@@ -800,7 +795,6 @@ const styles = StyleSheet.create({
   },
   navigateButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: '600',
   },
   emptyState: {
@@ -810,17 +804,14 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   emptyStateText: {
-    fontSize: 18,
     color: '#666666',
   },
   loadingText: {
-    fontSize: 16,
     color: '#666666',
     marginTop: 12,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 16,
     color: '#DC3545',
     textAlign: 'center',
     marginBottom: 16,
@@ -834,11 +825,9 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: '600',
   },
   webWarningText: {
-    fontSize: 16,
     color: '#FF9800',
     textAlign: 'center',
     marginTop: 50,

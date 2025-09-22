@@ -20,8 +20,10 @@ import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useFontScale } from '../../App';
 
 const AdminOrderStatus = () => {
+    const { getScaledSize } = useFontScale();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigation = useNavigation();
@@ -284,7 +286,7 @@ const AdminOrderStatus = () => {
                             activeOpacity={0.7}
                         >
                             <Ionicons name="calendar" size={18} color="#fff" />
-                            <Text style={styles.dateFilterText}>
+                            <Text style={[styles.dateFilterText, { fontSize: getScaledSize(12) }]}>
                                 {moment(fromDate).format('MMM D, YYYY')}
                             </Text>
                         </TouchableOpacity>
@@ -294,7 +296,7 @@ const AdminOrderStatus = () => {
                             activeOpacity={0.7}
                         >
                             <Ionicons name="calendar" size={18} color="#fff" />
-                            <Text style={styles.dateFilterText}>
+                            <Text style={[styles.dateFilterText, { fontSize: getScaledSize(12) }]}>
                                 {moment(toDate).format('MMM D, YYYY')}
                             </Text>
                         </TouchableOpacity>
@@ -342,7 +344,7 @@ const AdminOrderStatus = () => {
                 <View style={styles.modalOverlay}>
                     <View style={styles.filterModal}>
                         <View style={styles.filterModalHeader}>
-                            <Text style={styles.filterModalTitle}>Filter Orders</Text>
+                            <Text style={[styles.filterModalTitle, { fontSize: getScaledSize(18) }]}>Filter Orders</Text>
                             <TouchableOpacity
                                 onPress={() => setShowFilterModal(false)}
                                 style={styles.closeButton}
@@ -358,7 +360,7 @@ const AdminOrderStatus = () => {
                         >
                             {/* Delivery Filter */}
                             <View style={styles.filterSection}>
-                                <Text style={styles.filterSectionTitle}>Delivery Status</Text>
+                                <Text style={[styles.filterSectionTitle, { fontSize: getScaledSize(16) }]}>Delivery Status</Text>
                                 {['All', 'pending', 'delivered', 'out for delivery', 'processing', 'objection'].map(status => (
                                     <TouchableOpacity
                                         key={status}
@@ -370,7 +372,8 @@ const AdminOrderStatus = () => {
                                     >
                                         <Text style={[
                                             styles.filterOptionText,
-                                            selectedFilters.delivery === status && styles.filterOptionTextSelected
+                                            selectedFilters.delivery === status && styles.filterOptionTextSelected,
+                                            { fontSize: getScaledSize(14) }
                                         ]}>
                                             {status.toUpperCase()}
                                         </Text>
@@ -380,7 +383,7 @@ const AdminOrderStatus = () => {
 
                             {/* Acceptance Filter */}
                             <View style={styles.filterSection}>
-                                <Text style={styles.filterSectionTitle}>Acceptance Status</Text>
+                                <Text style={[styles.filterSectionTitle, { fontSize: getScaledSize(16) }]}>Acceptance Status</Text>
                                 {['All', 'Accepted', 'Rejected', 'Pending'].map(status => (
                                     <TouchableOpacity
                                         key={status}
@@ -392,7 +395,8 @@ const AdminOrderStatus = () => {
                                     >
                                         <Text style={[
                                             styles.filterOptionText,
-                                            selectedFilters.acceptance === status && styles.filterOptionTextSelected
+                                            selectedFilters.acceptance === status && styles.filterOptionTextSelected,
+                                            { fontSize: getScaledSize(14) }
                                         ]}>
                                             {status}
                                         </Text>
@@ -402,7 +406,7 @@ const AdminOrderStatus = () => {
 
                             {/* Cancelled Filter */}
                             <View style={styles.filterSection}>
-                                <Text style={styles.filterSectionTitle}>Order Status</Text>
+                                <Text style={[styles.filterSectionTitle, { fontSize: getScaledSize(16) }]}>Order Status</Text>
                                 {['All', 'Active', 'Cancelled'].map(status => (
                                     <TouchableOpacity
                                         key={status}
@@ -414,7 +418,8 @@ const AdminOrderStatus = () => {
                                     >
                                         <Text style={[
                                             styles.filterOptionText,
-                                            selectedFilters.cancelled === status && styles.filterOptionTextSelected
+                                            selectedFilters.cancelled === status && styles.filterOptionTextSelected,
+                                            { fontSize: getScaledSize(14) }
                                         ]}>
                                             {status}
                                         </Text>
@@ -428,13 +433,13 @@ const AdminOrderStatus = () => {
                                 style={styles.clearFiltersButton}
                                 onPress={clearAllFilters}
                             >
-                                <Text style={styles.clearFiltersText}>Clear All Filters</Text>
+                                <Text style={[styles.clearFiltersText, { fontSize: getScaledSize(14) }]}>Clear All Filters</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.applyFiltersButton}
                                 onPress={() => setShowFilterModal(false)}
                             >
-                                <Text style={styles.applyFiltersText}>Apply Filters</Text>
+                                <Text style={[styles.applyFiltersText, { fontSize: getScaledSize(14) }]}>Apply Filters</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -443,7 +448,7 @@ const AdminOrderStatus = () => {
 
             {error && (
                 <View style={styles.errorContainer}>
-                    <Text style={styles.errorText}>{error}</Text>
+                    <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{error}</Text>
                 </View>
             )}
 
@@ -451,7 +456,7 @@ const AdminOrderStatus = () => {
                 {orders.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="receipt-outline" size={60} color="#003366" />
-                        <Text style={styles.emptyStateText}>No orders found for selected date</Text>
+                        <Text style={[styles.emptyStateText, { fontSize: getScaledSize(16) }]}>No orders found for selected date</Text>
                     </View>
                 ) : (
                     getFilteredOrders().map((order) => (
@@ -463,8 +468,8 @@ const AdminOrderStatus = () => {
                         >
                             <View style={styles.orderHeader}>
                                 <View>
-                                    <Text style={styles.orderId}>Order #{order.id}</Text>
-                                    <Text style={styles.orderCustomer}>
+                                    <Text style={[styles.orderId, { fontSize: getScaledSize(16) }]}>Order #{order.id}</Text>
+                                    <Text style={[styles.orderCustomer, { fontSize: getScaledSize(13) }]}>
                                         {customerNames[order.customer_id] ? 
                                             customerNames[order.customer_id] : 
                                             `Loading... (ID: ${order.customer_id})`
@@ -473,7 +478,7 @@ const AdminOrderStatus = () => {
 
                                 </View>
                                 <View style={styles.orderCardRight}>
-                                    <Text style={styles.orderTotal}>₹{order.total_amount}</Text>
+                                    <Text style={[styles.orderTotal, { fontSize: getScaledSize(18) }]}>₹{order.total_amount}</Text>
                                     <View style={styles.orderCardIcon}>
                                         <Ionicons name="chevron-forward" size={20} color="#003366" />
                                     </View>
@@ -482,40 +487,40 @@ const AdminOrderStatus = () => {
 
                             <View style={styles.statusContainer}>
                                 <View style={styles.statusRow}>
-                                    <Text style={styles.statusLabel}>Approval Status:</Text>
+                                    <Text style={[styles.statusLabel, { fontSize: getScaledSize(14) }]}>Approval Status:</Text>
                                     <Text style={[
                                         styles.statusValue, 
-                                        { color: getStatusColor(order.approve_status) }
+                                        { color: getStatusColor(order.approve_status), fontSize: getScaledSize(14) }
                                     ]}>
                                         {getStatusText(order.approve_status)}
                                     </Text>
                                 </View>
 
                                 <View style={styles.statusRow}>
-                                    <Text style={styles.statusLabel}>Delivery Status:</Text>
+                                    <Text style={[styles.statusLabel, { fontSize: getScaledSize(14) }]}>Delivery Status:</Text>
                                     <Text style={[
                                         styles.statusValue, 
-                                        { color: getStatusColor(order.delivery_status) }
+                                        { color: getStatusColor(order.delivery_status), fontSize: getScaledSize(14) }
                                     ]}>
                                         {getStatusText(order.delivery_status)}
                                     </Text>
                                 </View>
 
                                 <View style={styles.statusRow}>
-                                    <Text style={styles.statusLabel}>Cancelled:</Text>
+                                    <Text style={[styles.statusLabel, { fontSize: getScaledSize(14) }]}>Cancelled:</Text>
                                     <Text style={[
                                         styles.statusValue, 
-                                        { color: getYesNoColor(order.cancelled) }
+                                        { color: getYesNoColor(order.cancelled), fontSize: getScaledSize(14) }
                                     ]}>
                                         {getYesNoText(order.cancelled)}
                                     </Text>
                                 </View>
 
                                 <View style={styles.statusRow}>
-                                    <Text style={styles.statusLabel}>Loading Slip:</Text>
+                                    <Text style={[styles.statusLabel, { fontSize: getScaledSize(14) }]}>Loading Slip:</Text>
                                     <Text style={[
                                         styles.statusValue, 
-                                        { color: getYesNoColor(order.loading_slip) }
+                                        { color: getYesNoColor(order.loading_slip), fontSize: getScaledSize(14) }
                                     ]}>
                                         {getYesNoText(order.loading_slip)}
                                     </Text>
@@ -565,7 +570,6 @@ const styles = StyleSheet.create({
     dateFilterText: {
         color: "#fff",
         marginLeft: 4,
-        fontSize: 12,
         fontWeight: '500',
     },
     errorContainer: {
@@ -578,7 +582,6 @@ const styles = StyleSheet.create({
     },
     errorText: {
         color: '#DC2626',
-        fontSize: 14,
     },
     loadingContainer: {
         flex: 1,
@@ -598,7 +601,6 @@ const styles = StyleSheet.create({
     },
     emptyStateText: {
         marginTop: 15,
-        fontSize: 16,
         color: '#003366',
         opacity: 0.7,
     },
@@ -622,17 +624,14 @@ const styles = StyleSheet.create({
         borderBottomColor: '#f0f0f0',
     },
     orderId: {
-        fontSize: 16,
         fontWeight: '600',
         color: '#003366',
     },
     orderCustomer: {
-        fontSize: 13,
         color: '#666',
         marginTop: 3,
     },
     customerId: {
-        fontSize: 12,
         color: '#999',
         marginTop: 2,
     },
@@ -648,12 +647,10 @@ const styles = StyleSheet.create({
         borderBottomColor: '#f5f5f5',
     },
     statusLabel: {
-        fontSize: 14,
         fontWeight: '500',
         color: '#333',
     },
     statusValue: {
-        fontSize: 14,
         fontWeight: '600',
     },
     orderCardIcon: {
@@ -666,7 +663,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     orderTotal: {
-        fontSize: 18,
         fontWeight: '700',
         color: '#003366',
         marginBottom: 2,
@@ -697,7 +693,6 @@ const styles = StyleSheet.create({
     },
     filterBadgeText: {
         color: '#fff',
-        fontSize: 10,
         fontWeight: '600',
     },
     modalOverlay: {
@@ -721,7 +716,6 @@ const styles = StyleSheet.create({
         borderBottomColor: '#E5E7EB',
     },
     filterModalTitle: {
-        fontSize: 18,
         fontWeight: '600',
         color: '#003366',
     },
@@ -737,7 +731,6 @@ const styles = StyleSheet.create({
         marginBottom: 25,
     },
     filterSectionTitle: {
-        fontSize: 16,
         fontWeight: '600',
         color: '#003366',
         marginBottom: 12,
@@ -753,7 +746,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#003366',
     },
     filterOptionText: {
-        fontSize: 14,
         color: '#374151',
     },
     filterOptionTextSelected: {

@@ -19,8 +19,10 @@ import Share from 'react-native-share';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ToastAndroid, Alert } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useFontScale } from '../../App';
 
 const Remarks = () => {
+    const { getScaledSize } = useFontScale();
     const [remarksData, setRemarksData] = useState([]);
     const [loadingRemarks, setLoadingRemarks] = useState(true);
     const [errorRemarks, setErrorRemarks] = useState(null);
@@ -180,7 +182,7 @@ const Remarks = () => {
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.centerContainer}>
                     <ActivityIndicator size="large" color="#003366" />
-                    <Text style={styles.loadingText}>Loading Data...</Text>
+                    <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading Data...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -190,7 +192,7 @@ const Remarks = () => {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.centerContainer}>
-                    <Text style={styles.errorText}>Error: {errorRemarks || errorRoute || errorUniqueRoutes}</Text>
+                    <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>Error: {errorRemarks || errorRoute || errorUniqueRoutes}</Text>
                 </View>
             </SafeAreaView>
         );
@@ -201,12 +203,12 @@ const Remarks = () => {
             <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
                 <View style={styles.container}>
                     <View style={styles.headerContainer}>
-                        <Text style={styles.headerTitle}>Remarks Dashboard</Text>
+                        <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Remarks Dashboard</Text>
                         <View style={styles.controlsContainer}>
                             <View style={styles.filterContainer}>
                                 <Picker
                                     selectedValue={selectedRoute}
-                                    style={styles.routePicker}
+                                    style={[styles.routePicker, { fontSize: getScaledSize(16) }]}
                                     onValueChange={(itemValue) => setSelectedRoute(itemValue)}
                                     dropdownIconColor={'#fff'}
                                 >
@@ -220,17 +222,17 @@ const Remarks = () => {
                                 onPress={exportToExcel}
                             >
                                 <Ionicons name="download-outline" size={20} color="#fff" style={styles.buttonIcon} />
-                                <Text style={styles.exportButtonText}>Export</Text>
+                                <Text style={[styles.exportButtonText, { fontSize: getScaledSize(16) }]}>Export</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     <View style={styles.table}>
                         <View style={styles.tableRowHeader}>
-                            <Text style={[styles.tableHeaderCell, styles.customerIdHeader]}>Customer ID</Text>
-                            <Text style={[styles.tableHeaderCell, styles.orderIdHeader]}>Order ID</Text>
-                            <Text style={[styles.tableHeaderCell, styles.routeHeader]}>Route</Text>
-                            <Text style={[styles.tableHeaderCell, styles.remarksHeader]}>Remarks</Text>
+                            <Text style={[styles.tableHeaderCell, styles.customerIdHeader, { fontSize: getScaledSize(14) }]}>Customer ID</Text>
+                            <Text style={[styles.tableHeaderCell, styles.orderIdHeader, { fontSize: getScaledSize(14) }]}>Order ID</Text>
+                            <Text style={[styles.tableHeaderCell, styles.routeHeader, { fontSize: getScaledSize(14) }]}>Route</Text>
+                            <Text style={[styles.tableHeaderCell, styles.remarksHeader, { fontSize: getScaledSize(14) }]}>Remarks</Text>
                         </View>
 
                         {filteredRemarks.map((remark, index) => (
@@ -238,22 +240,22 @@ const Remarks = () => {
                                 style={[styles.tableRow, index % 2 === 0 ? styles.evenRow : styles.oddRow]} 
                                 key={remark.id}
                             >
-                                <Text style={[styles.tableCell, styles.customerIdCell]}>{remark.customer_id}</Text>
-                                <Text style={[styles.tableCell, styles.orderIdCell]}>{remark.order_id}</Text>
-                                <Text style={[styles.tableCell, styles.routeCell]}>{routeData || "N/A"}</Text>
-                                <Text style={[styles.tableCell, styles.remarksCell]}>{remark.remarks}</Text>
+                                <Text style={[styles.tableCell, styles.customerIdCell, { fontSize: getScaledSize(14) }]}>{remark.customer_id}</Text>
+                                <Text style={[styles.tableCell, styles.orderIdCell, { fontSize: getScaledSize(14) }]}>{remark.order_id}</Text>
+                                <Text style={[styles.tableCell, styles.routeCell, { fontSize: getScaledSize(14) }]}>{routeData || "N/A"}</Text>
+                                <Text style={[styles.tableCell, styles.remarksCell, { fontSize: getScaledSize(14) }]}>{remark.remarks}</Text>
                             </View>
                         ))}
                     </View>
 
                     {filteredRemarks.length === 0 && !isLoading && !hasError && (
-                        <Text style={styles.emptyText}>No remarks found for the selected route.</Text>
+                        <Text style={[styles.emptyText, { fontSize: getScaledSize(16) }]}>No remarks found for the selected route.</Text>
                     )}
                     {errorRoute && remarksData.length > 0 && (
-                        <Text style={styles.routeErrorText}>Error fetching Route: {errorRoute}</Text>
+                        <Text style={[styles.routeErrorText, { fontSize: getScaledSize(14) }]}>Error fetching Route: {errorRoute}</Text>
                     )}
                     {!routeData && remarksData.length > 0 && !errorRoute && (
-                        <Text style={styles.noRouteText}>Route not available for Customer ID: {remarksData[0].customer_id}</Text>
+                        <Text style={[styles.noRouteText, { fontSize: getScaledSize(14) }]}>Route not available for Customer ID: {remarksData[0].customer_id}</Text>
                     )}
                 </View>
             </ScrollView>
@@ -295,7 +297,6 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     headerTitle: {
-        fontSize: 24,
         fontWeight: '700',
         color: '#fff',
         marginBottom: 12,
@@ -315,7 +316,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.95)',
         borderRadius: 8,
         color: '#003366',
-        fontSize: 16,
     },
     exportButton: {
         flexDirection: 'row',
@@ -328,7 +328,6 @@ const styles = StyleSheet.create({
     },
     exportButtonText: {
         color: '#fff',
-        fontSize: 16,
         fontWeight: '600',
     },
     buttonIcon: {
@@ -365,7 +364,6 @@ const styles = StyleSheet.create({
     },
     tableHeaderCell: {
         fontWeight: '600',
-        fontSize: 14,
         color: '#fff',
         paddingHorizontal: 12,
         textAlign: 'left',
@@ -376,7 +374,6 @@ const styles = StyleSheet.create({
     routeHeader: { flex: 2 },
     remarksHeader: { flex: 3 },
     tableCell: {
-        fontSize: 14,
         color: '#2d3748',
         paddingHorizontal: 12,
         lineHeight: 20,
@@ -388,12 +385,10 @@ const styles = StyleSheet.create({
     remarksCell: { flex: 3 },
     loadingText: {
         marginTop: 12,
-        fontSize: 16,
         color: '#4a5568',
         fontWeight: '500',
     },
     errorText: {
-        fontSize: 16,
         color: '#e53e3e',
         textAlign: 'center',
         padding: 16,
@@ -403,21 +398,18 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     emptyText: {
-        fontSize: 16,
         color: '#718096',
         textAlign: 'center',
         marginTop: 24,
         fontWeight: '500',
     },
     routeErrorText: {
-        fontSize: 14,
         color: '#dd6b20',
         textAlign: 'center',
         marginTop: 12,
         fontWeight: '500',
     },
     noRouteText: {
-        fontSize: 14,
         color: '#718096',
         textAlign: 'center',
         marginTop: 12,

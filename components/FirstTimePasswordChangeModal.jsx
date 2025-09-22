@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { ipAddress } from '../services/urls';
+import { useFontScale } from '../App';
 
 const FirstTimePasswordChangeModal = ({ isVisible, onClose, onSuccess, username, tempToken }) => {
+  const { getScaledSize } = useFontScale();
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -106,21 +108,21 @@ const FirstTimePasswordChangeModal = ({ isVisible, onClose, onSuccess, username,
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.header}>
-            <Text style={styles.title}>Change Password</Text>
+            <Text style={[styles.title, { fontSize: getScaledSize(20) }]}>Change Password</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Icon name="close" size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { fontSize: getScaledSize(14) }]}>
             This is your first login. Please set a new password to continue.
           </Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Current Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>Current Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Enter current password"
                 value={oldPassword}
                 onChangeText={setOldPassword}
@@ -141,10 +143,10 @@ const FirstTimePasswordChangeModal = ({ isVisible, onClose, onSuccess, username,
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>New Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>New Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Enter new password"
                 value={newPassword}
                 onChangeText={setNewPassword}
@@ -162,21 +164,21 @@ const FirstTimePasswordChangeModal = ({ isVisible, onClose, onSuccess, username,
                 />
               </TouchableOpacity>
             </View>
-            <Text style={styles.helperText}>
+            <Text style={[styles.helperText, { fontSize: getScaledSize(12) }]}>
               Password must contain:{'\n'}
               - At least 8 characters{'\n'}
               - One uppercase letter{'\n'}
               - One lowercase letter{'\n'}
               - One number{'\n'}
-              - One special character (!@#$%^&*(),.?":{'{'}|{'>'})
+              - One special character (!@#$%^&*(),.?":{'{}'}|{'<>'})
             </Text>
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm New Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>Confirm New Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Confirm new password"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -204,7 +206,7 @@ const FirstTimePasswordChangeModal = ({ isVisible, onClose, onSuccess, username,
             {isLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Change Password</Text>
+              <Text style={[styles.buttonText, { fontSize: getScaledSize(16) }]}>Change Password</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -234,7 +236,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -242,7 +243,6 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   subtitle: {
-    fontSize: 14,
     color: '#666',
     marginBottom: 20,
     lineHeight: 20,
@@ -251,7 +251,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
     color: "#666666",
     marginBottom: 8,
   },
@@ -266,13 +265,11 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 50,
-    fontSize: 16,
   },
   eyeButton: {
     padding: 8,
   },
   helperText: {
-    fontSize: 12,
     color: "#666666",
     marginTop: 4,
   },
@@ -287,7 +284,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: 'bold',
   },
 });

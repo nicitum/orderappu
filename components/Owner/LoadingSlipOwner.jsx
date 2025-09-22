@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     ToastAndroid,
 } from "react-native";
+import { useFontScale } from '../../App';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
@@ -50,6 +51,7 @@ const COLORS = {
 };
 
 const LoadingSlipOwner = () => {
+    const { getScaledSize } = useFontScale();
     const [users, setUsers] = useState([]);
     const [amOrders, setAmOrders] = useState([]);
     const [pmOrders, setPmOrders] = useState([]);
@@ -237,11 +239,11 @@ const LoadingSlipOwner = () => {
 
         return (
             <View style={styles.dataRow}>
-                <Text style={[styles.dataCell, { flex: 1.1 }]}>{item?.name || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 1.6 }]}>{item?.route || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.id || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { flex: 2.1 }]}>₹ {formattedAmount}</Text>
-                <Text style={[styles.dataCell, { flex: 1.5 }]}>{orderForUser?.approve_status || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.1, fontSize: getScaledSize(14) }]}>{item?.name || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.6, fontSize: getScaledSize(14) }]}>{item?.route || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 1.5, fontSize: getScaledSize(14) }]}>{orderForUser?.id || 'N/A'}</Text>
+                <Text style={[styles.dataCell, { flex: 2.1, fontSize: getScaledSize(14) }]}>₹ {formattedAmount}</Text>
+                <Text style={[styles.dataCell, { flex: 1.5, fontSize: getScaledSize(14) }]}>{orderForUser?.approve_status || 'N/A'}</Text>
             </View>
         );
     };
@@ -846,7 +848,7 @@ const LoadingSlipOwner = () => {
             <View style={styles.header}>
                 <View style={styles.headerContent}>
                     <MaterialCommunityIcons name="truck-delivery" size={28} color={COLORS.text.light} />
-                    <Text style={styles.headerTitle}>Loading Slips</Text>
+                    <Text style={[styles.headerTitle, { fontSize: getScaledSize(22) }]}>Loading Slips</Text>
                     <TouchableOpacity 
                         style={styles.datePickerButton}
                         onPress={showDatePicker}
@@ -858,7 +860,7 @@ const LoadingSlipOwner = () => {
 
             <View style={styles.contentContainer}>
                 <View style={styles.filterContainer}>
-                    <Text style={styles.filterLabel}>Filter Order Type:</Text>
+                    <Text style={[styles.filterLabel, { fontSize: getScaledSize(16) }]}>Filter Order Type:</Text>
                     <View style={styles.toggleContainer}>
                         <TouchableOpacity
                             style={[styles.toggleButton, orderTypeFilter === 'AM' && styles.toggleButtonActive]}
@@ -871,7 +873,7 @@ const LoadingSlipOwner = () => {
                                 size={20} 
                                 color={orderTypeFilter === 'AM' ? COLORS.text.light : COLORS.primary} 
                             />
-                            <Text style={[styles.toggleText, orderTypeFilter === 'AM' && styles.toggleTextActive]}>AM</Text>
+                            <Text style={[styles.toggleText, orderTypeFilter === 'AM' && styles.toggleTextActive, { fontSize: getScaledSize(14) }]}>AM</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.toggleButton, orderTypeFilter === 'PM' && styles.toggleButtonActive]}
@@ -884,23 +886,23 @@ const LoadingSlipOwner = () => {
                                 size={20} 
                                 color={orderTypeFilter === 'PM' ? COLORS.text.light : COLORS.primary} 
                             />
-                            <Text style={[styles.toggleText, orderTypeFilter === 'PM' && styles.toggleTextActive]}>PM</Text>
+                            <Text style={[styles.toggleText, orderTypeFilter === 'PM' && styles.toggleTextActive, { fontSize: getScaledSize(14) }]}>PM</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 <View style={styles.columnHeader}>
-                    <Text style={[styles.columnHeaderText, { flex: 1.1 }]}>Name</Text>
-                    <Text style={[styles.columnHeaderText, { flex: 1.6 }]}>Route</Text>
-                    <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Order ID</Text>
-                    <Text style={[styles.columnHeaderText, { flex: 2.1 }]}>Amount</Text>
-                    <Text style={[styles.columnHeaderText, { flex: 1.5 }]}>Status</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.1, fontSize: getScaledSize(15) }]}>Name</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.6, fontSize: getScaledSize(15) }]}>Route</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.5, fontSize: getScaledSize(15) }]}>Order ID</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 2.1, fontSize: getScaledSize(15) }]}>Amount</Text>
+                    <Text style={[styles.columnHeaderText, { flex: 1.5, fontSize: getScaledSize(15) }]}>Status</Text>
                 </View>
 
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={COLORS.primary} />
-                        <Text style={styles.loadingText}>Loading orders...</Text>
+                        <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
                     </View>
                 ) : (
                     <FlatList
@@ -910,7 +912,7 @@ const LoadingSlipOwner = () => {
                         ListEmptyComponent={() => (
                             <View style={styles.emptyListContainer}>
                                 <MaterialCommunityIcons name="file-document-outline" size={48} color={COLORS.text.secondary} />
-                                <Text style={styles.emptyListText}>No {orderTypeFilter} orders on {selectedDate}.</Text>
+                                <Text style={[styles.emptyListText, { fontSize: getScaledSize(16) }]}>No {orderTypeFilter} orders on {selectedDate}.</Text>
                             </View>
                         )}
                         contentContainerStyle={styles.listContent}
@@ -920,7 +922,7 @@ const LoadingSlipOwner = () => {
                 {loading && (
                     <View style={styles.loadingOverlay}>
                         <ActivityIndicator size="large" color={COLORS.text.light} />
-                        <Text style={styles.loadingText}>Generating Slip...</Text>
+                        <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Generating Slip...</Text>
                     </View>
                 )}
             </View>
@@ -959,7 +961,6 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
     },
     headerTitle: {
-        fontSize: 22,
         fontWeight: "600",
         color: COLORS.text.light,
         flex: 1,
@@ -987,7 +988,6 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     filterLabel: {
-        fontSize: 16,
         fontWeight: '600',
         color: COLORS.primary,
         marginRight: 16,
@@ -1012,7 +1012,6 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.primary,
     },
     toggleText: {
-        fontSize: 14,
         fontWeight: '600',
         color: COLORS.primary,
         marginLeft: 4,
@@ -1034,7 +1033,6 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     columnHeaderText: {
-        fontSize: 15,
         fontWeight: '700',
         color: COLORS.text.light,
         textAlign: 'center',
@@ -1053,7 +1051,6 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
     dataCell: {
-        fontSize: 14,
         fontWeight: '500',
         color: COLORS.text.primary,
         textAlign: 'center',
@@ -1070,7 +1067,6 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     emptyListText: {
-        fontSize: 16,
         fontWeight: '500',
         color: COLORS.text.secondary,
         textAlign: 'center',
@@ -1084,7 +1080,6 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 12,
-        fontSize: 16,
         fontWeight: '600',
         color: COLORS.primary,
     },

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Plat
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { useFontScale } from '../../App';
 
 
 const COLORS = {
@@ -32,6 +33,7 @@ const COLORS = {
 
 const ReportsCustomer = () => {
   const navigation = useNavigation();
+  const { getScaledSize } = useFontScale();
 
   const handleInvoiceDisplay = () => {
     navigation.navigate('CustomerInvoicePage');
@@ -54,10 +56,10 @@ const ReportsCustomer = () => {
                 <MaterialIcons name="history" size={20} color="#8B5CF6" />
               </View>
             </View>
-            <Text style={styles.cardTitleSmall}>Order History</Text>
-            <Text style={styles.cardSubtitleSmall}>View all your past orders</Text>
+            <Text style={[styles.cardTitleSmall, { fontSize: getScaledSize(15) }]}>Order History</Text>
+            <Text style={[styles.cardSubtitleSmall, { fontSize: getScaledSize(12) }]}>View all your past orders</Text>
             <View style={styles.cardFooterSmall}>
-              <Text style={styles.cardActionSmall}>View history</Text>
+              <Text style={[styles.cardActionSmall, { fontSize: getScaledSize(12) }]}>View history</Text>
               <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -69,10 +71,10 @@ const ReportsCustomer = () => {
                 <MaterialIcons name="receipt" size={20} color="#F59E0B" />
               </View>
             </View>
-            <Text style={styles.cardTitleSmall}>Invoice Display</Text>
-            <Text style={styles.cardSubtitleSmall}>View all your invoices</Text>
+            <Text style={[styles.cardTitleSmall, { fontSize: getScaledSize(15) }]}>Invoice Display</Text>
+            <Text style={[styles.cardSubtitleSmall, { fontSize: getScaledSize(12) }]}>View all your invoices</Text>
             <View style={styles.cardFooterSmall}>
-              <Text style={styles.cardActionSmall}>View invoices</Text>
+              <Text style={[styles.cardActionSmall, { fontSize: getScaledSize(12) }]}>View invoices</Text>
               <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>
@@ -168,10 +170,10 @@ const styles = StyleSheet.create({
   smallCard: { backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, marginBottom: 12, ...Platform.select({ ios: { shadowColor: COLORS.card.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, }, android: { elevation: 2, }, }), },
   cardHeaderSmall: { marginBottom: 8, },
   iconContainerSmall: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center', },
-  cardTitleSmall: { fontSize: 15, fontWeight: '600', color: COLORS.text.primary, marginBottom: 2, },
-  cardSubtitleSmall: { fontSize: 12, color: COLORS.text.secondary, lineHeight: 16, marginBottom: 8, },
+  cardTitleSmall: { fontWeight: '600', color: COLORS.text.primary, marginBottom: 2, },
+  cardSubtitleSmall: { color: COLORS.text.secondary, lineHeight: 16, marginBottom: 8, },
   cardFooterSmall: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.border, },
-  cardActionSmall: { fontSize: 12, fontWeight: '500', color: COLORS.text.secondary, },
+  cardActionSmall: { fontWeight: '500', color: COLORS.text.secondary, },
 });
 
 export default ReportsCustomer; 

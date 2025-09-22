@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import PasswordChangeModal from "./Profile/PasswordChangeModal";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
+import { useFontScale } from '../App';
 
 const PasswordChangeButton = () => {
+  const { getScaledSize } = useFontScale();
   const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
 
   // Password Change Modal handler
@@ -19,7 +21,7 @@ const PasswordChangeButton = () => {
         activeOpacity={0.7}
       >
         <MaterialIcons name="lock-outline" size={24} color="#FFFFFF" />
-        <Text style={styles.passwordChangeButtonText}>Change Password</Text>
+        <Text style={[styles.passwordChangeButtonText, { fontSize: getScaledSize(16) }]}>Change Password</Text>
       </TouchableOpacity>
 
       <PasswordChangeModal
@@ -49,7 +51,6 @@ const styles = StyleSheet.create({
   },
   passwordChangeButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
   },

@@ -18,6 +18,7 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { ipAddress } from "../../services/urls";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { jwtDecode } from "jwt-decode";
+import { useFontScale } from '../../App';
 
 const COLORS = {
   primary: "#003366",
@@ -45,6 +46,7 @@ const COLORS = {
 };
 
 const HomeAdmin = () => {
+  const { getScaledSize } = useFontScale();
   const [adminName, setAdminName] = useState("");
   const [adminRole, setAdminRole] = useState("");
   const [advertisements, setAdvertisements] = useState([]);
@@ -175,9 +177,9 @@ const HomeAdmin = () => {
       <View style={[styles.simpleHeaderContainer, Platform.OS === 'android' ? { paddingTop: StatusBar.currentHeight || 24 } : {}]}>
         <Image source={require("../../assets/logo.jpg")} style={styles.simpleHeaderLogo} resizeMode="contain" />
         <View style={styles.simpleHeaderTextContainer}>
-          <Text style={styles.simpleHeaderMainTitle}>User Dashboard</Text>
-          <Text style={styles.simpleHeaderUserName}>Name:- {adminName || "Admin"}</Text>
-          <Text style={styles.simpleHeaderRole}>Role :- {adminRole || "Admin"}</Text>
+          <Text style={[styles.simpleHeaderMainTitle, { fontSize: getScaledSize(16) }]}>User Dashboard</Text>
+          <Text style={[styles.simpleHeaderUserName, { fontSize: getScaledSize(13) }]}>Name:- {adminName || "Admin"}</Text>
+          <Text style={[styles.simpleHeaderRole, { fontSize: getScaledSize(11) }]}>Role :- {adminRole || "Admin"}</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
           <MaterialIcons name="refresh" size={24} color={COLORS.text.light} />
@@ -187,7 +189,7 @@ const HomeAdmin = () => {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading advertisements...</Text>
+            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading advertisements...</Text>
           </View>
         ) : (
           <View style={styles.content}>
@@ -249,17 +251,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   simpleHeaderMainTitle: {
-    fontSize: 16,
     fontWeight: '600',
     color: COLORS.text.light,
   },
   simpleHeaderUserName: {
-    fontSize: 13,
     color: COLORS.text.light,
     marginTop: 2,
   },
   simpleHeaderRole: {
-    fontSize: 11,
     color: COLORS.text.light,
     marginTop: 1,
     opacity: 0.8,
@@ -285,7 +284,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: COLORS.text.primary,
-    fontSize: 16,
     marginTop: 16,
   },
   carouselContainer: {

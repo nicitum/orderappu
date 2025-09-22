@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Platform,
 } from "react-native";
+import { useFontScale } from '../../App';
 import { Checkbox, Card, Button, Searchbar } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ipAddress } from "../../services/urls";
@@ -61,6 +62,7 @@ const smallLabelStyle = {
 };
 
 const OrderAcceptOwner = () => {
+  const { getScaledSize } = useFontScale();
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -518,17 +520,17 @@ const OrderAcceptOwner = () => {
               <Icon name="account-circle" size={32} color={COLORS.primary} />
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{item.username || item.name}</Text>
+              <Text style={[styles.userName, { fontSize: getScaledSize(18) }]}>{item.username || item.name}</Text>
               {/* Route and Phone side by side */}
               <View style={styles.userMetaRowHorizontal}>
-                <Text style={styles.userMetaText}>{item.route || 'N/A'}</Text>
+                <Text style={[styles.userMetaText, { fontSize: getScaledSize(13) }]}>{item.route || 'N/A'}</Text>
                 <TouchableOpacity
                   style={[styles.userMetaRowSingle, { marginLeft: 60 }]}
                   onPress={() => item.phone && Linking.openURL(`tel:${item.phone}`)}
                   disabled={!item.phone}
                 >
                   <Icon name="phone" size={15} color={COLORS.primary} />
-                  <Text style={styles.clickableMetaText}>{item.phone || 'N/A'}</Text>
+                  <Text style={[styles.clickableMetaText, { fontSize: getScaledSize(13) }]}>{item.phone || 'N/A'}</Text>
                 </TouchableOpacity>
               </View>
               {/* Delivery Address below */}
@@ -538,7 +540,7 @@ const OrderAcceptOwner = () => {
                 disabled={!item.delivery_address}
               >
                 <Icon name="map-marker" size={15} color={COLORS.primary} />
-                <Text style={[styles.clickableMetaText, { maxWidth: undefined }]} numberOfLines={2} ellipsizeMode="tail">{item.delivery_address || 'No address'}</Text>
+                <Text style={[styles.clickableMetaText, { maxWidth: undefined, fontSize: getScaledSize(13) }]} numberOfLines={2} ellipsizeMode="tail">{item.delivery_address || 'No address'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -562,22 +564,22 @@ const OrderAcceptOwner = () => {
                         />
                         <View style={styles.orderDetails}>
                           <View style={styles.orderMeta}>
-                            <Text style={styles.orderLabel}>Order ID:</Text>
-                            <Text style={styles.orderValue}>{order.id}</Text>
+                            <Text style={[styles.orderLabel, { fontSize: getScaledSize(14) }]}>Order ID:</Text>
+                            <Text style={[styles.orderValue, { fontSize: getScaledSize(14) }]}>{order.id}</Text>
                           </View>
                          
                           <View style={styles.orderMeta}>
-                            <Text style={styles.orderLabel}>Date:</Text>
-                            <Text style={styles.orderValue}>{moment.unix(order.placed_on).format('DD MMM, YYYY')}</Text>
+                            <Text style={[styles.orderLabel, { fontSize: getScaledSize(14) }]}>Date:</Text>
+                            <Text style={[styles.orderValue, { fontSize: getScaledSize(14) }]}>{moment.unix(order.placed_on).format('DD MMM, YYYY')}</Text>
                           </View>
                           <View style={styles.orderMeta}>
-                            <Text style={styles.orderLabel}>Order Value:</Text>
-                            <Text style={styles.orderValue}>{order.total_amount}</Text>
+                            <Text style={[styles.orderLabel, { fontSize: getScaledSize(14) }]}>Order Value:</Text>
+                            <Text style={[styles.orderValue, { fontSize: getScaledSize(14) }]}>{order.total_amount}</Text>
                           </View>
 
                           <View style={styles.orderMeta}>
-                            <Text style={styles.orderLabel}>Due On:</Text>
-                            <Text style={styles.orderValue}>{moment.unix(order.due_on).format('DD MMM, YYYY')}</Text>
+                            <Text style={[styles.orderLabel, { fontSize: getScaledSize(14) }]}>Due On:</Text>
+                            <Text style={[styles.orderValue, { fontSize: getScaledSize(14) }]}>{moment.unix(order.due_on).format('DD MMM, YYYY')}</Text>
                           </View>
 
                         </View>
@@ -585,12 +587,12 @@ const OrderAcceptOwner = () => {
                           {order.altered === 'Yes' ? (
                             <View style={[styles.statusBadge, styles.alteredBadge]}>
                               <Icon name="pencil" size={14} color={COLORS.primary} />
-                              <Text style={styles.alteredStatus}>Altered</Text>
+                              <Text style={[styles.alteredStatus, { fontSize: getScaledSize(12) }]}>Altered</Text>
                             </View>
                           ) : order.approve_status === 'Altered' ? (
                             <View style={[styles.statusBadge, styles.alteredBadge]}>
                               <Icon name="pencil" size={14} color={COLORS.primary} />
-                              <Text style={styles.alteredStatus}>Altered</Text>
+                              <Text style={[styles.alteredStatus, { fontSize: getScaledSize(12) }]}>Altered</Text>
                             </View>
                           ) : (
                             <View style={[
@@ -604,7 +606,8 @@ const OrderAcceptOwner = () => {
                               />
                               <Text style={[
                                 styles.statusText,
-                                order.approve_status === 'Accepted' ? styles.acceptedStatus : order.approve_status === 'Rejected' ? { color: COLORS.error } : styles.pendingStatus
+                                order.approve_status === 'Accepted' ? styles.acceptedStatus : order.approve_status === 'Rejected' ? { color: COLORS.error } : styles.pendingStatus,
+                                { fontSize: getScaledSize(12) }
                               ]}>
                                 {order.approve_status === 'Accepted' ? 'Accepted' : order.approve_status === 'Rejected' ? 'Rejected' : 'Pending'}
                               </Text>
@@ -622,7 +625,7 @@ const OrderAcceptOwner = () => {
             ) : (
               <Card style={styles.noOrdersCard}>
                 <Card.Content>
-                  <Text style={styles.noOrdersText}>No orders for today</Text>
+                  <Text style={[styles.noOrdersText, { fontSize: getScaledSize(14) }]}>No orders for today</Text>
                 </Card.Content>
               </Card>
             )}
@@ -644,7 +647,7 @@ const OrderAcceptOwner = () => {
                   onPress={() => setSelectAllOrders(!selectAllOrders)}
                   color={COLORS.primary}
                 />
-                <Text style={styles.selectAllText}>Select All Orders</Text>
+                <Text style={[styles.selectAllText, { fontSize: getScaledSize(13) }]}>Select All Orders</Text>
               </View>
               
             </View>
@@ -754,9 +757,8 @@ const OrderAcceptOwner = () => {
             <Card style={styles.emptyCard}>
               <Card.Content style={styles.emptyContent}>
                 <Icon name="account-question" size={48} color={COLORS.primary} />
-                <Text style={styles.emptyText}>No users found</Text>
-                <Text style={styles.emptySubtext}>
-                  {searchQuery ? 'Try a different search term' : 'No users assigned to you'}
+                <Text style={[styles.emptyText, { fontSize: getScaledSize(18) }]}>No users found</Text>
+                <Text style={[styles.emptySubtext, { fontSize: getScaledSize(14) }]}>                  {searchQuery ? 'Try a different search term' : 'No users assigned to you'}
                 </Text>
               </Card.Content>
             </Card>
@@ -771,14 +773,14 @@ const OrderAcceptOwner = () => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading user data...</Text>
+          <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading user data...</Text>
         </View>
       ) : error ? (
         <Card style={styles.errorCard}>
           <Card.Content>
             <View style={styles.errorContent}>
               <Icon name="alert-circle" size={24} color={COLORS.error} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
             </View>
           </Card.Content>
         </Card>
@@ -833,7 +835,6 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     marginLeft: 4,
-    fontSize: 13,
     color: COLORS.primary,
     fontWeight: '500',
   },
@@ -880,7 +881,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text.primary,
   },
@@ -945,12 +945,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   orderLabel: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     width: 70,
   },
   orderValue: {
-    fontSize: 14,
     color: COLORS.text.primary,
     fontWeight: '500',
   },
@@ -974,7 +972,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#DBEAFE',
   },
   statusText: {
-    fontSize: 12,
     fontWeight: '500',
     marginLeft: 4,
   },
@@ -988,7 +985,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   noOrdersText: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     fontStyle: 'italic',
   },
@@ -999,7 +995,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
     color: COLORS.primary,
   },
   errorCard: {
@@ -1015,7 +1010,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.error,
     marginLeft: 8,
-    fontSize: 16,
   },
   emptyCard: {
     backgroundColor: COLORS.surface,
@@ -1029,14 +1023,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginTop: 16,
     textAlign: 'center',
   },
   emptySubtext: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     marginTop: 8,
     textAlign: 'center',
@@ -1048,12 +1040,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   userMetaText: {
-    fontSize: 13,
     color: COLORS.text.secondary,
     marginLeft: 4,
   },
   clickableMetaText: {
-    fontSize: 13,
     color: COLORS.primary,
     marginLeft: 3,
     maxWidth: 90,

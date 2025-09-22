@@ -16,6 +16,7 @@ import {
     Platform,
     ToastAndroid,
     PermissionsAndroid,
+    Linking,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -51,6 +52,8 @@ import {
     styles
 } from './InvoiceDirectComponents';
 
+import { useFontScale } from '../../../App';
+
 // Helper to convert Uint8Array to base64 (for RNFS)
 function uint8ToBase64(uint8) {
     let binary = '';
@@ -66,53 +69,166 @@ function uint8ToBase64(uint8) {
     }
 }
 
-// Helper function to save PDF to downloads (works on all Android versions)
-const savePDFToDownloads = async (pdfBytes, fileName) => {
+// Helper function to check and request storage permissions
+const checkStoragePermissions = async () => {
+    if (Platform.OS !== 'android') {
+        return true; // iOS doesn't need explicit storage permissions for app documents
+    }
+
     try {
-        // For Android 10+ (API 29+), we use scoped storage approach
-        if (Platform.OS === 'android' && Platform.Version >= 29) {
-            // On Android 10+, we can write to Download directory without permissions
-            const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-            const base64Data = uint8ToBase64(pdfBytes);
-            await RNFS.writeFile(filePath, base64Data, 'base64');
+        // For Android 13+ (API 33+), we don't need WRITE_EXTERNAL_STORAGE
+        if (Platform.Version >= 33) {
+            return true;
+        }
+        
+        // For Android 10-12 (API 29-32), check if we have permission
+        if (Platform.Version >= 29) {
+            // Check if we already have permission
+            const hasPermission = await PermissionsAndroid.check(
+                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+            );
             
-            ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
-            return filePath;
-        } 
-        // For older Android versions, we need explicit permissions
-        else if (Platform.OS === 'android') {
-            // Request storage permissions
+            if (hasPermission) {
+                return true;
+            }
+            
+            // Request permission
             const granted = await PermissionsAndroid.request(
                 PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
                 {
-                    title: "Storage Permission",
-                    message: "App needs access to storage to save PDFs",
-                    buttonPositive: "OK"
+                    title: "Storage Permission Required",
+                    message: "This app needs access to storage to save PDF files to your Downloads folder.",
+                    buttonNeutral: "Ask Me Later",
+                    buttonNegative: "Cancel",
+                    buttonPositive: "OK",
                 }
             );
             
-            if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-                const filePath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-                const base64Data = uint8ToBase64(pdfBytes);
-                await RNFS.writeFile(filePath, base64Data, 'base64');
-                
-                ToastAndroid.show(`PDF saved to Downloads as ${fileName}`, ToastAndroid.LONG);
-                return filePath;
-            } else {
-                Alert.alert("Permission Denied", "Cannot save PDF without storage permission");
+            return granted === PermissionsAndroid.RESULTS.GRANTED;
+        }
+        
+        // For older Android versions (below API 29)
+        const hasPermission = await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+        );
+        
+        if (hasPermission) {
+            return true;
+        }
+        
+        const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            {
+                title: "Storage Permission Required",
+                message: "This app needs access to storage to save PDF files.",
+                buttonNeutral: "Ask Me Later",
+                buttonNegative: "Cancel",
+                buttonPositive: "OK",
+            }
+        );
+        
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+        
+    } catch (error) {
+        console.warn('Permission check failed:', error);
+        return false;
+    }
+};
+
+// Helper function to save PDF to downloads (improved with better error handling)
+const savePDFToDownloads = async (pdfBytes, fileName) => {
+    try {
+        console.log('Starting PDF save process...');
+        console.log('Platform:', Platform.OS, 'Version:', Platform.Version);
+        console.log('DownloadDirectoryPath:', RNFS.DownloadDirectoryPath);
+        
+        if (Platform.OS === 'android') {
+            // Check and request permissions first
+            const hasPermission = await checkStoragePermissions();
+            
+            if (!hasPermission) {
+                Alert.alert(
+                    "Permission Required", 
+                    "Storage permission is required to save PDF files. Please grant permission in app settings.",
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Open Settings", onPress: () => Linking.openSettings() }
+                    ]
+                );
                 return null;
             }
-        } 
-        // For iOS
-        else {
-            const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+            
+            // Ensure Downloads directory exists
+            const downloadDir = RNFS.DownloadDirectoryPath;
+            const dirExists = await RNFS.exists(downloadDir);
+            
+            if (!dirExists) {
+                console.log('Downloads directory does not exist, creating...');
+                await RNFS.mkdir(downloadDir);
+            }
+            
+            // Create full file path
+            const filePath = `${downloadDir}/${fileName}`;
+            console.log('Saving to path:', filePath);
+            
+            // Check if file already exists and create unique name if needed
+            let finalPath = filePath;
+            let counter = 1;
+            while (await RNFS.exists(finalPath)) {
+                const nameWithoutExt = fileName.replace('.pdf', '');
+                finalPath = `${downloadDir}/${nameWithoutExt}_${counter}.pdf`;
+                counter++;
+            }
+            
+            // Convert Uint8Array to base64
+            const base64Data = uint8ToBase64(pdfBytes);
+            
+            // Write file
+            await RNFS.writeFile(finalPath, base64Data, 'base64');
+            
+            // Verify file was created
+            const fileExists = await RNFS.exists(finalPath);
+            if (!fileExists) {
+                throw new Error('File was not created successfully');
+            }
+            
+            const finalFileName = finalPath.split('/').pop();
+            ToastAndroid.show(`PDF saved to Downloads as ${finalFileName}`, ToastAndroid.LONG);
+            console.log('PDF saved successfully to:', finalPath);
+            
+            return finalPath;
+        } else {
+            // iOS - save to Documents directory
+            const documentsDir = RNFS.DocumentDirectoryPath;
+            const filePath = `${documentsDir}/${fileName}`;
+            
             const base64Data = uint8ToBase64(pdfBytes);
             await RNFS.writeFile(filePath, base64Data, 'base64');
+            
+            Alert.alert("Success", `PDF saved to Documents as ${fileName}`);
             return filePath;
         }
+        
     } catch (error) {
         console.error("Error saving PDF:", error);
-        Alert.alert("Error", `Failed to save PDF: ${error.message}`);
+        
+        let errorMessage = "Failed to save PDF";
+        
+        if (error.code === 'ENOENT') {
+            errorMessage = "Directory not found. Please try again.";
+        } else if (error.code === 'EACCES') {
+            errorMessage = "Permission denied. Please check app permissions in settings.";
+        } else if (error.message.includes('Permission')) {
+            errorMessage = "Storage permission required. Please grant permission and try again.";
+        } else {
+            errorMessage = `Save failed: ${error.message}`;
+        }
+        
+        Alert.alert("Error", errorMessage, [
+            { text: "OK" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() }
+        ]);
+        
         return null;
     }
 };
@@ -120,6 +236,7 @@ const savePDFToDownloads = async (pdfBytes, fileName) => {
 
 const InvoiceDirect = () => {
     const navigation = useNavigation();
+    const { getScaledSize } = useFontScale();
     const [allUsers, setAllUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -533,7 +650,7 @@ const InvoiceDirect = () => {
         }
     };
 
-    // Download PDF to device storage
+    // Download PDF to device storage with improved error handling
     const downloadPDFHandler = async () => {
         if (!generatedPDFData) {
             Toast.show({
@@ -547,11 +664,26 @@ const InvoiceDirect = () => {
         try {
             setIsSharingPDF(true); // Reuse loading state
             
+            console.log('Starting PDF download process...');
+            console.log('PDF data type:', typeof generatedPDFData.pdfBytes);
+            
+            // Validate PDF data
+            if (!generatedPDFData.pdfBytes || !generatedPDFData.fileName) {
+                throw new Error('Invalid PDF data');
+            }
+            
             // Convert base64 back to Uint8Array for file saving
-            const binaryString = atob(generatedPDFData.pdfBytes);
-            const uint8Array = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                uint8Array[i] = binaryString.charCodeAt(i);
+            let uint8Array;
+            try {
+                const binaryString = atob(generatedPDFData.pdfBytes);
+                uint8Array = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    uint8Array[i] = binaryString.charCodeAt(i);
+                }
+                console.log('PDF converted to Uint8Array, size:', uint8Array.length);
+            } catch (conversionError) {
+                console.error('Error converting PDF data:', conversionError);
+                throw new Error('Failed to process PDF data');
             }
             
             const filePath = await savePDFToDownloads(uint8Array, generatedPDFData.fileName);
@@ -562,12 +694,19 @@ const InvoiceDirect = () => {
                     text1: 'Success',
                     text2: 'Invoice downloaded successfully!'
                 });
+                console.log('PDF downloaded successfully to:', filePath);
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Download Failed',
+                    text2: 'Could not save PDF to device storage'
+                });
             }
         } catch (error) {
             console.error('Error downloading PDF:', error);
             Toast.show({
                 type: 'error',
-                text1: 'Error',
+                text1: 'Download Failed',
                 text2: error.message || 'Failed to download PDF'
             });
         } finally {
@@ -599,6 +738,7 @@ const InvoiceDirect = () => {
                 item={item}
                 onQuantityChange={updateProductQuantityHandler}
                 styles={styles}
+                getScaledSize={getScaledSize}
             />
         );
     };
@@ -626,14 +766,14 @@ const InvoiceDirect = () => {
                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
                 </TouchableOpacity>
                 <View style={styles.headerContent}>
-                     <Text style={styles.headerTitle}>
+                     <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}> 
                          {retrievedInvoice && generatedPDFData ? 'Invoice PDF Ready' :
                           showInvoiceRetrieval ? 'Retrieve Invoice' :
                           showInvoiceCreation ? 'Create Invoice' : 
                           selectedUser ? 'Select Products' : 
                           showExistingCustomers ? 'Existing Customers' : 'Direct Invoice'}
                      </Text>
-                     <Text style={styles.headerSubtitle}>
+                     <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}> 
                          {retrievedInvoice && generatedPDFData ? 'Share or cancel to continue' :
                           showInvoiceRetrieval ? 'Enter invoice number to retrieve' :
                           showInvoiceCreation ? `Invoice for ${selectedUser?.username || `Customer ${selectedUser?.customer_id}`}` :
@@ -677,24 +817,24 @@ const InvoiceDirect = () => {
                     // PDF Ready View (after invoice creation)
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Invoice PDF Generated</Text>
+                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice PDF Generated</Text>
                             
                             {/* Invoice Info */}
                             <View style={styles.invoiceInfoContainer}>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Invoice Number: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
                                     {retrievedInvoice.invoice_info.invoice_number}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Amount: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
                                     Rs {retrievedInvoice.invoice_info.invoice_amount}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Total Items: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
                                     {retrievedInvoice.invoice_info.total_items}
                                 </Text>
-                                <Text style={styles.invoiceInfoText}>
-                                    <Text style={styles.invoiceInfoLabel}>Created: </Text>
+                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
                                     {new Date(retrievedInvoice.invoice_info.created_at).toLocaleDateString()}
                                 </Text>
                             </View>
@@ -712,7 +852,7 @@ const InvoiceDirect = () => {
                                     ) : (
                                         <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={styles.shareButtonText}>
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Downloading...' : 'Download PDF'}
                                     </Text>
                                 </TouchableOpacity>
@@ -728,7 +868,7 @@ const InvoiceDirect = () => {
                                     ) : (
                                         <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={styles.shareButtonText}>
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
                                     </Text>
                                 </TouchableOpacity>
@@ -739,7 +879,7 @@ const InvoiceDirect = () => {
                                     activeOpacity={0.8}
                                 >
                                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
-                                    <Text style={styles.cancelButtonText}>Back to Menu</Text>
+                                    <Text style={[styles.cancelButtonText, { fontSize: getScaledSize(16) }]}>Back to Menu</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -748,11 +888,11 @@ const InvoiceDirect = () => {
                     // Invoice Retrieval View
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Retrieve Invoice</Text>
+                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Retrieve Invoice</Text>
                             
                             {/* Invoice Number Input */}
                             <View style={styles.inputContainer}>
-                                <Text style={styles.inputLabel}>Invoice Number</Text>
+                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(16) }]}>Invoice Number</Text>
                                 <TextInput
                                     style={styles.textInput}
                                     placeholder="Enter invoice number..."
@@ -773,8 +913,7 @@ const InvoiceDirect = () => {
                                 ) : (
                                     <MaterialIcons name="picture-as-pdf" size={20} color={COLORS.text.light} />
                                 )}
-                                <Text style={styles.createButtonText}>
-                                    {isGeneratingInvoice ? 'Retrieving Invoice...' : 
+                                <Text style={[styles.createButtonText, { fontSize: getScaledSize(16) }]}>                                    {isGeneratingInvoice ? 'Retrieving Invoice...' : 
                                      isGeneratingPDF ? 'Generating PDF...' : 'Generate Invoice PDF'}
                                 </Text>
                             </TouchableOpacity>
@@ -782,41 +921,37 @@ const InvoiceDirect = () => {
                             {/* Retrieved Invoice Display */}
                             {retrievedInvoice && (
                                 <View style={styles.retrievedInvoiceContainer}>
-                                    <Text style={styles.sectionTitle}>Invoice Details</Text>
+                                    <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Invoice Details</Text>
                                     
                                     {/* Invoice Info */}
                                     <View style={styles.invoiceInfoContainer}>
-                                        <Text style={styles.invoiceInfoText}>
-                                            <Text style={styles.invoiceInfoLabel}>Invoice Number: </Text>
+                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
                                             {retrievedInvoice.invoice_info.invoice_number}
                                         </Text>
-                                        <Text style={styles.invoiceInfoText}>
-                                            <Text style={styles.invoiceInfoLabel}>Amount: </Text>
+                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
                                             Rs {retrievedInvoice.invoice_info.invoice_amount}
                                         </Text>
-                                        <Text style={styles.invoiceInfoText}>
-                                            <Text style={styles.invoiceInfoLabel}>Total Items: </Text>
+                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
                                             {retrievedInvoice.invoice_info.total_items}
                                         </Text>
-                                        <Text style={styles.invoiceInfoText}>
-                                            <Text style={styles.invoiceInfoLabel}>Created: </Text>
+                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
                                             {new Date(retrievedInvoice.invoice_info.created_at).toLocaleDateString()}
                                         </Text>
                                     </View>
 
                                     {/* Products List */}
                                     <View style={styles.productsContainer}>
-                                        <Text style={styles.sectionTitle}>Products ({retrievedInvoice.products.length})</Text>
+                                        <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Products ({retrievedInvoice.products.length})</Text>
                                         <FlatList
                                             data={retrievedInvoice.products}
                                             renderItem={({ item }) => (
                                                 <View style={styles.retrievedProductItem}>
-                                                    <Text style={styles.retrievedProductName}>{item.name}</Text>
-                                                    <Text style={styles.retrievedProductDetails}>
+                                                    <Text style={[styles.retrievedProductName, { fontSize: getScaledSize(14) }]}>{item.name}</Text>
+                                                    <Text style={[styles.retrievedProductDetails, { fontSize: getScaledSize(12) }]}> 
                                                         Qty: {item.quantity} × Rs {item.price} = Rs {item.item_total}
                                                     </Text>
                                                     {item.approved_qty !== item.quantity && (
-                                                        <Text style={styles.retrievedProductApproved}>
+                                                        <Text style={[styles.retrievedProductApproved, { fontSize: getScaledSize(12) }]}> 
                                                             Approved: {item.approved_qty} × Rs {item.approved_price} = Rs {item.approved_item_total}
                                                         </Text>
                                                     )}
@@ -842,7 +977,7 @@ const InvoiceDirect = () => {
                                                 ) : (
                                                     <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
                                                 )}
-                                                <Text style={styles.shareButtonText}>
+                                                <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                                     {isSharingPDF ? 'Downloading...' : 'Download PDF'}
                                                 </Text>
                                             </TouchableOpacity>
@@ -858,7 +993,7 @@ const InvoiceDirect = () => {
                                                 ) : (
                                                     <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
                                                 )}
-                                                <Text style={styles.shareButtonText}>
+                                                <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                                     {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
                                                 </Text>
                                             </TouchableOpacity>
@@ -872,7 +1007,7 @@ const InvoiceDirect = () => {
                     // Existing Customers View
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <Text style={styles.title}>Select a Customer</Text>
+                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Select a Customer</Text>
                             <Animated.View style={[styles.searchContainer, { opacity: fadeAnim }]}> 
                                 <MaterialIcons name="search" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
                                 <TextInput
@@ -902,6 +1037,7 @@ const InvoiceDirect = () => {
                                             item={item}
                                             onPress={() => handleUserSelect(item)}
                                             styles={styles}
+                                            getScaledSize={getScaledSize}
                                         />
                                     )}
                                     showsVerticalScrollIndicator={false}
@@ -920,12 +1056,13 @@ const InvoiceDirect = () => {
                          >
                              <View style={styles.content}>
                                  <View style={styles.card}>
-                                     <Text style={styles.title}>Create Direct Invoice</Text>
+                                     <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Create Direct Invoice</Text>
                                      
                                      {/* Invoice Number Display */}
                                      <InvoiceNumberDisplay
                                          invoiceNumber={invoiceNumber}
                                          styles={styles}
+                                         getScaledSize={getScaledSize}
                                      />
 
                                      {/* Add More Products Button */}
@@ -934,18 +1071,19 @@ const InvoiceDirect = () => {
                                          onPress={() => setShowSearchModal(true)}
                                      >
                                          <MaterialIcons name="add" size={24} color={COLORS.text.light} />
-                                         <Text style={styles.addProductButtonText}>Add More Products</Text>
+                                         <Text style={[styles.addProductButtonText, { fontSize: getScaledSize(16) }]}>Add More Products</Text>
                                      </TouchableOpacity>
 
                                      {/* Selected Products */}
                                      <View style={styles.selectedProductsContainer}>
-                                         <Text style={styles.sectionTitle}>Selected Products ({selectedProducts.length})</Text>
+                                         <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Selected Products ({selectedProducts.length})</Text>
                                          {selectedProducts.map((item, index) => (
                                              <SelectedProductItem
                                                  key={item.product_id.toString()}
                                                  item={item}
                                                  onQuantityChange={updateProductQuantityHandler}
                                                  styles={styles}
+                                                 getScaledSize={getScaledSize}
                                              />
                                          ))}
                                      </View>
@@ -954,6 +1092,7 @@ const InvoiceDirect = () => {
                                      <TotalAmountDisplay
                                          totalAmount={calculateTotalAmount(selectedProducts)}
                                          styles={styles}
+                                         getScaledSize={getScaledSize}
                                      />
                                  </View>
                              </View>
@@ -965,6 +1104,7 @@ const InvoiceDirect = () => {
                                  onPress={createDirectInvoiceHandler}
                                  isLoading={isCreatingInvoice}
                                  styles={styles}
+                                 getScaledSize={getScaledSize}
                              />
                          </View>
                      </View>
@@ -972,10 +1112,8 @@ const InvoiceDirect = () => {
                      // Customer Type Selection View
                      <View style={styles.content}>
                          <View style={styles.card}>
-                             <Text style={styles.title}>Invoice Options</Text>
-                             <Text style={styles.subtitle}>
-                                 Choose how you want to create the invoice
-                             </Text>
+                             <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice Options</Text>
+                             <Text style={[styles.subtitle, { fontSize: getScaledSize(16) }]}>Choose how you want to create the invoice</Text>
                              
                              {/* Existing Customers Option */}
                              <TouchableOpacity 
@@ -987,10 +1125,8 @@ const InvoiceDirect = () => {
                                      <MaterialIcons name="people" size={24} color={COLORS.primary} />
                                  </View>
                                  <View style={styles.optionContent}>
-                                     <Text style={styles.optionTitle}>Existing Customers</Text>
-                                     <Text style={styles.optionDescription}>
-                                         Select from registered customers
-                                     </Text>
+                                     <Text style={[styles.optionTitle, { fontSize: getScaledSize(16) }]}>Existing Customers</Text>
+                                     <Text style={[styles.optionDescription, { fontSize: getScaledSize(13) }]}>Select from registered customers</Text>
                                  </View>
                                  <MaterialIcons name="arrow-forward-ios" size={16} color={COLORS.text.secondary} />
                              </TouchableOpacity>
@@ -1005,10 +1141,8 @@ const InvoiceDirect = () => {
                                      <MaterialIcons name="person-add" size={24} color={COLORS.primary} />
                                  </View>
                                  <View style={styles.optionContent}>
-                                     <Text style={styles.optionTitle}>Walk-In Customer</Text>
-                                     <Text style={styles.optionDescription}>
-                                         Create invoice for new walk-in customer
-                                     </Text>
+                                     <Text style={[styles.optionTitle, { fontSize: getScaledSize(16) }]}>Walk-In Customer</Text>
+                                     <Text style={[styles.optionDescription, { fontSize: getScaledSize(13) }]}>Create invoice for new walk-in customer</Text>
                                  </View>
                                  <MaterialIcons name="arrow-forward-ios" size={16} color={COLORS.text.secondary} />
                              </TouchableOpacity>

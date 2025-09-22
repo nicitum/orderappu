@@ -9,6 +9,7 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import moment from "moment";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { useFontScale } from '../../App';
 
 // Helper to convert Uint8Array to base64 (for RNFS)
 function uint8ToBase64(uint8) {
@@ -102,6 +103,7 @@ const numberToWords = (num) => {
 import { ipAddress } from "../../services/urls"; // Replace with your actual IP address
 
 const InvoiceOwner = ({ navigation }) => {
+  const { getScaledSize } = useFontScale();
   const [orders, setOrders] = useState([]);
   const [assignedUsers, setAssignedUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -572,7 +574,7 @@ const InvoiceOwner = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Invoice Generation</Text>
+        <Text style={[styles.headerTitle, { fontSize: getScaledSize(22) }]}>Invoice Generation</Text>
         <View style={styles.headerActions}>
           <Button color="#003366" title={`Date: ${selectedDate.toISOString().split("T")[0]}`} onPress={showDatePicker} />
           <DateTimePickerModal
@@ -585,12 +587,12 @@ const InvoiceOwner = ({ navigation }) => {
         </View>
       </View>
       <View style={styles.selectAllContainer}>
-        <Text style={styles.selectAllText}>Select All</Text>
+        <Text style={[styles.selectAllText, { fontSize: getScaledSize(16) }]}>Select All</Text>
         <Checkbox status={selectAllChecked ? "checked" : "unchecked"} onPress={handleSelectAllCheckboxChange} color="#003366" />
       </View>
       <ScrollView style={styles.ordersContainer} contentContainerStyle={styles.ordersContent}>
-        {loading && <Text style={styles.loadingText}>Loading Orders...</Text>}
-        {error && <Text style={styles.errorText}>Error: {error}</Text>}
+        {loading && <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading Orders...</Text>}
+        {error && <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>Error: {error}</Text>}
         {!loading && !error && orders.length > 0 ? (
           orders.map((order) => (
             <View key={order.id} style={styles.orderCard}>
@@ -604,24 +606,24 @@ const InvoiceOwner = ({ navigation }) => {
               <View style={styles.orderDetails}>
                 <View style={styles.orderRow}>
                   <MaterialIcons name="receipt" size={20} color="#003366" />
-                  <Text style={styles.orderId}>Order ID: {order.id}</Text>
+                  <Text style={[styles.orderId, { fontSize: getScaledSize(16) }]}>Order ID: {order.id}</Text>
                 </View>
                 <View style={styles.orderRow}>
                   <MaterialIcons name="person" size={18} color="#666" />
-                  <Text style={styles.orderLabel}>Customer ID:</Text>
-                  <Text style={styles.orderValue}>{order.customer_id}</Text>
+                  <Text style={[styles.orderLabel, { fontSize: getScaledSize(15) }]}>Customer ID:</Text>
+                  <Text style={[styles.orderValue, { fontSize: getScaledSize(15) }]}>{order.customer_id}</Text>
                 </View>
                 <View style={styles.orderRow}>
                   <MaterialIcons name="event" size={18} color="#666" />
-                  <Text style={styles.orderLabel}>Placed On:</Text>
-                  <Text style={styles.orderValue}>{moment.unix(order.placed_on).format("DD MMM YYYY")}</Text>
+                  <Text style={[styles.orderLabel, { fontSize: getScaledSize(15) }]}>Placed On:</Text>
+                  <Text style={[styles.orderValue, { fontSize: getScaledSize(15) }]}>{moment.unix(order.placed_on).format("DD MMM YYYY")}</Text>
                 </View>
               </View>
               <Button color="#003366" title="Generate Invoice" onPress={() => generateInvoice(order)} />
             </View>
           ))
         ) : !loading && !error ? (
-          <Text style={styles.noOrdersText}>No orders found for selected date.</Text>
+          <Text style={[styles.noOrdersText, { fontSize: getScaledSize(16) }]}>No orders found for selected date.</Text>
         ) : null}
       </ScrollView>
       {!loading && orders.length > 0 && (

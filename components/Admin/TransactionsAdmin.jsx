@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../services/urls';
+import { useFontScale } from '../../App';
 
 const COLORS = {
   primary: "#003366",
@@ -33,6 +34,7 @@ const COLORS = {
 };
 
 const TransactionsAdmin = () => {
+  const { getScaledSize } = useFontScale();
   const navigation = useNavigation();
   const [allowPlaceOrder, setAllowPlaceOrder] = useState(false);
   const [allowInvoicing, setAllowInvoicing] = useState(false);
@@ -115,8 +117,8 @@ const TransactionsAdmin = () => {
           {!allowOrderAcceptance && !allowEditOrder && !allowPlaceOrder && !allowInvoicing ? (
             <View style={styles.noOptionsContainer}>
               <MaterialIcons name="block" size={60} color={COLORS.text.secondary} />
-              <Text style={styles.noOptionsTitle}>No Transaction Options Available</Text>
-              <Text style={styles.noOptionsSubtitle}>Please contact your Owner to get access to transaction features.</Text>
+              <Text style={[styles.noOptionsTitle, { fontSize: getScaledSize(18) }]}>No Transaction Options Available</Text>
+              <Text style={[styles.noOptionsSubtitle, { fontSize: getScaledSize(14) }]}>Please contact your Owner to get access to transaction features.</Text>
             </View>
           ) : (
             <>
@@ -128,10 +130,10 @@ const TransactionsAdmin = () => {
                   <MaterialIcons name="assignment-turned-in" size={24} color="#2563EB" />
                 </View>
               </View>
-              <Text style={styles.cardTitle}>Order Acceptance</Text>
-              <Text style={styles.cardSubtitle}>View and manage order acceptance</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Order Acceptance</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View and manage order acceptance</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>Go to status</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Go to status</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -145,10 +147,10 @@ const TransactionsAdmin = () => {
                   <MaterialIcons name="edit" size={24} color="#F59E0B" />
                 </View>
               </View>
-              <Text style={styles.cardTitle}>Update Orders</Text>
-              <Text style={styles.cardSubtitle}>Edit and modify existing orders</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Update Orders</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Edit and modify existing orders</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>Manage orders</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Manage orders</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -162,10 +164,10 @@ const TransactionsAdmin = () => {
                   <MaterialIcons name="playlist-add" size={24} color="#3B82F6" />
                 </View>
               </View>
-              <Text style={styles.cardTitle}>Place Order</Text>
-              <Text style={styles.cardSubtitle}>Create new orders for customers</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Place Order</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Create new orders for customers</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>Tap to start</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Tap to start</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -179,10 +181,10 @@ const TransactionsAdmin = () => {
                   <MaterialIcons name="receipt" size={24} color="#10B981" />
                 </View>
               </View>
-              <Text style={styles.cardTitle}>Invoices</Text>
-              <Text style={styles.cardSubtitle}>View and manage invoices</Text>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoices</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View and manage invoices</Text>
               <View style={styles.cardFooter}>
-                <Text style={styles.cardAction}>View all</Text>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View all</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -210,13 +212,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text.light,
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
   },
@@ -256,13 +256,11 @@ const styles = StyleSheet.create({
   },
 
   cardTitle: {
-    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginBottom: 4,
   },
   cardSubtitle: {
-    fontSize: 12,
     color: COLORS.text.secondary,
     lineHeight: 16,
     marginBottom: 10,
@@ -276,7 +274,6 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
   },
   cardAction: {
-    fontSize: 12,
     fontWeight: '500',
     color: COLORS.text.secondary,
   },
@@ -287,7 +284,6 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   noOptionsTitle: {
-    fontSize: 18,
     fontWeight: '600',
     color: COLORS.text.primary,
     marginTop: 20,
@@ -295,7 +291,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   noOptionsSubtitle: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     textAlign: 'center',
     lineHeight: 20,

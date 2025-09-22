@@ -18,10 +18,12 @@ import { jwtDecode } from "jwt-decode";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Toast from 'react-native-toast-message';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useFontScale } from '../../App';
 
 const { width } = Dimensions.get('window');
 
 const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatuses }) => {
+    const { getScaledSize } = useFontScale();
     const [localStatus, setLocalStatus] = useState(item.delivery_status || 'pending');
     const isDelivered = localStatus === 'delivered';
     const isObjection = localStatus === 'objection';
@@ -142,11 +144,11 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
             <View style={styles.orderHeader}>
                 <View style={styles.orderTitleContainer}>
                     <MaterialIcons name="shopping-bag" size={20} color="#003366" />
-                    <Text style={styles.orderTitle}>Order #{item.id}</Text>
+                    <Text style={[styles.orderTitle, { fontSize: getScaledSize(16) }]}>Order #{item.id}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
                     <MaterialIcons name={statusInfo.icon} size={16} color={statusInfo.color} />
-                    <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                    <Text style={[styles.statusText, { color: statusInfo.color, fontSize: getScaledSize(12) }]}>
                         {statusInfo.label}
                     </Text>
                 </View>
@@ -155,13 +157,13 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
             <View style={styles.orderDetails}>
                 <View style={styles.detailRow}>
                     <MaterialIcons name="event" size={16} color="#666666" />
-                    <Text style={styles.detailText}>
+                    <Text style={[styles.detailText, { fontSize: getScaledSize(14) }]}>
                         {new Date(item.placed_on * 1000).toLocaleDateString()}
                     </Text>
                 </View>
                 <View style={styles.detailRow}>
                     <MaterialIcons name="payment" size={16} color="#666666" />
-                    <Text style={styles.detailText}>₹{item.total_amount || 0}</Text>
+                    <Text style={[styles.detailText, { fontSize: getScaledSize(14) }]}>₹{item.total_amount || 0}</Text>
                 </View>
             </View>
 
@@ -184,9 +186,9 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
 
             {showRemarksInput && (
                 <View style={styles.remarksContainer}>
-                    <Text style={styles.remarksLabel}>{isObjection ? 'Objection Remarks' : 'Delivery Remarks'}</Text>
+                    <Text style={[styles.remarksLabel, { fontSize: getScaledSize(14) }]}>{isObjection ? 'Objection Remarks' : 'Delivery Remarks'}</Text>
                     <TextInput
-                        style={styles.remarksInput}
+                        style={[styles.remarksInput, { fontSize: getScaledSize(14) }]}
                         placeholder={isObjection ? 'Add objection remarks here...' : 'Add delivery remarks here...'}
                         placeholderTextColor="#999999"
                         multiline
@@ -201,7 +203,7 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
                         activeOpacity={0.8}
                     >
                         <MaterialIcons name="check" size={20} color="#FFFFFF" />
-                        <Text style={styles.saveRemarksButtonText}>Save Remarks</Text>
+                        <Text style={[styles.saveRemarksButtonText, { fontSize: getScaledSize(14) }]}>Save Remarks</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -209,7 +211,7 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
             {isDelivered && remarksSaved && (
                 <View style={styles.remarksSavedContainer}>
                     <MaterialIcons name="check-circle" size={16} color="#4CAF50" />
-                    <Text style={styles.remarksSavedText}>Remarks saved</Text>
+                    <Text style={[styles.remarksSavedText, { fontSize: getScaledSize(14) }]}>Remarks saved</Text>
                 </View>
             )}
         </View>
@@ -217,6 +219,7 @@ const OrderItem = React.memo(({ item, onStatusUpdate, loading, remarksSavedStatu
 });
 
 const DeliveryStatusUpdate = () => {
+    const { getScaledSize } = useFontScale();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -318,7 +321,7 @@ const DeliveryStatusUpdate = () => {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#003366" />
-                <Text style={styles.loadingText}>Loading orders...</Text>
+                <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
             </View>
         );
     }
@@ -328,8 +331,8 @@ const DeliveryStatusUpdate = () => {
             <StatusBar backgroundColor="#003366" barStyle="light-content" />
             
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Delivery Status</Text>
-                <Text style={styles.headerSubtitle}>Update order delivery status</Text>
+                <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Delivery Status</Text>
+                <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}>Update order delivery status</Text>
             </View>
 
             <ScrollView 
@@ -340,7 +343,7 @@ const DeliveryStatusUpdate = () => {
                 {error ? (
                     <View style={styles.errorContainer}>
                         <MaterialIcons name="error-outline" size={48} color="#F44336" />
-                        <Text style={styles.errorText}>{error}</Text>
+                        <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                     </View>
                 ) : orders.length > 0 ? (
                     orders.map((item) => (
@@ -355,8 +358,8 @@ const DeliveryStatusUpdate = () => {
                 ) : (
                     <View style={styles.emptyContainer}>
                         <MaterialIcons name="inbox" size={64} color="#003366" />
-                        <Text style={styles.emptyTitle}>No Orders Found</Text>
-                        <Text style={styles.emptySubtitle}>There are no orders to update at this time</Text>
+                        <Text style={[styles.emptyTitle, { fontSize: getScaledSize(20) }]}>No Orders Found</Text>
+                        <Text style={[styles.emptySubtitle, { fontSize: getScaledSize(14) }]}>There are no orders to update at this time</Text>
                     </View>
                 )}
             </ScrollView>

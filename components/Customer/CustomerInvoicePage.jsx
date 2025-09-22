@@ -17,6 +17,7 @@ import moment from 'moment';
 import axios from 'axios';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Card, Button } from 'react-native-paper';
+import { useFontScale } from '../../App';
 
 const COLORS = {
     primary: '#003366',
@@ -35,6 +36,7 @@ const COLORS = {
 };
 
 const CustomerInvoicePage = () => {
+    const { getScaledSize } = useFontScale();
     const [allOrders, setAllOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -185,7 +187,7 @@ const CustomerInvoicePage = () => {
             >
                 <MaterialCommunityIcons name="chevron-left" size={24} color={COLORS.primary} />
             </TouchableOpacity>
-            <Text style={styles.monthText}>
+            <Text style={[styles.monthText, { fontSize: getScaledSize(18) }]}>
                 {moment(selectedMonth).format('MMMM YYYY')}
             </Text>
             <TouchableOpacity 
@@ -205,8 +207,8 @@ const CustomerInvoicePage = () => {
                     <MaterialCommunityIcons name={icon} size={24} color={color} />
                 </View>
                 <View style={styles.summaryTextContainer}>
-                    <Text style={styles.summaryTitle}>{title}</Text>
-                    <Text style={[styles.summaryAmount, { color }]}>{formatCurrency(amount)}</Text>
+                    <Text style={[styles.summaryTitle, { fontSize: getScaledSize(14) }]}>{title}</Text>
+                    <Text style={[styles.summaryAmount, { color, fontSize: getScaledSize(18) }]}>{formatCurrency(amount)}</Text>
                 </View>
             </Card.Content>
         </Card>
@@ -218,10 +220,10 @@ const CustomerInvoicePage = () => {
             <Card.Content>
                 {isFirstOrderOfDay && (
                     <View style={styles.dailySummary}>
-                        <Text style={styles.dailySummaryTitle}>Daily Summary</Text>
+                        <Text style={[styles.dailySummaryTitle, { fontSize: getScaledSize(14) }]}>Daily Summary</Text>
                         <View style={styles.dailySummaryRow}>
-                            <Text style={styles.dailySummaryLabel}>Total Invoice:</Text>
-                            <Text style={styles.dailySummaryValue}>{formatCurrency(dateTotalOrderAmount)}</Text>
+                            <Text style={[styles.dailySummaryLabel, { fontSize: getScaledSize(14) }]}>Total Invoice:</Text>
+                            <Text style={[styles.dailySummaryValue, { fontSize: getScaledSize(14) }]}>{formatCurrency(dateTotalOrderAmount)}</Text>
                         </View>
                     </View>
                 )}
@@ -229,9 +231,9 @@ const CustomerInvoicePage = () => {
                     <View style={styles.orderHeader}>
                         <View style={styles.orderIdContainer}>
                             <MaterialCommunityIcons name="receipt" size={20} color={COLORS.primary} />
-                            <Text style={styles.orderId}>Order #{item.id}</Text>
+                            <Text style={[styles.orderId, { fontSize: getScaledSize(16) }]}>Order #{item.id}</Text>
                         </View>
-                        <Text style={styles.orderAmount}>{formatCurrency(item.total_amount)}</Text>
+                        <Text style={[styles.orderAmount, { fontSize: getScaledSize(16) }]}>{formatCurrency(item.total_amount)}</Text>
                     </View>
                 </TouchableOpacity>
                 {showInvoice === item.id && (
@@ -239,25 +241,25 @@ const CustomerInvoicePage = () => {
                         {expandedOrderProducts.length > 0 ? (
                             <View>
                                 <View style={styles.invoiceTableHeader}>
-                                    <Text style={styles.tableHeaderCell}>Product</Text>
-                                    <Text style={styles.tableHeaderCell}>Qty</Text>
-                                    <Text style={styles.tableHeaderCell}>Rate</Text>
-                                    <Text style={styles.tableHeaderCell}>GST</Text>
-                                    <Text style={styles.tableHeaderCell}>Total</Text>
+                                    <Text style={[styles.tableHeaderCell, { fontSize: getScaledSize(12) }]}>Product</Text>
+                                    <Text style={[styles.tableHeaderCell, { fontSize: getScaledSize(12) }]}>Qty</Text>
+                                    <Text style={[styles.tableHeaderCell, { fontSize: getScaledSize(12) }]}>Rate</Text>
+                                    <Text style={[styles.tableHeaderCell, { fontSize: getScaledSize(12) }]}>GST</Text>
+                                    <Text style={[styles.tableHeaderCell, { fontSize: getScaledSize(12) }]}>Total</Text>
                                 </View>
                                 {calculateInvoiceDetails(expandedOrderProducts).map(product => (
                                     <View key={product.serialNumber} style={styles.invoiceTableRow}>
-                                        <Text style={styles.tableCell}>{product.name}</Text>
-                                        <Text style={styles.tableCell}>{product.quantity}</Text>
-                                        <Text style={styles.tableCell}>{product.rate}</Text>
-                                        <Text style={styles.tableCell}>{product.gstRate}%</Text>
-                                        <Text style={styles.tableCell}>{formatCurrency(product.value)}</Text>
+                                        <Text style={[styles.tableCell, { fontSize: getScaledSize(12) }]}>{product.name}</Text>
+                                        <Text style={[styles.tableCell, { fontSize: getScaledSize(12) }]}>{product.quantity}</Text>
+                                        <Text style={[styles.tableCell, { fontSize: getScaledSize(12) }]}>{product.rate}</Text>
+                                        <Text style={[styles.tableCell, { fontSize: getScaledSize(12) }]}>{product.gstRate}%</Text>
+                                        <Text style={[styles.tableCell, { fontSize: getScaledSize(12) }]}>{formatCurrency(product.value)}</Text>
                                     </View>
                                 ))}
                                 <View style={styles.invoiceTotalSection}>
                                     <View style={styles.invoiceTotalRow}>
-                                        <Text style={styles.totalLabel}>Subtotal:</Text>
-                                        <Text style={styles.totalValue}>
+                                        <Text style={[styles.totalLabel, { fontSize: getScaledSize(14) }]}>Subtotal:</Text>
+                                        <Text style={[styles.totalValue, { fontSize: getScaledSize(14) }]}>
                                             {formatCurrency(expandedOrderProducts.reduce((sum, item) => 
                                                 sum + (parseFloat(item.price) / (1 + (parseFloat(item.gst_rate || 0) / 100))) * item.quantity, 0
                                             ))}
@@ -276,16 +278,16 @@ const CustomerInvoicePage = () => {
                                         return (
                                             <View>
                                                 <View style={styles.invoiceTotalRow}>
-                                                    <Text style={styles.totalLabel}>CGST:</Text>
-                                                    <Text style={styles.totalValue}>{formatCurrency(cgst)}</Text>
+                                                    <Text style={[styles.totalLabel, { fontSize: getScaledSize(14) }]}>CGST:</Text>
+                                                    <Text style={[styles.totalValue, { fontSize: getScaledSize(14) }]}>{formatCurrency(cgst)}</Text>
                                                 </View>
                                                 <View style={styles.invoiceTotalRow}>
-                                                    <Text style={styles.totalLabel}>SGST:</Text>
-                                                    <Text style={styles.totalValue}>{formatCurrency(sgst)}</Text>
+                                                    <Text style={[styles.totalLabel, { fontSize: getScaledSize(14) }]}>SGST:</Text>
+                                                    <Text style={[styles.totalValue, { fontSize: getScaledSize(14) }]}>{formatCurrency(sgst)}</Text>
                                                 </View>
                                                 <View style={[styles.invoiceTotalRow, styles.grandTotalRow]}>
-                                                    <Text style={styles.grandTotalLabel}>Grand Total:</Text>
-                                                    <Text style={styles.grandTotalValue}>{formatCurrency(item.total_amount)}</Text>
+                                                    <Text style={[styles.grandTotalLabel, { fontSize: getScaledSize(16) }]}>Grand Total:</Text>
+                                                    <Text style={[styles.grandTotalValue, { fontSize: getScaledSize(16) }]}>{formatCurrency(item.total_amount)}</Text>
                                                 </View>
                                             </View>
                                         );
@@ -317,12 +319,12 @@ const CustomerInvoicePage = () => {
             {loading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={COLORS.primary} />
-                    <Text style={styles.loadingText}>Loading transactions...</Text>
+                    <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading transactions...</Text>
                 </View>
             ) : error ? (
                 <View style={styles.errorContainer}>
                     <MaterialCommunityIcons name="alert-circle-outline" size={48} color={COLORS.error} />
-                    <Text style={styles.errorText}>{error}</Text>
+                    <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                     <Button
                         mode="contained"
                         onPress={fetchOrders}
@@ -335,7 +337,7 @@ const CustomerInvoicePage = () => {
             ) : groupedOrders.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <MaterialCommunityIcons name="file-document-outline" size={48} color={COLORS.text.secondary} />
-                    <Text style={styles.emptyText}>No transactions found for this month</Text>
+                    <Text style={[styles.emptyText, { fontSize: getScaledSize(16) }]}>No transactions found for this month</Text>
                 </View>
             ) : (
                 <SectionList
@@ -356,7 +358,7 @@ const CustomerInvoicePage = () => {
                     }}
                     renderSectionHeader={({ section: { title } }) => (
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionHeaderText}>
+                            <Text style={[styles.sectionHeaderText, { fontSize: getScaledSize(16) }]}>
                                 {formatDate(moment(title, 'YYYY-MM-DD').unix())}
                             </Text>
                         </View>
@@ -392,7 +394,6 @@ const styles = StyleSheet.create({
         backgroundColor: `${COLORS.primary}10`,
     },
     monthText: {
-        fontSize: 18,
         fontWeight: '600',
         color: COLORS.primary,
     },
@@ -424,12 +425,10 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     summaryTitle: {
-        fontSize: 14,
         color: COLORS.text.secondary,
         marginBottom: 4,
     },
     summaryAmount: {
-        fontSize: 18,
         fontWeight: 'bold',
     },
     loadingContainer: {
@@ -440,7 +439,6 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 12,
-        fontSize: 16,
         fontWeight: '600',
         color: COLORS.primary,
     },
@@ -451,7 +449,6 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     errorText: {
-        fontSize: 16,
         color: COLORS.error,
         textAlign: 'center',
         marginTop: 12,
@@ -471,7 +468,6 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     emptyText: {
-        fontSize: 16,
         color: COLORS.text.secondary,
         marginTop: 12,
         textAlign: 'center',
@@ -482,7 +478,6 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     sectionHeaderText: {
-        fontSize: 16,
         fontWeight: '600',
         color: COLORS.text.light,
     },
@@ -501,7 +496,6 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     dailySummaryTitle: {
-        fontSize: 14,
         fontWeight: '600',
         color: COLORS.primary,
         marginBottom: 8,
@@ -512,11 +506,9 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     dailySummaryLabel: {
-        fontSize: 14,
         color: COLORS.text.secondary,
     },
     dailySummaryValue: {
-        fontSize: 14,
         fontWeight: '600',
         color: COLORS.primary,
     },
@@ -530,13 +522,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     orderId: {
-        fontSize: 16,
         fontWeight: '600',
         color: COLORS.primary,
         marginLeft: 8,
     },
     orderAmount: {
-        fontSize: 16,
         fontWeight: '700',
         color: COLORS.primary,
     },
@@ -556,7 +546,6 @@ const styles = StyleSheet.create({
     },
     tableHeaderCell: {
         flex: 1,
-        fontSize: 12,
         fontWeight: '600',
         color: COLORS.primary,
         textAlign: 'center',
@@ -570,7 +559,6 @@ const styles = StyleSheet.create({
     },
     tableCell: {
         flex: 1,
-        fontSize: 12,
         color: COLORS.text.primary,
         textAlign: 'center',
     },
@@ -586,11 +574,9 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     totalLabel: {
-        fontSize: 14,
         color: COLORS.text.secondary,
     },
     totalValue: {
-        fontSize: 14,
         fontWeight: '600',
         color: COLORS.primary,
     },
@@ -601,12 +587,10 @@ const styles = StyleSheet.create({
         borderTopColor: `${COLORS.primary}20`,
     },
     grandTotalLabel: {
-        fontSize: 16,
         fontWeight: '700',
         color: COLORS.primary,
     },
     grandTotalValue: {
-        fontSize: 16,
         fontWeight: '700',
         color: COLORS.primary,
     },

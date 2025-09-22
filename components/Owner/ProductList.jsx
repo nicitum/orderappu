@@ -19,8 +19,10 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Picker } from "@react-native-picker/picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
+import { useFontScale } from '../../App';
 
 const ProductsComponent = () => {
+  const { getScaledSize } = useFontScale();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -155,9 +157,9 @@ const ProductsComponent = () => {
           )}
         </View>
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-          <Text style={styles.productDetails}>{item.category} • {item.brand}</Text>
-          <Text style={styles.productPrice}>₹{item.price}</Text>
+          <Text style={[styles.productName, { fontSize: getScaledSize(14) }]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.productDetails, { fontSize: getScaledSize(12) }]}>{item.category} • {item.brand}</Text>
+          <Text style={[styles.productPrice, { fontSize: getScaledSize(16) }]}>₹{item.price}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -167,7 +169,7 @@ const ProductsComponent = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#003366" />
-        <Text style={styles.loadingText}>Loading products...</Text>
+        <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading products...</Text>
       </View>
     );
   }
@@ -184,15 +186,15 @@ const ProductsComponent = () => {
           >
             <Icon name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Access Denied</Text>
+          <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}>Access Denied</Text>
         </View>
         <View style={styles.accessDeniedContainer}>
           <Icon name="block" size={64} color="#FF6B6B" />
-          <Text style={styles.accessDeniedTitle}>Access Denied</Text>
-          <Text style={styles.accessDeniedText}>
+          <Text style={[styles.accessDeniedTitle, { fontSize: getScaledSize(24) }]}>Access Denied</Text>
+          <Text style={[styles.accessDeniedText, { fontSize: getScaledSize(16) }]}>
             You need superadmin or owner role to access this page.
           </Text>
-          <Text style={styles.accessDeniedText}>
+          <Text style={[styles.accessDeniedText, { fontSize: getScaledSize(16) }]}>
             Your current role: {userRole}
           </Text>
         </View>
@@ -208,7 +210,7 @@ const ProductsComponent = () => {
       <View style={styles.searchContainer}>
         <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { fontSize: getScaledSize(16), padding: getScaledSize(12) }]}
           placeholder="Search products..."
           placeholderTextColor="#666"
           value={searchTerm}
@@ -219,17 +221,17 @@ const ProductsComponent = () => {
       {/* Debug info */}
       <View style={styles.debugContainer}>
        
-        <Text style={styles.debugText}>Total Products: {products.length}</Text>
-        <Text style={styles.debugText}>Filtered Products: {filteredProducts.length}</Text>
-        <Text style={styles.debugText}>Categories: {categories.length - 1}</Text>
-        <Text style={styles.debugText}>Brands: {brands.length - 1}</Text>
+        <Text style={[styles.debugText, { fontSize: getScaledSize(14) }]}>Total Products: {products.length}</Text>
+        <Text style={[styles.debugText, { fontSize: getScaledSize(14) }]}>Filtered Products: {filteredProducts.length}</Text>
+        <Text style={[styles.debugText, { fontSize: getScaledSize(14) }]}>Categories: {categories.length - 1}</Text>
+        <Text style={[styles.debugText, { fontSize: getScaledSize(14) }]}>Brands: {brands.length - 1}</Text>
       </View>
 
       <View style={styles.filterContainer}>
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={selectedCategory}
-            style={styles.picker}
+            style={[styles.picker, { height: getScaledSize(48) }]}
             dropdownIconColor="#003366"
             onValueChange={(itemValue) => setSelectedCategory(itemValue)}
           >
@@ -246,7 +248,7 @@ const ProductsComponent = () => {
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={selectedBrand}
-            style={styles.picker}
+            style={[styles.picker, { height: getScaledSize(48) }]}
             dropdownIconColor="#003366"
             onValueChange={(itemValue) => setSelectedBrand(itemValue)}
           >
@@ -273,8 +275,8 @@ const ProductsComponent = () => {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Icon name="search-off" size={48} color="#CCC" />
-            <Text style={styles.noProducts}>No products found</Text>
-            <Text style={styles.emptySubText}>Try adjusting your search or filters</Text>
+            <Text style={[styles.noProducts, { fontSize: getScaledSize(16) }]}>No products found</Text>
+            <Text style={[styles.emptySubText, { fontSize: getScaledSize(14) }]}>Try adjusting your search or filters</Text>
           </View>
         }
       />
@@ -318,7 +320,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
     color: "#666",
   },
   header: {
@@ -339,7 +340,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: "#FFFFFF",
     flex: 1,
-    fontSize: 20,
     fontWeight: "600",
     textAlign: "center",
   },
@@ -366,8 +366,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     color: "#333",
-    padding: 12,
-    fontSize: 16,
   },
   filterContainer: {
     flexDirection: "row",
@@ -387,7 +385,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   picker: {
-    height: 48,
   },
   listContainer: {
     padding: 8,
@@ -430,19 +427,16 @@ const styles = StyleSheet.create({
   },
   productName: {
     color: "#333333",
-    fontSize: 14,
     fontWeight: "600",
     marginBottom: 4,
     height: 40,
   },
   productDetails: {
     color: "#666666",
-    fontSize: 12,
     marginBottom: 8,
   },
   productPrice: {
     color: "#003366",
-    fontSize: 16,
     fontWeight: "700",
   },
   emptyContainer: {
@@ -453,13 +447,11 @@ const styles = StyleSheet.create({
   },
   noProducts: {
     color: "#666666",
-    fontSize: 16,
     marginTop: 12,
     fontWeight: "600",
   },
   emptySubText: {
     color: "#999999",
-    fontSize: 14,
     marginTop: 8,
     textAlign: "center",
   },
@@ -494,7 +486,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   debugText: {
-    fontSize: 14,
     color: "#333",
     marginBottom: 4,
   },
@@ -506,14 +497,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F7FA",
   },
   accessDeniedTitle: {
-    fontSize: 24,
     fontWeight: "bold",
     color: "#FF6B6B",
     marginTop: 20,
     textAlign: "center",
   },
   accessDeniedText: {
-    fontSize: 16,
     color: "#666",
     textAlign: "center",
     marginTop: 10,

@@ -1,27 +1,15 @@
-import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import ProfilePage from './profile';
 import OrdersPage from './OrdersPage';
 import DeliveryStatusUpdate from './DeliveryStatusUpdate';
-
-
 import PlaceOrderAdmin from './PlaceOrderAdmin';
-
-
-import DailyOrdersReport from './DailyOrdersReport';
 import Remarks from './Remarks';
-
-import AutoOrderUpdate from './AutoOrderUpdate';
-
-
-
-import AutoOrderPage from './AutoOrderPage';
-
-
 import OrderTrackingScreen from './OrderTrackingScreen';
-
 import OrderTrackingCustomerScreen from './OrderTrackingCustomerScreen';
 import CartCustomer from '../Customer/CartCustomer';
+import Settings from './Settings';
+import FontSettings from './FontSettings';
+
 const Stack = createStackNavigator();
 
 const ProfileStack = () => {
@@ -61,12 +49,6 @@ const ProfileStack = () => {
 
 
 
-      <Stack.Screen 
-        name="DailyOrdersReport" 
-        component={DailyOrdersReport} 
-        options={{ title: 'DailyOrdersReport' }} 
-        
-      />
 
 
       
@@ -89,21 +71,8 @@ const ProfileStack = () => {
     
 
 
-    
-    <Stack.Screen 
-        name="AutoOrderPage"
-        component={AutoOrderPage}
-        options={{ title: 'Auto Order Page' }} 
-      />
-
-
       
-      
-      <Stack.Screen 
-        name="AutoOrderUpdate"
-        component={AutoOrderUpdate}
-        options={{ title: 'Auto Order Update' }}
-      />
+  
 
       <Stack.Screen 
         name="OrderTrackingScreen"
@@ -123,28 +92,22 @@ const ProfileStack = () => {
         component={CartCustomer}
         options={{ headerShown: false }}
       />
-
-
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-    </Stack.Navigator>
       
-
-
+      <Stack.Screen
+        name="Settings"
+        component={Settings}
+        options={{ headerShown: false }}
+      />
+      
+      <Stack.Screen
+        name="FontSettings"
+        component={FontSettings}
+        options={{ headerShown: false }}
+      />
       
     
+
+    </Stack.Navigator>
   );
 };
 

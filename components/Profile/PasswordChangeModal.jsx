@@ -17,8 +17,10 @@ import axios from "axios";
 import { ipAddress } from "../../services/urls";
 import { checkTokenAndRedirect } from "../../services/auth";
 import { useNavigation } from "@react-navigation/native";
+import { useFontScale } from '../../App';
 
 const PasswordChangeModal = ({ isVisible, onClose }) => {
+  const { getScaledSize } = useFontScale();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -143,17 +145,17 @@ const PasswordChangeModal = ({ isVisible, onClose }) => {
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Change Password</Text>
+            <Text style={[styles.modalTitle, { fontSize: getScaledSize(24) }]}>Change Password</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <MaterialIcons name="close" size={24} color="#666666" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Current Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>Current Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Enter current password"
                 secureTextEntry={!showOldPassword}
                 value={oldPassword}
@@ -174,10 +176,10 @@ const PasswordChangeModal = ({ isVisible, onClose }) => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>New Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>New Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Enter new password"
                 secureTextEntry={!showNewPassword}
                 value={newPassword}
@@ -195,7 +197,7 @@ const PasswordChangeModal = ({ isVisible, onClose }) => {
                 />
               </TouchableOpacity>
             </View>
-            <Text style={styles.helperText}>
+            <Text style={[styles.helperText, { fontSize: getScaledSize(12) }]}>
               Password must contain:{'\n'}
               - At least 8 characters{'\n'}
               - One uppercase letter{'\n'}
@@ -206,10 +208,10 @@ const PasswordChangeModal = ({ isVisible, onClose }) => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm New Password</Text>
+            <Text style={[styles.label, { fontSize: getScaledSize(14) }]}>Confirm New Password</Text>
             <View style={styles.passwordInput}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { fontSize: getScaledSize(16) }]}
                 placeholder="Confirm new password"
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
@@ -239,7 +241,7 @@ const PasswordChangeModal = ({ isVisible, onClose }) => {
             ) : (
               <>
                 <MaterialIcons name="lock" size={20} color="#FFFFFF" />
-                <Text style={styles.submitButtonText}>Update Password</Text>
+                <Text style={[styles.submitButtonText, { fontSize: getScaledSize(16) }]}>Update Password</Text>
               </>
             )}
           </TouchableOpacity>
@@ -275,7 +277,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalTitle: {
-    fontSize: 24,
     fontWeight: "600",
     color: "#003366",
   },
@@ -286,7 +287,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
     color: "#666666",
     marginBottom: 8,
   },
@@ -301,14 +301,12 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 48,
-    fontSize: 16,
     color: "#333333",
   },
   eyeIcon: {
     padding: 8,
   },
   helperText: {
-    fontSize: 12,
     color: "#666666",
     marginTop: 4,
   },
@@ -326,7 +324,6 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
   },

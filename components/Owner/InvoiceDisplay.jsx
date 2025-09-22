@@ -17,8 +17,10 @@ import { ipAddress } from '../../services/urls';
 import moment from 'moment';
 import axios from 'axios';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useFontScale } from '../../App';
 
 const InvoiceDisplay = () => {
+    const { getScaledSize } = useFontScale();
     const [allUsers, setAllUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -295,11 +297,11 @@ const InvoiceDisplay = () => {
             {/* Customer Selection Section */}
             {!selectedUser ? (
                 <View style={styles.card}>
-                    <Text style={styles.title}>Select a Customer</Text>
+                    <Text style={[styles.title, { fontSize: getScaledSize(20) }]}>Select a Customer</Text>
                     <Animated.View style={[styles.searchContainer, { opacity: fadeAnim }]}> 
                         <MaterialIcons name="search" size={22} color="#003366" style={{ marginRight: 8 }} />
                         <TextInput
-                            style={styles.searchInput}
+                            style={[styles.searchInput, { fontSize: getScaledSize(16) }]}
                             placeholder="Search customers by name..."
                             value={searchQuery}
                             onChangeText={handleSearch}
@@ -309,12 +311,12 @@ const InvoiceDisplay = () => {
                     {loading ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color="#003366" />
-                            <Text style={styles.loadingText}>Loading customers...</Text>
+                            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading customers...</Text>
                         </View>
                     ) : error ? (
-                        <Text style={styles.errorText}>{error}</Text>
+                        <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                     ) : filteredUsers.length === 0 ? (
-                        <Text style={styles.noDataText}>No customers found.</Text>
+                        <Text style={[styles.noDataText, { fontSize: getScaledSize(16) }]}>No customers found.</Text>
                     ) : (
                         <FlatList
                             data={filteredUsers}
@@ -325,7 +327,7 @@ const InvoiceDisplay = () => {
                                     onPress={() => handleUserSelect(item)}
                                 >
                                     <MaterialIcons name="person" size={22} color="#003366" style={{ marginRight: 10 }} />
-                                    <Text style={styles.userText}>{item.name || `Customer ${item.customer_id}`}</Text>
+                                    <Text style={[styles.userText, { fontSize: getScaledSize(16) }]}>{item.name || `Customer ${item.customer_id}`}</Text>
                                 </TouchableOpacity>
                             )}
                         />
@@ -338,7 +340,7 @@ const InvoiceDisplay = () => {
                         <TouchableOpacity onPress={() => setSelectedUser(null)}>
                             <MaterialIcons name="arrow-back" size={22} color="#003366" />
                         </TouchableOpacity>
-                        <Text style={styles.selectedUserText}>{selectedUser.name || `Customer ${selectedUser.customer_id}`}</Text>
+                        <Text style={[styles.selectedUserText, { fontSize: getScaledSize(18) }]}>{selectedUser.name || `Customer ${selectedUser.customer_id}`}</Text>
                     </View>
 
                     {/* Month Selector */}
@@ -346,7 +348,7 @@ const InvoiceDisplay = () => {
                         <TouchableOpacity onPress={() => changeMonth(-1)}>
                             <MaterialIcons name="chevron-left" size={28} color="#003366" />
                         </TouchableOpacity>
-                        <Text style={styles.monthText}>{moment(selectedMonth).format('MMMM YYYY')}</Text>
+                        <Text style={[styles.monthText, { fontSize: getScaledSize(18) }]}>{moment(selectedMonth).format('MMMM YYYY')}</Text>
                         <TouchableOpacity onPress={() => changeMonth(1)}>
                             <MaterialIcons name="chevron-right" size={28} color="#003366" />
                         </TouchableOpacity>
@@ -356,11 +358,11 @@ const InvoiceDisplay = () => {
                     <View style={styles.summaryCard}>
                         <View style={styles.summaryRow}>
                             <MaterialIcons name="receipt-long" size={22} color="#003366" style={{ marginRight: 8 }} />
-                            <Text style={styles.balanceText}>Total Invoice: {formatCurrency(totalOrderAmount)}</Text>
+                            <Text style={[styles.balanceText, { fontSize: getScaledSize(17) }]}>Total Invoice: {formatCurrency(totalOrderAmount)}</Text>
                         </View>
                         <View style={styles.summaryRow}>
                             <MaterialIcons name="payments" size={22} color="#059669" style={{ marginRight: 8 }} />
-                            <Text style={styles.balanceText}>Total Paid: {formatCurrency(totalPaidAmount)}</Text>
+                            <Text style={[styles.balanceText, { fontSize: getScaledSize(17) }]}>Total Paid: {formatCurrency(totalPaidAmount)}</Text>
                         </View>
                     </View>
 
@@ -368,12 +370,12 @@ const InvoiceDisplay = () => {
                     {loading ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color="#003366" />
-                            <Text style={styles.loadingText}>Loading...</Text>
+                            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading...</Text>
                         </View>
                     ) : error ? (
-                        <Text style={styles.errorText}>{error}</Text>
+                        <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                     ) : groupedOrders.length === 0 ? (
-                        <Text style={styles.noDataText}>No orders found for this month.</Text>
+                        <Text style={[styles.noDataText, { fontSize: getScaledSize(16) }]}>No orders found for this month.</Text>
                     ) : (
                         <SectionList
                             sections={groupedOrders}

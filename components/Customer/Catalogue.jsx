@@ -20,6 +20,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ipAddress } from '../../services/urls';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
+import { useFontScale } from '../../App';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-IN', {
@@ -32,6 +33,7 @@ const formatCurrency = (amount) => {
 
 const Catalogue = () => {
   const navigation = useNavigation();
+  const { getScaledSize } = useFontScale();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -302,7 +304,7 @@ const Catalogue = () => {
             <Icon name="image" size={24} color="#bbb" />
           </View>
         )}
-        {!isAllBrand && <Text style={styles.sidebarOptionText} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>}
+        {!isAllBrand && <Text style={[styles.sidebarOptionText, { fontSize: getScaledSize(14) }]} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>}
       </TouchableOpacity>
     );
   };
@@ -317,7 +319,8 @@ const Catalogue = () => {
     >
       <Text style={[
         styles.categoryText,
-        selectedCategoryId === item.id && styles.selectedCategoryText
+        selectedCategoryId === item.id && styles.selectedCategoryText,
+        { fontSize: getScaledSize(12) }
       ]}>{item.name}</Text>
     </TouchableOpacity>
   );
@@ -358,41 +361,45 @@ const Catalogue = () => {
         <View style={styles.productDetailsRight}>
           {item.offers && item.offers.trim() !== '' ? (
             <View style={styles.offerBadge}>
-              <Text style={styles.offerText}>{item.offers.toLowerCase()}</Text>
+              <Text style={[styles.offerText, { fontSize: getScaledSize(10) }]}>{item.offers.toLowerCase()}</Text>
             </View>
           ) : null}
           <Text style={[
             styles.productNameLarge,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(15) }
           ]} numberOfLines={2}>{item.name}</Text>
           {item.size ? (
             <Text style={[
               styles.productVolume,
-              isInactive && styles.inactiveProductText
+              isInactive && styles.inactiveProductText,
+              { fontSize: getScaledSize(14) }
             ]}>{item.size}</Text>
           ) : null}
           <View style={styles.priceContainer}>
             {item.price ? (
               <Text style={[
                 styles.originalPrice,
-                isInactive && styles.inactiveProductText
+                isInactive && styles.inactiveProductText,
+                { fontSize: getScaledSize(15) }
               ]}>{formatCurrency(price)}</Text>
             ) : null}
             <Text style={[
               styles.currentPrice,
-              isInactive && styles.inactiveProductText
+              isInactive && styles.inactiveProductText,
+              { fontSize: getScaledSize(20) }
             ]}>{formatCurrency(discountPrice)}</Text>
           </View>
           {isInactive ? (
             <View style={styles.inactiveButton}>
-              <Text style={styles.inactiveButtonText}>UNAVAILABLE</Text>
+              <Text style={[styles.inactiveButtonText, { fontSize: getScaledSize(12) }]}>UNAVAILABLE</Text>
             </View>
           ) : quantityInCart === 0 ? (
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => handleAddItem(item)}
             >
-              <Text style={styles.addButtonText}>ADD</Text>
+              <Text style={[styles.addButtonText, { fontSize: getScaledSize(12) }]}>ADD</Text>
             </TouchableOpacity>
           ) : (
             <View style={styles.quantityControlsContainer}>
@@ -402,7 +409,7 @@ const Catalogue = () => {
               >
                 <Icon name="remove" size={20} color="#FFF" />
               </TouchableOpacity>
-              <Text style={styles.quantityDisplay}>{quantityInCart}</Text>
+              <Text style={[styles.quantityDisplay, { fontSize: getScaledSize(14) }]}>{quantityInCart}</Text>
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={() => handleIncreaseQuantity(item.id)}
@@ -428,7 +435,7 @@ const Catalogue = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#003366" />
-        <Text>Loading Catalogue...</Text>
+        <Text style={{ fontSize: getScaledSize(16) }}>Loading Catalogue...</Text>
       </View>
     );
   }
@@ -440,13 +447,13 @@ const Catalogue = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={{padding: 8, backgroundColor: '#eafaf1', alignItems: 'center'}}>
-        <Text style={{color: '#059669', fontSize: 13, fontWeight: 'bold'}}>All prices include GST</Text>
+        <Text style={{color: '#059669', fontSize: getScaledSize(13), fontWeight: 'bold'}}>All prices include GST</Text>
       </View>
 
       <View style={styles.mainContainer}>
         <View style={styles.sidebar}>
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarHeaderText}>Brands</Text>
+            <Text style={[styles.sidebarHeaderText, { fontSize: getScaledSize(16) }]}>Brands</Text>
           </View>
           <FlatList
             data={brandImageItems}
@@ -466,12 +473,13 @@ const Catalogue = () => {
             >
               <Text style={[
                 styles.categoryText,
-                selectedBrandId === allBrandItem.id && styles.selectedCategoryText
+                selectedBrandId === allBrandItem.id && styles.selectedCategoryText,
+                { fontSize: getScaledSize(12) }
               ]}>{allBrandItem.name}</Text>
             </TouchableOpacity>
           )}
           <View style={[styles.sidebarHeader, { marginTop: 0 }]}> 
-            <Text style={styles.sidebarHeaderText}>Categories</Text>
+            <Text style={[styles.sidebarHeaderText, { fontSize: getScaledSize(16) }]}>Categories</Text>
           </View>
           <FlatList
             data={categories}
@@ -502,7 +510,7 @@ const Catalogue = () => {
               })}
             />
           ) : (
-             !loading && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No products found.</Text></View>
+             !loading && <View style={styles.emptyProductsContainer}><Text style={[styles.emptyProductsText, { fontSize: getScaledSize(16) }]}>No products found.</Text></View>
           )}
         </View>
       </View>
@@ -513,7 +521,7 @@ const Catalogue = () => {
         activeOpacity={0.7}
       >
         <Icon name="search" size={24} color="#FFFFFF" />
-        <Text style={styles.floatingSearchButtonText}>Search</Text>
+        <Text style={[styles.floatingSearchButtonText, { fontSize: getScaledSize(12) }]}>Search</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -523,7 +531,7 @@ const Catalogue = () => {
         <Icon name="shopping-cart" size={24} color="#FFFFFF" />
         {Object.keys(cart).length > 0 && (
           <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>{Object.values(cart).reduce((sum, q) => sum + q, 0)}</Text>
+            <Text style={[styles.cartBadgeText, { fontSize: getScaledSize(12) }]}>{Object.values(cart).reduce((sum, q) => sum + q, 0)}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -548,10 +556,10 @@ const Catalogue = () => {
               resizeMode="contain"
             />
             <View style={styles.modalProductInfoContainer}>
-                <Text style={styles.modalProductName}>{enlargedProduct.name}</Text>
-                <Text style={styles.modalProductPrice}>{formatCurrency(enlargedProduct.price)}</Text>
+                <Text style={[styles.modalProductName, { fontSize: getScaledSize(18) }]}>{enlargedProduct.name}</Text>
+                <Text style={[styles.modalProductPrice, { fontSize: getScaledSize(16) }]}>{formatCurrency(enlargedProduct.price)}</Text>
                 {enlargedProduct.offer > 0 && (
-                  <Text style={styles.modalProductOffer}>{enlargedProduct.offer}% OFF</Text>
+                  <Text style={[styles.modalProductOffer, { fontSize: getScaledSize(14) }]}>{enlargedProduct.offer}% OFF</Text>
                 )}
             </View>
           </View>
@@ -595,7 +603,7 @@ const Catalogue = () => {
             numColumns={1}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.productListContent}
-            ListEmptyComponent={!loading && searchTerm.length > 0 && <View style={styles.emptyProductsContainer}><Text style={styles.emptyProductsText}>No matching products found.</Text></View>}
+            ListEmptyComponent={!loading && searchTerm.length > 0 && <View style={styles.emptyProductsContainer}><Text style={[styles.emptyProductsText, { fontSize: getScaledSize(16) }]}>No matching products found.</Text></View>}
             removeClippedSubviews={true}
             maxToRenderPerBatch={10}
             windowSize={10}
@@ -647,7 +655,6 @@ const styles = StyleSheet.create({
   },
   sidebarHeaderText: {
     fontWeight: 'bold',
-    fontSize: 14,
     color: '#003366',
   },
   sidebarOption: {
@@ -681,7 +688,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sidebarOptionText: {
-    fontSize: 11,
     color: '#003366',
     fontWeight: '500',
     textAlign: 'center',
@@ -740,13 +746,11 @@ const styles = StyleSheet.create({
   },
   offerText: {
     color: '#27ae60',
-    fontSize: 12,
     fontWeight: '400',
     textTransform: 'lowercase',
     letterSpacing: 0.2,
   },
   productNameLarge: {
-    fontSize: 15,
     fontWeight: '600',
     color: '#222',
     marginBottom: 2,
@@ -754,7 +758,6 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   productVolume: {
-    fontSize: 14,
     color: '#666666',
     marginBottom: 10,
   },
@@ -764,13 +767,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   originalPrice: {
-    fontSize: 15,
     color: '#999999',
     textDecorationLine: 'line-through',
     marginBottom: 4,
   },
   currentPrice: {
-    fontSize: 20,
     fontWeight: 'bold',
     color: '#003366',
   },
@@ -787,7 +788,6 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: 'bold',
   },
   quantityControlsContainer: {
@@ -805,7 +805,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   quantityDisplay: {
-    fontSize: 16,
     fontWeight: 'bold',
     color: '#333333',
     minWidth: 20,
@@ -830,7 +829,6 @@ const styles = StyleSheet.create({
   },
   floatingSearchButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
   },
@@ -864,7 +862,6 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: {
     color: '#FFFFFF',
-    fontSize: 12,
     fontWeight: 'bold',
   },
   searchModalSafeArea: {
@@ -885,7 +882,6 @@ const styles = StyleSheet.create({
   },
   searchModalInput: {
     flex: 1,
-    fontSize: 16,
     color: '#333',
     height: 40,
     backgroundColor: '#F0F0F0',
@@ -903,7 +899,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyProductsText: {
-    fontSize: 15,
     color: '#666',
     textAlign: 'center',
   },
@@ -936,19 +931,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalProductName: {
-    fontSize: 20,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: 8,
   },
   modalProductPrice: {
-    fontSize: 18,
     color: '#FFFFFF',
     textAlign: 'center',
   },
   modalProductOffer: {
-    fontSize: 16,
     color: '#34C759',
     textAlign: 'center',
   },
@@ -981,7 +973,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   categoryText: {
-    fontSize: 12,
     color: '#003366',
     fontWeight: '500',
   },
@@ -1019,7 +1010,6 @@ const styles = StyleSheet.create({
   },
   inactiveButtonText: {
     color: '#666666',
-    fontSize: 14,
     fontWeight: 'bold',
   },
 });

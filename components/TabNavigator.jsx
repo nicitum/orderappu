@@ -6,6 +6,7 @@ import { View, Text, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFontScale } from '../App';
 
 import CustomerStack from './Customer/CustomerStack';
 import CatalogueStack from './Customer/CatalogueStack';
@@ -29,6 +30,7 @@ import ReportsOwnerStack from './Owner/ReportsOwnerStack';
 const Tab = createBottomTabNavigator();
 
 const TabNavigator = () => {
+    const { getScaledSize } = useFontScale();
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -109,7 +111,7 @@ const TabNavigator = () => {
     if (isLoading) {
         return (
             <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading...</Text>
+                <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading...</Text>
             </View>
         );
     }
@@ -300,7 +302,6 @@ const styles = StyleSheet.create({
         backgroundColor: "#F5F6F5", // Light neutral background
     },
     loadingText: {
-        fontSize: 16,
         color: "#003366",
         fontWeight: "500",
     },
@@ -312,7 +313,6 @@ const styles = StyleSheet.create({
         height: 60,
     },
     tabLabel: {
-        fontSize: 12,
         fontWeight: "600",
         marginBottom: 5,
     },
@@ -322,7 +322,6 @@ const styles = StyleSheet.create({
     headerTitle: {
         color: "#FFFFFF", // White text for contrast
         fontWeight: "600",
-        fontSize: 18,
     },
 });
 

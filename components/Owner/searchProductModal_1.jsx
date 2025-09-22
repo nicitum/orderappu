@@ -16,10 +16,10 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { ipAddress } from "../../services/urls";
 import { checkTokenAndRedirect } from "../../services/auth";
 import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { jwtDecode } from "jwt-decode";
+import { useFontScale } from '../../App';
 
 const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustomerId, allowProductEdit }) => {
+  const { getScaledSize } = useFontScale();
   const [searchQuery, setSearchQuery] = useState("");
   const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -212,7 +212,8 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         <View style={styles.productInfo}>
           <Text style={[
             styles.productName,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(16) }
           ]} numberOfLines={1}>
             {item.name}
           </Text>
@@ -221,7 +222,8 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
               <View style={styles.productTag}>
                 <Text style={[
                   styles.productTagText,
-                  isInactive && styles.inactiveProductText
+                  isInactive && styles.inactiveProductText,
+                  { fontSize: getScaledSize(12) }
                 ]}>{item.category}</Text>
               </View>
             )}
@@ -229,26 +231,29 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
               <View style={styles.productTag}>
                 <Text style={[
                   styles.productTagText,
-                  isInactive && styles.inactiveProductText
+                  isInactive && styles.inactiveProductText,
+                  { fontSize: getScaledSize(12) }
                 ]}>{item.brand}</Text>
               </View>
             )}
           </View>
           <Text style={[
             styles.priceText,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(16) }
           ]}>
             ₹{typeof item.price === 'number' ? item.price.toFixed(2) : "N/A"}
           </Text>
           <Text style={[
             styles.priceText,
-            isInactive && styles.inactiveProductText
+            isInactive && styles.inactiveProductText,
+            { fontSize: getScaledSize(16) }
           ]}>
             GST {item.gstRate || 0}%
           </Text>
           {isInactive && (
             <View style={styles.inactiveBadge}>
-              <Text style={styles.inactiveBadgeText}>UNAVAILABLE</Text>
+              <Text style={[styles.inactiveBadgeText, { fontSize: getScaledSize(12) }]}>UNAVAILABLE</Text>
             </View>
           )}
         </View>
@@ -281,7 +286,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Products</Text>
+            <Text style={[styles.modalTitle, { fontSize: getScaledSize(20) }]}>Add Products</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
@@ -291,7 +296,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={20} color="#003366" style={styles.searchIcon} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { fontSize: getScaledSize(16), height: getScaledSize(48) }]}
               placeholder="Search products (min 3 chars)"
               placeholderTextColor="#999"
               value={searchQuery}
@@ -310,10 +315,10 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
           {/* Filters */}
           <View style={styles.filterSection}>
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Categories</Text>
+              <Text style={[styles.filterTitle, { fontSize: getScaledSize(16) }]}>Categories</Text>
               {selectedCategory && (
                 <TouchableOpacity onPress={() => setSelectedCategory("")}>
-                  <Text style={styles.clearFilterText}>Clear</Text>
+                  <Text style={[styles.clearFilterText, { fontSize: getScaledSize(14) }]}>Clear</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -333,6 +338,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
                     style={[
                       styles.filterButtonText,
                       selectedCategory === category && styles.selectedFilterButtonText,
+                      { fontSize: getScaledSize(14) }
                     ]}
                   >
                     {category}
@@ -344,10 +350,10 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
 
           <View style={styles.filterSection}>
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Brands</Text>
+              <Text style={[styles.filterTitle, { fontSize: getScaledSize(16) }]}>Brands</Text>
               {selectedBrand && (
                 <TouchableOpacity onPress={() => setSelectedBrand("")}>
-                  <Text style={styles.clearFilterText}>Clear</Text>
+                  <Text style={[styles.clearFilterText, { fontSize: getScaledSize(14) }]}>Clear</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -365,6 +371,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
                     style={[
                       styles.filterButtonText,
                       selectedBrand === brand && styles.selectedFilterButtonText,
+                      { fontSize: getScaledSize(14) }
                     ]}
                   >
                     {brand}
@@ -376,16 +383,16 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
 
           {(selectedCategory || selectedBrand || searchQuery) && (
             <TouchableOpacity style={styles.clearAllButton} onPress={clearFilters}>
-              <Text style={styles.clearAllButtonText}>Clear All Filters</Text>
+              <Text style={[styles.clearAllButtonText, { fontSize: getScaledSize(14) }]}>Clear All Filters</Text>
             </TouchableOpacity>
           )}
 
           {/* Error Message */}
-          {error && <Text style={styles.errorText}>{error}</Text>}
+          {error && <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{error}</Text>}
 
           {/* Product List */}
           <View style={styles.resultsContainer}>
-            <Text style={styles.resultsCount}>
+            <Text style={[styles.resultsCount, { fontSize: getScaledSize(14) }]}>
               {products.length} {products.length === 1 ? "Product" : "Products"} Found
             </Text>
             <FlatList
@@ -395,7 +402,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Ionicons name="search-outline" size={50} color="#ccc" />
-                  <Text style={styles.emptyText}>
+                  <Text style={[styles.emptyText, { fontSize: getScaledSize(14) }]}>
                     {searchQuery.length > 2
                       ? "No products found matching your criteria."
                       : "Please type at least 3 characters or select a category/brand."}
@@ -411,7 +418,7 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
             <View style={styles.loadingOverlay}>
               <View style={styles.loaderContainer}>
                 <ActivityIndicator size="large" color="#fff" />
-                <Text style={styles.loadingText}>Loading products...</Text>
+                <Text style={[styles.loadingText, { fontSize: getScaledSize(14) }]}>Loading products...</Text>
               </View>
             </View>
           )}
@@ -426,39 +433,39 @@ const SearchProductModal_1 = ({ isVisible, onClose, onAddProduct, currentCustome
         >
           <View style={styles.editModalOverlay}>
             <View style={styles.editModalCard}>
-              <Text style={styles.editModalTitle}>Edit Price & Quantity</Text>
-              <Text style={styles.editModalLabel}>Price (₹):</Text>
+              <Text style={[styles.editModalTitle, { fontSize: getScaledSize(16) }]}>Edit Price & Quantity</Text>
+              <Text style={[styles.editModalLabel, { fontSize: getScaledSize(12) }]}>Price (₹):</Text>
               <TextInput
-                style={styles.editModalInput}
+                style={[styles.editModalInput, { fontSize: getScaledSize(14), paddingVertical: getScaledSize(8) }]}
                 keyboardType="numeric"
                 value={editPrice}
                 onChangeText={setEditPrice}
               />
               {editProduct && (
-                <Text style={{ color: '#888', fontSize: 13, alignSelf: 'flex-start', marginBottom: 2 }}>
+                <Text style={{ color: '#888', fontSize: getScaledSize(13), alignSelf: 'flex-start', marginBottom: 2 }}>
                   Allowed: ₹{editProduct.min_selling_price ?? editProduct.minSellingPrice ?? 0} - ₹{editProduct.discountPrice ?? editProduct.selling_price ?? editProduct.price ?? 0}
                 </Text>
               )}
-              <Text style={styles.editModalLabel}>Quantity:</Text>
+              <Text style={[styles.editModalLabel, { fontSize: getScaledSize(12) }]}>Quantity:</Text>
               <TextInput
-                style={styles.editModalInput}
+                style={[styles.editModalInput, { fontSize: getScaledSize(14), paddingVertical: getScaledSize(8) }]}
                 keyboardType="numeric"
                 value={editQty}
                 onChangeText={setEditQty}
               />
-              {error && <Text style={styles.errorText}>{error}</Text>}
+              {error && <Text style={[styles.errorText, { fontSize: getScaledSize(14) }]}>{error}</Text>}
               <View style={styles.editModalButtonRow}>
                 <TouchableOpacity
                   style={[styles.editModalButton, { backgroundColor: '#003087' }]}
                   onPress={handleConfirmEditProduct}
                 >
-                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Add</Text>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: getScaledSize(14) }}>Add</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.editModalButton, { backgroundColor: '#bbb' }]}
                   onPress={() => setEditModalVisible(false)}
                 >
-                  <Text style={{ color: '#222' }}>Cancel</Text>
+                  <Text style={{ color: '#222', fontSize: getScaledSize(14) }}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -497,7 +504,6 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: "#fff",
-    fontSize: 20,
     fontWeight: "700",
   },
   closeButton: {
@@ -521,8 +527,6 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 48,
-    fontSize: 16,
     color: "#333",
   },
   clearSearchButton: {
@@ -539,13 +543,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   filterTitle: {
-    fontSize: 16,
     fontWeight: "600",
     color: "#003087",
   },
   clearFilterText: {
     color: "#007bff",
-    fontSize: 14,
     fontWeight: "500",
   },
   filterButton: {
@@ -562,7 +564,6 @@ const styles = StyleSheet.create({
     borderColor: "#003087",
   },
   filterButtonText: {
-    fontSize: 14,
     color: "#555",
   },
   selectedFilterButtonText: {
@@ -579,7 +580,6 @@ const styles = StyleSheet.create({
   },
   clearAllButtonText: {
     color: "#003087",
-    fontSize: 14,
     fontWeight: "600",
   },
   resultsContainer: {
@@ -588,7 +588,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   resultsCount: {
-    fontSize: 14,
     color: "#666",
     marginBottom: 12,
   },
@@ -620,7 +619,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    fontSize: 16,
     fontWeight: "600",
     color: "#222",
     marginBottom: 6,
@@ -638,13 +636,11 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   productTagText: {
-    fontSize: 12,
     color: "#003087",
   },
   priceText: {
     color: "#003087",
     fontWeight: "700",
-    fontSize: 16,
   },
   addButton: {
     backgroundColor: "#003087",
@@ -664,8 +660,6 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: "center",
     marginTop: 12,
-    fontSize: 14,
-    color: "#888",
     lineHeight: 20,
   },
   errorText: {
@@ -676,7 +670,6 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#ffebee",
     borderRadius: 8,
-    fontSize: 14,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -694,7 +687,6 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#003087",
     marginTop: 12,
-    fontSize: 14,
     fontWeight: "500",
   },
   editModalOverlay: {
@@ -716,14 +708,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   editModalTitle: {
-    fontSize: 16,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 16,
     textAlign: 'center',
   },
   editModalLabel: {
-    fontSize: 12,
     fontWeight: '500',
     color: '#4B5563',
     marginBottom: 4,
@@ -733,9 +723,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    fontSize: 14,
     color: '#111827',
     marginBottom: 8,
   },
@@ -771,7 +758,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   inactiveBadgeText: {
-    fontSize: 12,
     color: '#666666',
     fontWeight: '500',
   },

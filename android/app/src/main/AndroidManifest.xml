@@ -2,9 +2,25 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- For Android 13+ (API 33+) to manage external storage -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    
+    <!-- For Android 10+ scoped storage -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    
+    <!-- Firebase Messaging permissions -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- Android 13+ (API 33+) notification permission -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
       android:name=".MainApplication"
@@ -14,7 +30,27 @@
       android:allowBackup="false"
       android:theme="@style/AppTheme"
       android:supportsRtl="true"
-      android:usesCleartextTraffic="true">
+      android:usesCleartextTraffic="true"
+      android:requestLegacyExternalStorage="true">
+      
+      <!-- Custom Firebase Messaging Service -->
+      <service
+        android:name=".MyFirebaseMessagingService"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="com.google.firebase.MESSAGING_EVENT" />
+        </intent-filter>
+      </service>
+      
+      <!-- Default Firebase Messaging Service (fallback) -->
+      <service
+        android:name="com.google.firebase.messaging.FirebaseMessagingService"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="com.google.firebase.MESSAGING_EVENT" />
+        </intent-filter>
+      </service>
+      
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

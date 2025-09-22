@@ -1,8 +1,10 @@
 import React from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
+import { useFontScale } from '../../App';
 
 const OrderModal = ({ isVisible, onClose, onSelect, onEdit }) => {
+  const { getScaledSize } = useFontScale();
   return (
     <Modal visible={isVisible} animationType="slide" transparent={true}>
       <View style={styles.modalBackground}>
@@ -11,14 +13,14 @@ const OrderModal = ({ isVisible, onClose, onSelect, onEdit }) => {
             <Icon name="close" size={24} color="#003366" />
           </TouchableOpacity>
 
-          <Text style={styles.modalTitle}>Your Order</Text>
+          <Text style={[styles.modalTitle, { fontSize: getScaledSize(22) }]}>Your Order</Text>
 
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.button} onPress={onSelect}>
-              <Text style={styles.buttonText}>Select</Text>
+              <Text style={[styles.buttonText, { fontSize: getScaledSize(16) }]}>Select</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.button} onPress={onEdit}>
-              <Text style={styles.buttonText}>Edit</Text>
+              <Text style={[styles.buttonText, { fontSize: getScaledSize(16) }]}>Edit</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -46,7 +48,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 22,
     fontWeight: "600",
     marginBottom: 20,
     color: "#003366",
@@ -78,7 +79,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#fff",
-    fontSize: 16,
     fontWeight: "600",
   },
 });

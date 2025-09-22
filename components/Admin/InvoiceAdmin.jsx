@@ -10,6 +10,7 @@ import { Checkbox, Card, Button, FAB } from "react-native-paper";
 import moment from "moment";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { useFontScale } from '../../App';
 
 // Color Constants
 const COLORS = {
@@ -41,6 +42,7 @@ const COLORS = {
 import { ipAddress } from "../../services/urls";
 
 const InvoiceAdmin = ({ navigation }) => {
+  const { getScaledSize } = useFontScale();
   const [adminId, setAdminId] = useState(null);
   const [orders, setOrders] = useState([]);
   const [assignedUsers, setAssignedUsers] = useState([]);
@@ -744,9 +746,9 @@ const InvoiceAdmin = ({ navigation }) => {
         <Card.Content>
           <View style={styles.orderHeader}>
             <View style={styles.orderInfo}>
-              <Text style={styles.orderId}>Order #{order.id}</Text>
-              <Text style={styles.customerName}>{customer.name}</Text>
-              <Text style={styles.orderDate}>{orderDate}</Text>
+              <Text style={[styles.orderId, { fontSize: getScaledSize(16) }]}>Order #{order.id}</Text>
+              <Text style={[styles.customerName, { fontSize: getScaledSize(14) }]}>{customer.name}</Text>
+              <Text style={[styles.orderDate, { fontSize: getScaledSize(12) }]}>{orderDate}</Text>
             </View>
             {!selectAllChecked && (
               <Checkbox
@@ -779,7 +781,7 @@ const InvoiceAdmin = ({ navigation }) => {
           <Card.Content>
             <View style={styles.dateHeader}>
               <Icon name="calendar" size={24} color={COLORS.primary} />
-              <Text style={styles.dateText}>{moment(selectedDate).format("DD MMM YYYY")}</Text>
+              <Text style={[styles.dateText, { fontSize: getScaledSize(18) }]}>{moment(selectedDate).format("DD MMM YYYY")}</Text>
               <Button
                 mode="outlined"
                 onPress={showDatePicker}
@@ -798,7 +800,7 @@ const InvoiceAdmin = ({ navigation }) => {
             onPress={handleSelectAllCheckboxChange}
             color={COLORS.primary}
           />
-          <Text style={styles.selectAllText}>Select All Orders</Text>
+          <Text style={[styles.selectAllText, { fontSize: getScaledSize(16) }]}>Select All Orders</Text>
         </View>
 
         <ScrollView
@@ -812,14 +814,14 @@ const InvoiceAdmin = ({ navigation }) => {
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.loadingText}>Loading orders...</Text>
+              <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading orders...</Text>
             </View>
           ) : error ? (
             <Card style={styles.errorCard}>
               <Card.Content>
                 <View style={styles.errorContent}>
                   <Icon name="alert-circle" size={24} color={COLORS.error} />
-                  <Text style={styles.errorText}>{error}</Text>
+                  <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>{error}</Text>
                 </View>
               </Card.Content>
             </Card>
@@ -829,8 +831,8 @@ const InvoiceAdmin = ({ navigation }) => {
             <Card style={styles.emptyCard}>
               <Card.Content style={styles.emptyContent}>
                 <Icon name="file-document-outline" size={48} color={COLORS.primary} />
-                <Text style={styles.emptyText}>No orders found</Text>
-                <Text style={styles.emptySubtext}>No orders available for the selected date</Text>
+                <Text style={[styles.emptyText, { fontSize: getScaledSize(18) }]}>No orders found</Text>
+                <Text style={[styles.emptySubtext, { fontSize: getScaledSize(14) }]}>No orders available for the selected date</Text>
               </Card.Content>
             </Card>
           )}
@@ -862,7 +864,7 @@ const InvoiceAdmin = ({ navigation }) => {
       <Animated.View style={[styles.header, { height: headerHeight, opacity: headerOpacity }]}>
         <View style={styles.headerContent}>
           <Icon name="file-document" size={28} color={COLORS.text.light} />
-          <Text style={styles.headerTitle}>Invoice Management</Text>
+          <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Invoice Management</Text>
         </View>
       </Animated.View>
 
@@ -901,7 +903,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 24,
     fontWeight: "600",
     color: COLORS.text.light,
     marginLeft: 12,
@@ -922,7 +923,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dateText: {
-    fontSize: 18,
     fontWeight: "600",
     color: COLORS.text.primary,
   },
@@ -943,7 +943,6 @@ const styles = StyleSheet.create({
   },
   selectAllText: {
     marginLeft: 8,
-    fontSize: 16,
     color: COLORS.text.primary,
     fontWeight: "500",
   },
@@ -970,17 +969,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: 16,
     fontWeight: "600",
     color: COLORS.text.primary,
   },
   customerName: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     marginTop: 4,
   },
   orderDate: {
-    fontSize: 12,
     color: COLORS.text.tertiary,
     marginTop: 2,
   },
@@ -1003,7 +999,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
     color: COLORS.primary,
   },
   errorCard: {
@@ -1019,7 +1014,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.error,
     marginLeft: 8,
-    fontSize: 16,
   },
   emptyCard: {
     backgroundColor: COLORS.surface,
@@ -1033,14 +1027,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    fontSize: 18,
     fontWeight: "600",
     color: COLORS.text.primary,
     marginTop: 16,
     textAlign: "center",
   },
   emptySubtext: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     marginTop: 8,
     textAlign: "center",

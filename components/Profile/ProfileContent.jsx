@@ -12,8 +12,10 @@ import { ipAddress } from "../../services/urls";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import { checkTokenAndRedirect } from "../../services/auth";
 import { useNavigation } from "@react-navigation/native";
+import { useFontScale } from '../../App';
 
 const ProfileContent = () => {
+    const { getScaledSize } = useFontScale();
     const [loading, setLoading] = useState(true);
     const [userData, setUserData] = useState(null);
     const [error, setError] = useState(null);
@@ -51,7 +53,7 @@ const ProfileContent = () => {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#003366" />
-                <Text style={styles.loadingText}>Loading profile...</Text>
+                <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading profile...</Text>
             </View>
         );
     }
@@ -60,7 +62,7 @@ const ProfileContent = () => {
         return (
             <View style={styles.errorContainer}>
                 <MaterialIcons name="error-outline" size={48} color="#E74C3C" />
-                <Text style={styles.errorText}>Error: {error}</Text>
+                <Text style={[styles.errorText, { fontSize: getScaledSize(16) }]}>Error: {error}</Text>
             </View>
         );
     }
@@ -71,8 +73,8 @@ const ProfileContent = () => {
                 <MaterialIcons name={icon} size={24} color="#003366" />
             </View>
             <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>{title}</Text>
-                <Text style={styles.infoValue}>{value || 'Not provided'}</Text>
+                <Text style={[styles.infoLabel, { fontSize: getScaledSize(14) }]}>{title}</Text>
+                <Text style={[styles.infoValue, { fontSize: getScaledSize(16) }]}>{value || 'Not provided'}</Text>
             </View>
         </View>
     );
@@ -83,19 +85,19 @@ const ProfileContent = () => {
                 <View style={styles.avatarContainer}>
                     <MaterialIcons name="person" size={32} color="#FFFFFF" />
                 </View>
-                <Text style={styles.userName}>{userData?.name || 'User'}</Text>
-                <Text style={styles.userRole}>{userData?.role || 'Member'}</Text>
+                <Text style={[styles.userName, { fontSize: getScaledSize(18) }]}>{userData?.name || 'User'}</Text>
+                <Text style={[styles.userRole, { fontSize: getScaledSize(14) }]}>{userData?.role || 'Member'}</Text>
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Personal Information</Text>
+                <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Personal Information</Text>
                 {renderInfoCard('Username', userData?.username, 'person-outline')}
                 {renderInfoCard('Phone Number', userData?.phone, 'phone')}
                 {renderInfoCard('Email', userData?.email, 'email')}
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Delivery Information</Text>
+                <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Delivery Information</Text>
                 {renderInfoCard('Delivery Address', userData?.delivery_address, 'location-on')}
                 {renderInfoCard('Route', userData?.route, 'directions')}
             </View>
@@ -119,7 +121,6 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         marginTop: 12,
-        fontSize: 16,
         color: "#666666",
     },
     errorContainer: {
@@ -131,7 +132,6 @@ const styles = StyleSheet.create({
     },
     errorText: {
         marginTop: 12,
-        fontSize: 16,
         color: "#E74C3C",
         textAlign: "center",
     },
@@ -153,13 +153,11 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     userName: {
-        fontSize: 18,
         fontWeight: "500",
         color: "#FFFFFF",
         marginBottom: 4,
     },
     userRole: {
-        fontSize: 14,
         color: "rgba(255, 255, 255, 0.8)",
     },
     section: {
@@ -167,7 +165,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     sectionTitle: {
-        fontSize: 18,
         fontWeight: "600",
         color: "#003366",
         marginBottom: 16,
@@ -199,12 +196,10 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     infoLabel: {
-        fontSize: 14,
         color: "#666666",
         marginBottom: 4,
     },
     infoValue: {
-        fontSize: 16,
         color: "#333333",
         fontWeight: "500",
     },

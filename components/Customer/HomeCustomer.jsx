@@ -26,6 +26,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { checkTokenAndRedirect } from "../../services/auth"
 import { jwtDecode } from "jwt-decode"
 import { Linking } from "react-native"
+import { useFontScale } from '../../App';
 
 // Modern Color Palette
 const COLORS = {
@@ -75,6 +76,7 @@ const formatDate = (epochTime) => {
 }
 
 const HomeCustomer = () => {
+  const { getScaledSize } = useFontScale();
   const [isLoading, setIsLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [userDetails, setUserDetails] = useState(null)
@@ -239,10 +241,11 @@ const HomeCustomer = () => {
         };
         setUserDetails(userDetails);
       } else if (userGetResponse) {
-         Alert.alert("Failed", userGetResponse.message || "Failed to fetch user details");
+         console.warn("Failed to fetch user details:", userGetResponse.message || "Unknown error");
+         // Continue without showing alert - app should still function
       } else {
          console.error("Failed to fetch user details: No response");
-         Alert.alert("Error", "An error occurred while fetching user details.");
+         // Continue without showing alert - app should still function
       }
 
       let lastIndentDate = "", totalAmount = 0, orderType = "AM", items = []
@@ -283,7 +286,8 @@ const HomeCustomer = () => {
     } catch (err) {
       console.error("User details fetch error:", err)
       setIsLoading(false)
-      Alert.alert("Error", "An error occurred. Please try again.")
+      // Log error but don't show alert - app should continue functioning
+      return null;
     }
   }, [navigation])
 
@@ -385,8 +389,8 @@ const HomeCustomer = () => {
       <View style={[styles.simpleHeaderContainer, Platform.OS === 'android' ? { paddingTop: StatusBar.currentHeight || 24 } : {}]}>
         <Image source={require("../../assets/logo.jpg")} style={styles.simpleHeaderLogo} resizeMode="contain" />
         <View style={styles.simpleHeaderTextContainer}>
-          <Text style={styles.simpleHeaderMainTitle}>Customer Dashboard</Text>
-          <Text style={styles.simpleHeaderUserName}>{customerName || "User"}</Text>
+          <Text style={[styles.simpleHeaderMainTitle, { fontSize: getScaledSize(16) }]}>Customer Dashboard</Text>
+          <Text style={[styles.simpleHeaderUserName, { fontSize: getScaledSize(13) }]}>{customerName || "User"}</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
           <MaterialIcons name="refresh" size={24} color={COLORS.text.light} />
@@ -414,7 +418,7 @@ const HomeCustomer = () => {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading your dashboard...</Text>
+            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading your dashboard...</Text>
           </View>
         ) : (
           <View style={styles.content}>
@@ -453,12 +457,12 @@ const HomeCustomer = () => {
             {!isAdmin && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Order History</Text>
+                  <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Order History</Text>
                   <TouchableOpacity 
                     style={styles.viewAllButton}
                     onPress={() => navigation.navigate("OrdersHistory")}
                   >
-                    <Text style={styles.viewAllText}>View All</Text>
+                    <Text style={[styles.viewAllText, { fontSize: getScaledSize(14) }]}>View All</Text>
                     <MaterialIcons name="chevron-right" size={20} color={COLORS.primary} />
                   </TouchableOpacity>
                 </View>
@@ -466,22 +470,22 @@ const HomeCustomer = () => {
                   <View style={styles.orderCard}>
                     <View style={styles.orderHeader}>
                       
-                      <Text style={styles.orderDate}>{formatDate(lastIndentDate)}</Text>
+                      <Text style={[styles.orderDate, { fontSize: getScaledSize(14) }]}>{formatDate(lastIndentDate)}</Text>
                     </View>
                     <View style={styles.orderBody}>
                       <View style={styles.orderSummary}>
                         <View style={styles.orderInfo}>
-                          <Text style={styles.orderInfoLabel}>Total Items</Text>
-                          <Text style={styles.orderInfoValue}>{totalQuantity}</Text>
+                          <Text style={[styles.orderInfoLabel, { fontSize: getScaledSize(14) }]}>Total Items</Text>
+                          <Text style={[styles.orderInfoValue, { fontSize: getScaledSize(14) }]}>{totalQuantity}</Text>
                         </View>
                         <View style={styles.orderInfo}>
-                          <Text style={styles.orderInfoLabel}>Total Amount</Text>
-                          <Text style={styles.orderInfoValue}>{formatCurrency(totalAmount || 0)}</Text>
+                          <Text style={[styles.orderInfoLabel, { fontSize: getScaledSize(14) }]}>Total Amount</Text>
+                          <Text style={[styles.orderInfoValue, { fontSize: getScaledSize(14) }]}>{formatCurrency(totalAmount || 0)}</Text>
                         </View>
                       </View>
                       {lastOrderItems && lastOrderItems.length > 0 && (
                         <View style={styles.orderItems}>
-                          <Text style={styles.orderItemsTitle}>Order Details</Text>
+                          <Text style={[styles.orderItemsTitle, { fontSize: getScaledSize(14) }]}>Order Details</Text>
                           {lastOrderItems.map((item, index) => (
                             <View key={index} style={styles.orderItem}>
                               {item.image ? (
@@ -497,13 +501,13 @@ const HomeCustomer = () => {
                                 </View>
                               )}
                               <View style={styles.itemInfo}>
-                                <Text style={styles.itemName} numberOfLines={2}>{item.name || 'Product Name'}</Text>
+                                <Text style={[styles.itemName, { fontSize: getScaledSize(14) }]} numberOfLines={2}>{item.name || 'Product Name'}</Text>
                                 <View style={styles.itemDetails}>
-                                  <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
-                                  <Text style={styles.itemUnitPrice}>{formatCurrency(parseFloat(item.price || 0))} each</Text>
+                                  <Text style={[styles.itemQuantity, { fontSize: getScaledSize(12) }]}>Qty: {item.quantity}</Text>
+                                  <Text style={[styles.itemUnitPrice, { fontSize: getScaledSize(12) }]}>{formatCurrency(parseFloat(item.price || 0))} each</Text>
                                 </View>
                               </View>
-                              <Text style={styles.itemPrice}>{formatCurrency(parseFloat(item.price || 0) * item.quantity)}</Text>
+                              <Text style={[styles.itemPrice, { fontSize: getScaledSize(14) }]}>{formatCurrency(parseFloat(item.price || 0) * item.quantity)}</Text>
                             </View>
                           ))}
                         </View>
@@ -513,8 +517,8 @@ const HomeCustomer = () => {
                 ) : (
                   <View style={styles.emptyState}>
                     <MaterialIcons name="history" size={48} color={COLORS.text.tertiary} />
-                    <Text style={styles.emptyStateText}>No orders yet</Text>
-                    <Text style={styles.emptyStateSubtext}>Your order history will appear here</Text>
+                    <Text style={[styles.emptyStateText, { fontSize: getScaledSize(16) }]}>No orders yet</Text>
+                    <Text style={[styles.emptyStateSubtext, { fontSize: getScaledSize(14) }]}>Your order history will appear here</Text>
                   </View>
                 )}
               </View>
@@ -549,12 +553,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   simpleHeaderMainTitle: {
-    fontSize: 16,
     fontWeight: '600',
     color: COLORS.text.light,
   },
   simpleHeaderUserName: {
-    fontSize: 13,
     color: COLORS.text.light,
     marginTop: 2,
   },
@@ -578,7 +580,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
     fontWeight: "700",
     color: COLORS.text.primary,
     marginBottom: 16,
@@ -588,7 +589,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   viewAllText: {
-    fontSize: 14,
     color: COLORS.primary,
     marginRight: 4,
   },
@@ -626,7 +626,6 @@ const styles = StyleSheet.create({
   },
   orderDate: {
     color: COLORS.text.light,
-    fontSize: 14,
   },
   orderBody: {
     padding: 16,
@@ -673,7 +672,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   orderItemsTitle: {
-    fontSize: 16,
     fontWeight: "600",
     color: COLORS.text.primary,
     marginBottom: 12,
@@ -710,22 +708,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   itemName: {
-    fontSize: 14,
     color: COLORS.text.primary,
     fontWeight: '500',
   },
   itemQuantity: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     marginLeft: 8,
   },
   itemUnitPrice: {
-    fontSize: 12,
     color: COLORS.text.secondary,
     marginLeft: 8,
   },
   itemPrice: {
-    fontSize: 14,
     fontWeight: "500",
     color: COLORS.text.primary,
     marginLeft: 16,
@@ -737,7 +731,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: COLORS.text.primary,
-    fontSize: 16,
     marginTop: 16,
   },
   emptyState: {
@@ -759,13 +752,11 @@ const styles = StyleSheet.create({
     }),
   },
   emptyStateText: {
-    fontSize: 18,
     fontWeight: "600",
     color: COLORS.text.primary,
     marginTop: 16,
   },
   emptyStateSubtext: {
-    fontSize: 14,
     color: COLORS.text.secondary,
     textAlign: "center",
     marginTop: 8,
