@@ -9,6 +9,7 @@ import OrderTrackingCustomerScreen from './OrderTrackingCustomerScreen';
 import CartCustomer from '../Customer/CartCustomer';
 import Settings from './Settings';
 import FontSettings from './FontSettings';
+import BluetoothPrinter from './BluetoothPrinter'; // Added Bluetooth Printer
 
 const Stack = createStackNavigator();
 
@@ -105,6 +106,11 @@ const ProfileStack = () => {
         options={{ headerShown: false }}
       />
       
+      <Stack.Screen
+        name="BluetoothPrinter"
+        component={BluetoothPrinter}
+        options={{ title: 'Bluetooth Printer' }}
+      />
     
 
     </Stack.Navigator>

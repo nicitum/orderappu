@@ -254,7 +254,7 @@ const LoginPage = () => {
       const notificationPayload = {
         targetUserId: customerId,  // Changed to match the expected format
         title: 'Login Successful',
-        body: 'Happy Navaratri . Welcome to our application.',
+        body: 'Happy Diwali In Advance . Welcome to our application.',
         data: {
           type: 'login_success',
           timestamp: new Date().toISOString()

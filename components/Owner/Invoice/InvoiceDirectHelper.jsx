@@ -247,7 +247,8 @@ export const createDirectInvoice = async (invoiceData) => {
             products: invoiceData.products,
             invoice_amount: invoiceData.totalAmount,
             customer_name: invoiceData.customerName || null,
-            customer_phone: invoiceData.customerPhone || null
+            customer_phone: invoiceData.customerPhone || null,
+            customer_id: invoiceData.customerId || null  // Add missing customer_id
         };
 
         console.log('Creating direct invoice:', requestBody);

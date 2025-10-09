@@ -25,6 +25,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import RNBluetoothClassic from 'react-native-bluetooth-classic';
 import {
     fetchAllUsers,
     fetchCustomerData,
@@ -38,6 +39,7 @@ import {
     updateProductQuantity,
     fetchClientStatus
 } from './InvoiceDirectHelper';
+import { printInvoicePOSPDF } from './invoicePOSPrintUtils';
 import SearchProductModal_1 from '../searchProductModal_1';
 import {
     COLORS,
@@ -484,7 +486,8 @@ const InvoiceDirect = () => {
                 products: selectedProducts,
                 totalAmount: totalAmount,
                 customerName: selectedUser?.username || `Customer ${selectedUser?.customer_id}`,
-                customerPhone: customerData?.phone || 'N/A'
+                customerPhone: customerData?.phone || 'N/A',
+                customerId: selectedUser?.customer_id || null  // Add missing customer_id
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -714,6 +717,69 @@ const InvoiceDirect = () => {
         }
     };
 
+    // Print POS receipt
+    const printPOSPDFHandler = async () => {
+        if (!retrievedInvoice) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'No invoice data available to print'
+            });
+            return;
+        }
+
+        try {
+            setIsSharingPDF(true);
+            
+            // Check if Bluetooth is enabled
+            const isBluetoothEnabled = await RNBluetoothClassic.isBluetoothEnabled();
+            if (!isBluetoothEnabled) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Bluetooth Disabled',
+                    text2: 'Please enable Bluetooth to print receipts'
+                });
+                return;
+            }
+            
+            // Get connected devices
+            const connectedDevices = await RNBluetoothClassic.getConnectedDevices();
+            if (connectedDevices.length === 0) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'No Printer Connected',
+                    text2: 'Please connect to a Bluetooth printer first'
+                });
+                return;
+            }
+            
+            // Use the first connected device
+            const deviceId = connectedDevices[0].id;
+            
+            // Print the invoice directly
+            const result = await printInvoicePOSPDF(retrievedInvoice, customerData, deviceId, RNBluetoothClassic);
+            
+            if (result.success) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Print Success',
+                    text2: 'Invoice printed successfully!'
+                });
+            } else {
+                throw new Error(result.error || 'Failed to print invoice');
+            }
+        } catch (error) {
+            console.error('Error printing POS receipt:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Print Failed',
+                text2: error.message || 'Failed to print receipt'
+            });
+        } finally {
+            setIsSharingPDF(false);
+        }
+    };
+
     // Cancel PDF view and go back to main screen
     const cancelPDFHandler = () => {
         setRetrievedInvoice(null);
@@ -870,6 +936,22 @@ const InvoiceDirect = () => {
                                     )}
                                     <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    onPress={printPOSPDFHandler}
+                                    disabled={isSharingPDF}
+                                    activeOpacity={0.8}
+                                >
+                                    {isSharingPDF ? (
+                                        <ActivityIndicator color={COLORS.text.light} size="small" />
+                                    ) : (
+                                        <MaterialIcons name="print" size={24} color={COLORS.text.light} />
+                                    )}
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                        {isSharingPDF ? 'Printing...' : 'Print Receipt'}
                                     </Text>
                                 </TouchableOpacity>
 

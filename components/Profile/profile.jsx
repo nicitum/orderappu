@@ -165,6 +165,20 @@ const ProfilePage = ({ setIsLoggedIn }) => {
                         </View>
                         <MaterialIcons name="chevron-right" size={24} color="#666" />
                     </TouchableOpacity>
+                    
+                    {/* Bluetooth Printer Menu Item */}
+                    <TouchableOpacity 
+                        style={styles.menuItem}
+                        onPress={() => navigation.navigate("BluetoothPrinter")}
+                    >
+                        <View style={styles.menuIconText}>
+                            <View style={styles.iconContainer}>
+                                <MaterialIcons name="print" size={24} color="#003366" />
+                            </View>
+                            <Text style={[styles.menuText, { fontSize: getScaledSize(16) }]}>Bluetooth Printer</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={24} color="#666" />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.section}>

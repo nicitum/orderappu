@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from './services/NotificationService';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, PermissionsAndroid } from 'react-native'; // Added PermissionsAndroid for Bluetooth permissions
 
 const Stack = createNativeStackNavigator();
 
@@ -87,9 +87,9 @@ export const useFontScale = () => {
 function App() {
   // Request notification permission and initialize handlers when app starts
   useEffect(() => {
-    const initializeNotifications = async () => {
+    const initializeApp = async () => {
       try {
-        console.log('App started - initializing notifications...');
+        console.log('App started - initializing...');
         
         // Small delay to ensure app is ready
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -148,8 +148,14 @@ function App() {
             );
           }
         }
+        
+        // Request Bluetooth permissions for Android
+        if (Platform.OS === 'android') {
+          console.log('Requesting Bluetooth permissions on app start...');
+          await requestBluetoothPermissionsOnStart();
+        }
       } catch (error) {
-        console.error('Error initializing notifications on app start:', error);
+        console.error('Error initializing app on start:', error);
         // Still initialize handlers as fallback
         try {
           NotificationService.initializeNotificationHandlers();
@@ -159,7 +165,38 @@ function App() {
       }
     };
     
-    initializeNotifications();
+    // Function to request Bluetooth permissions on app start
+    const requestBluetoothPermissionsOnStart = async () => {
+      try {
+        if (Platform.Version >= 31) {
+          // Android 12 (API 31) and above
+          const result = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          ]);
+          
+          console.log('Bluetooth permissions result:', result);
+        } else {
+          // Android 11 (API 30) and below
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Bluetooth Permission',
+              message: 'This app needs Bluetooth permission to connect to printers',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            },
+          );
+          
+          console.log('Bluetooth permission result:', granted);
+        }
+      } catch (error) {
+        console.error('Error requesting Bluetooth permissions:', error);
+      }
+    };
+    
+    initializeApp();
     
     // Cleanup function
     return () => {

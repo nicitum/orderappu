@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
 import SearchProductModal_1 from '../searchProductModal_1';
+import RNBluetoothClassic from 'react-native-bluetooth-classic'; // Add Bluetooth printer support
 import {
     generateInvoiceNumber,
     createDirectInvoice,
@@ -29,6 +30,7 @@ import {
     updateProductQuantity,
     fetchClientStatus
 } from './InvoiceDirectHelper';
+import { printInvoicePOSPDF } from './invoicePOSPrintUtils'; // Import POS printing function
 import {
     COLORS,
     SelectedProductItem,
@@ -264,6 +266,8 @@ const WalkIn = () => {
                 totalAmount: totalAmount,
                 customerName: customerName.trim(), // Add customer name for walk-in
                 customerPhone: customerPhone.trim() // Add customer phone for walk-in
+                // Note: customerId is intentionally omitted for walk-in customers
+                // The backend will recognize this as a walk-in customer
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -467,6 +471,66 @@ const WalkIn = () => {
         );
     };
 
+    // Add new state for POS printing
+    const [isPrintingPOS, setIsPrintingPOS] = useState(false);
+
+    // Print POS receipt function
+    const printPOSHandler = async () => {
+        if (!retrievedInvoice) {
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'No invoice data available to print'
+            });
+            return;
+        }
+
+        try {
+            setIsPrintingPOS(true);
+            
+            // Check if Bluetooth printer is connected
+            const connectedDevices = await RNBluetoothClassic.getConnectedDevices();
+            if (connectedDevices.length === 0) {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Printer Not Connected',
+                    text2: 'Please connect to a Bluetooth printer first'
+                });
+                return;
+            }
+            
+            // Create walk-in customer data for POS printing
+            const walkInCustomerData = {
+                username: customerName.trim(),
+                phone: customerPhone.trim(),
+                route: 'Walk-In Customer',
+                delivery_address: 'Walk-In Customer'
+            };
+            
+            // Print POS PDF directly to thermal printer
+            const posResult = await printInvoicePOSPDF(retrievedInvoice, walkInCustomerData);
+            
+            if (posResult.success) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'POS Receipt Printed',
+                    text2: posResult.message || 'Receipt printed successfully!'
+                });
+            } else {
+                throw new Error(posResult.error || 'Failed to print POS receipt');
+            }
+        } catch (error) {
+            console.error('Error printing POS receipt:', error);
+            Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: error.message || 'Failed to print POS receipt'
+            });
+        } finally {
+            setIsPrintingPOS(false);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
@@ -517,7 +581,7 @@ const WalkIn = () => {
             {/* Content */}
             <View style={styles.container}>
                 {retrievedInvoice && generatedPDFData ? (
-                    // PDF Ready View (after invoice creation)
+                    // PDF Ready View (after invoice creation) - Modified to include POS print button
                     <View style={styles.content}>
                         <View style={styles.card}>
                             <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice PDF Generated</Text>
@@ -552,6 +616,22 @@ const WalkIn = () => {
 
                             {/* Action Buttons */}
                             <View style={styles.pdfActionButtons}>
+                                <TouchableOpacity
+                                    style={[styles.printButton, isPrintingPOS && styles.shareButtonDisabled]}
+                                    onPress={printPOSHandler}
+                                    disabled={isPrintingPOS}
+                                    activeOpacity={0.8}
+                                >
+                                    {isPrintingPOS ? (
+                                        <ActivityIndicator color={COLORS.text.light} size="small" />
+                                    ) : (
+                                        <MaterialIcons name="print" size={24} color={COLORS.text.light} />
+                                    )}
+                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}>
+                                        {isPrintingPOS ? 'Printing...' : 'Print POS'}
+                                    </Text>
+                                </TouchableOpacity>
+                                
                                 <TouchableOpacity
                                     style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
                                     onPress={downloadPDFHandler}
