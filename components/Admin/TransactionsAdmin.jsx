@@ -40,6 +40,7 @@ const TransactionsAdmin = () => {
   const [allowInvoicing, setAllowInvoicing] = useState(false);
   const [allowOrderAcceptance, setAllowOrderAcceptance] = useState(false);
   const [allowEditOrder, setAllowEditOrder] = useState(false);
+  const [allowDirectInvoice, setAllowDirectInvoice] = useState(false); // New state for direct invoice permission
 
   useFocusEffect(
     React.useCallback(() => {
@@ -65,17 +66,19 @@ const TransactionsAdmin = () => {
         
         // Set allowPlaceOrder based on userDetails API response
         setAllowPlaceOrder(user.allow_place_order === 'Yes');
-        // Set allowInvoicing based on userDetails API response
-        setAllowInvoicing(user.allow_invoicing === 'Yes');
+       
         // Set allowOrderAcceptance based on userDetails API response
         setAllowOrderAcceptance(user.allow_order_acceptance === 'Yes');
         // Set allowEditOrder based on userDetails API response
         setAllowEditOrder(user.allow_edit_order === 'Yes');
+        // Set allowDirectInvoice based on userDetails API response
+        setAllowDirectInvoice(user.allow_invoicing === 'Yes'); // New permission
       } else {
         setAllowPlaceOrder(false);
-        setAllowInvoicing(false);
+
         setAllowOrderAcceptance(false);
         setAllowEditOrder(false);
+        setAllowDirectInvoice(false); // Default to false
       }
     } catch (error) {
       console.error('Error fetching user details:', error);
@@ -84,6 +87,7 @@ const TransactionsAdmin = () => {
       setAllowInvoicing(false);
       setAllowOrderAcceptance(false);
       setAllowEditOrder(false);
+      setAllowDirectInvoice(false); // Default to false
     }
   };
 
@@ -103,6 +107,16 @@ const TransactionsAdmin = () => {
     navigation.navigate('AdminOrderUpdate');
   };
 
+  // New handler for direct invoice
+  const handleDirectInvoice = () => {
+    navigation.navigate('InvoiceDirect');
+  };
+
+  // Handler for invoice summary has been removed since it's moved to Reports section
+  // const handleInvoiceSummary = () => {
+  //   navigation.navigate('InvoiceSummary');
+  // };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
@@ -114,7 +128,7 @@ const TransactionsAdmin = () => {
         <View style={styles.content}>
           
           {/* Check if any transaction options are enabled */}
-          {!allowOrderAcceptance && !allowEditOrder && !allowPlaceOrder && !allowInvoicing ? (
+          {!allowOrderAcceptance && !allowEditOrder && !allowPlaceOrder && !allowInvoicing && !allowDirectInvoice ? (
             <View style={styles.noOptionsContainer}>
               <MaterialIcons name="block" size={60} color={COLORS.text.secondary} />
               <Text style={[styles.noOptionsTitle, { fontSize: getScaledSize(18) }]}>No Transaction Options Available</Text>
@@ -189,6 +203,40 @@ const TransactionsAdmin = () => {
               </View>
             </TouchableOpacity>
           )}
+
+          {/* Direct Invoice Card - Only show if user has permission */}
+          {allowDirectInvoice && (
+            <TouchableOpacity style={styles.card} onPress={handleDirectInvoice} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#FEF3C7' }]}>
+                  <MaterialIcons name="receipt-long" size={24} color="#F59E0B" />
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Direct Invoice</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Create invoices directly for customers</Text>
+              <View style={styles.cardFooter}>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Create invoice</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Invoice Summary Card has been removed since it's moved to Reports section */}
+          {/* {allowDirectInvoice && (
+            <TouchableOpacity style={styles.card} onPress={handleInvoiceSummary} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
+                  <MaterialIcons name="summarize" size={24} color="#10B981" />
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoice Summary</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View your invoice history and summaries</Text>
+              <View style={styles.cardFooter}>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View summary</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )} */}
             </>
           )}
 
@@ -197,6 +245,8 @@ const TransactionsAdmin = () => {
     </SafeAreaView>
   );
 };
+
+export default TransactionsAdmin;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -297,5 +347,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
-
-export default TransactionsAdmin; 

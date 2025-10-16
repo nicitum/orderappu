@@ -134,6 +134,8 @@ const LoginPage = () => {
   };
 
   // Get FCM token and send to backend with customerId
+  // Commented out FCM token registration as requested
+  /*
   const handleFcmTokenRegistration = async (customerId) => {
     try {
       // Request permission first
@@ -166,6 +168,7 @@ const LoginPage = () => {
       return false;
     }
   };
+  */
 
   const handleLogin = async () => {
     Keyboard.dismiss();
@@ -211,17 +214,17 @@ const LoginPage = () => {
           ["userAuthToken", data.token]
         ]);
         
-        // Register FCM token with customerId and wait for confirmation
-        const tokenRegistered = await handleFcmTokenRegistration(decoded.id);
+        // Commented out FCM token registration as requested
+        // const tokenRegistered = await handleFcmTokenRegistration(decoded.id);
         
-        if (tokenRegistered) {
+        // if (tokenRegistered) {
             // Token registration completed
           
           // Show login success notification from backend
-          await showLoginSuccessNotification();
-        } else {
-          console.warn('FCM token registration failed, skipping login notification');
-        }
+          // await showLoginSuccessNotification();
+        // } else {
+        //   console.warn('FCM token registration failed, skipping login notification');
+        // }
         
         navigation.reset({
           index: 0,
@@ -239,6 +242,8 @@ const LoginPage = () => {
   };
 
   // Show login success notification via backend
+  // Commented out login success notification as requested
+  /*
   const showLoginSuccessNotification = async () => {
     try {
       console.log('=== SENDING LOGIN SUCCESS NOTIFICATION ===');
@@ -286,6 +291,7 @@ const LoginPage = () => {
       // Notification is optional, so we don't block the login flow
     }
   };
+  */
 
   const handlePasswordChangeSuccess = async () => {
     setShowPasswordModal(false);
@@ -296,14 +302,14 @@ const LoginPage = () => {
         ["userAuthToken", tempToken]
       ]);
       
-      // Register FCM token with customerId
-      await handleFcmTokenRegistration(decoded.id);
+      // Commented out FCM token registration as requested
+      // await handleFcmTokenRegistration(decoded.id);
       
       // Small delay to ensure token is registered before sending notification
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Show login success notification from backend
-      await showLoginSuccessNotification();
+      // await showLoginSuccessNotification();
       
       navigation.reset({
         index: 0,

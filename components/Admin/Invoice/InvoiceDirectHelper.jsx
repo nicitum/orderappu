@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../../services/urls';
 import Share from 'react-native-share';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { jwtDecode } from 'jwt-decode';
 
 // Helper to get token
 const getToken = async () => {
@@ -16,25 +17,33 @@ const getToken = async () => {
 export const fetchAllUsers = async () => {
     try {
         const authToken = await getToken();
-        const url = `http://${ipAddress}:8091/allUsers/`;
         
-        const response = await fetch(url, {
+        // Decode JWT token to get current admin ID
+        const decodedToken = jwtDecode(authToken);
+        const currentAdminId = decodedToken.id1; // Using id1 as the admin ID as per user instruction
+        
+        const response = await fetch(`http://${ipAddress}:8091/assigned-users/${currentAdminId}`, {
             headers: {
-                Authorization: `Bearer ${authToken}`,
+                "Authorization": `Bearer ${authToken}`,
                 "Content-Type": "application/json",
             },
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch users: ${response.status}`);
+            throw new Error(`Failed to fetch assigned users. Status: ${response.status}`);
         }
 
-        const data = await response.json();
-        const filteredData = data.data.filter(user => user.role === "user") || [];
-        return { success: true, data: filteredData };
+        const responseData = await response.json();
+        if (responseData.success) {
+            // Assuming the API returns assignedUsers array directly
+            const filteredData = responseData.assignedUsers || [];
+            return { success: true, data: filteredData };
+        } else {
+            throw new Error(responseData.message || "Failed to fetch assigned users.");
+        }
     } catch (err) {
-        console.error("Error fetching users:", err);
-        return { success: false, error: err.message };
+        console.error("Error fetching assigned users:", err);
+        return { success: false, error: err.message || "Error fetching assigned users. Please try again." };
     }
 };
 

@@ -17,7 +17,7 @@ import { ipAddress } from "../../services/urls";
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Button } from 'react-native-paper';
 import { useFontScale } from '../../App';
-import TestNotification from '../TestNotification';
+// import TestNotification from '../TestNotification';
 
 const COLORS = {
   primary: '#003366',
@@ -143,7 +143,8 @@ const OwnerHomePage = () => {
             </Text>
           </View>
 
-          {/* Test Notification Section */}
+          {/* Test Notification Section - Commented out as requested */}
+          {/* 
           <View style={styles.testSection}>
             <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>
               Push Notification Test
@@ -153,6 +154,7 @@ const OwnerHomePage = () => {
             </Text>
             <TestNotification />
           </View>
+          */}
         </ScrollView>
       )}
     </View>
@@ -255,29 +257,29 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     fontWeight: '500',
   },
-  testSection: {
-    backgroundColor: COLORS.surface,
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginBottom: 8,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
+  // testSection: {
+  //   backgroundColor: COLORS.surface,
+  //   padding: 20,
+  //   borderRadius: 12,
+  //   marginBottom: 16,
+  //   elevation: 2,
+  //   shadowColor: '#000',
+  //   shadowOffset: { width: 0, height: 1 },
+  //   shadowOpacity: 0.1,
+  //   shadowRadius: 2,
+  // },
+  // sectionTitle: {
+  //   fontSize: 18,
+  //   fontWeight: 'bold',
+  //   color: COLORS.text.primary,
+  //   marginBottom: 8,
+  // },
+  // sectionDescription: {
+  //   fontSize: 14,
+  //   color: COLORS.text.secondary,
+  //   marginBottom: 16,
+  //   lineHeight: 20,
+  // },
 });
 
 export default OwnerHomePage;

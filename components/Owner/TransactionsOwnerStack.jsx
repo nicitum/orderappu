@@ -8,7 +8,7 @@ import OwnerCartPage from './OwnerCartPage';
 import OrderHistoryOwner from './OrderHistoryOwner';
 import OwnerOrderUpdate from './OwnerOrderUpdate.jsx';
 import InvoiceDirect from './Invoice/InvoiceDirect';
-import WalkIn from './Invoice/WalkIn';
+// Removed WalkIn import
 
 const Stack = createStackNavigator();
 
@@ -22,7 +22,7 @@ const TransactionsOwnerStack = () => (
     <Stack.Screen name="OrderHistoryOwner" component={OrderHistoryOwner} />
     <Stack.Screen name="OwnerOrderUpdate" component={OwnerOrderUpdate} />
     <Stack.Screen name="InvoiceDirect" component={InvoiceDirect} />
-    <Stack.Screen name="WalkIn" component={WalkIn} />
+    {/* Removed WalkIn screen */}
   </Stack.Navigator>
 );
 

@@ -4,6 +4,7 @@ import ReportsAdmin from './ReportsAdmin';
 import AdminOrderHistory from './AdminOrderHistory';
 import AdminCartPage from './AdminCartPage';
 import AdminOrderStatus from './AdminOrderStatus';
+import InvoiceSummary from './Invoice/InvoiceSummary'; // Add InvoiceSummary import
 
 
 
@@ -20,6 +21,7 @@ const ReportsStack = () => {
       <Stack.Screen name="AdminOrderHistory" component={AdminOrderHistory} />
       <Stack.Screen name="AdminCartPage" component={AdminCartPage} />
       <Stack.Screen name="AdminOrderStatus" component={AdminOrderStatus} />
+      <Stack.Screen name="InvoiceSummary" component={InvoiceSummary} /> 
      
 
 
@@ -27,4 +29,4 @@ const ReportsStack = () => {
   );
 };
 
-export default ReportsStack; 
+export default ReportsStack;

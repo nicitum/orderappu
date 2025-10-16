@@ -47,6 +47,11 @@ const ReportsOwner = () => {
     navigation.navigate('OwnerOrderStatus');
   };
 
+  // New handler for invoice summary
+  const handleInvoiceSummary = () => {
+    navigation.navigate('InvoiceSummary');
+  };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -88,7 +93,20 @@ const ReportsOwner = () => {
             </View>
           </TouchableOpacity>
 
-       
+          {/* Invoice Summary Card */}
+          <TouchableOpacity style={styles.card} onPress={handleInvoiceSummary} activeOpacity={0.8}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
+                <MaterialIcons name="summarize" size={24} color="#10B981" />
+              </View>
+            </View>
+            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoice Summary</Text>
+            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View your invoice history and summaries</Text>
+            <View style={styles.cardFooter}>
+              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View summary</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+            </View>
+          </TouchableOpacity>
 
         </View>
       </ScrollView>

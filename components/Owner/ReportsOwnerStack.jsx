@@ -5,7 +5,7 @@ import InvoiceSA from './InvoiceSA';
 import OrderHistoryOwner from './OrderHistoryOwner';
 import OwnerCartPage from './OwnerCartPage';
 import OwnerOrderStatus from './OwnerOrderStatus';
-
+import InvoiceSummary from './Invoice/InvoiceSummary';
 
 const Stack = createStackNavigator();
 
@@ -19,8 +19,8 @@ const ReportsOwnerStack = () => (
     <Stack.Screen name="OrderHistoryOwner" component={OrderHistoryOwner} />
     <Stack.Screen name="OwnerCartPage" component={OwnerCartPage} />
     <Stack.Screen name="OwnerOrderStatus" component={OwnerOrderStatus} />
-
+    <Stack.Screen name="InvoiceSummary" component={InvoiceSummary} />
   </Stack.Navigator>
 );
 
-export default ReportsOwnerStack; 
+export default ReportsOwnerStack;

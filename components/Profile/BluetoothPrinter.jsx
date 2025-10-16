@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   PermissionsAndroid,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import RNBluetoothClassic, {
@@ -18,6 +19,9 @@ const BluetoothPrinter = () => {
   const [pairedDevices, setPairedDevices] = useState([]);
   const [connectedDevice, setConnectedDevice] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // disconnected, connecting, connected, checking
+  const hasCheckedConnection = useRef(false); // Ref to ensure connection check runs only once
 
   // Request Bluetooth permissions based on Android version
   const requestBluetoothPermissions = async () => {
@@ -90,44 +94,155 @@ const BluetoothPrinter = () => {
     try {
       const devices = await RNBluetoothClassic.getBondedDevices();
       setPairedDevices(devices);
+      return devices;
     } catch (error) {
       console.log('Error getting paired devices:', error);
       Alert.alert('Error', 'Failed to get paired devices');
+      return [];
     }
   };
 
-  // Connect to a Bluetooth device
-  const connectToDevice = async (device) => {
+  // Check if a device is currently connected
+  const checkConnectedDevice = async () => {
+    // Only run this check once
+    if (hasCheckedConnection.current) {
+      return;
+    }
+    
+    hasCheckedConnection.current = true;
+    setConnectionStatus('checking');
+    
     try {
+      const connectedDevices = await RNBluetoothClassic.getConnectedDevices();
+      console.log('Connected devices:', connectedDevices);
+      
+      if (connectedDevices.length > 0) {
+        setConnectedDevice(connectedDevices[0]);
+        setConnectionStatus('connected');
+      } else {
+        setConnectedDevice(null);
+        setConnectionStatus('disconnected');
+      }
+    } catch (error) {
+      console.log('Error checking connected devices:', error);
+      setConnectedDevice(null);
+      setConnectionStatus('disconnected');
+    }
+  };
+
+  // Connect to a Bluetooth device with better error handling
+  const connectToDevice = async (device) => {
+    if (isConnecting) return; // Prevent multiple simultaneous connections
+    
+    setIsConnecting(true);
+    setConnectionStatus('connecting');
+    
+    try {
+      // First check if we're already connected to this device
+      if (connectedDevice && connectedDevice.id === device.id) {
+        Alert.alert('Already Connected', `Already connected to ${device.name}`);
+        setIsConnecting(false);
+        setConnectionStatus('connected');
+        return;
+      }
+
       // Disconnect from any currently connected device
       if (connectedDevice) {
-        await RNBluetoothClassic.disconnectFromDevice(connectedDevice.id);
+        try {
+          await RNBluetoothClassic.disconnectFromDevice(connectedDevice.id);
+        } catch (disconnectError) {
+          console.log('Error disconnecting from previous device:', disconnectError);
+        }
       }
       
       // Connect to the new device
+      console.log('Connecting to device:', device.id);
       const connection = await RNBluetoothClassic.connectToDevice(device.id, {
-        DELIMITER: '\n', // Set delimiter if needed
+        DELIMITER: '\n',
+        SECURE_SOCKET: false, // Try insecure connection first
       });
       
       setConnectedDevice(device);
+      setConnectionStatus('connected');
       Alert.alert('Success', `Connected to ${device.name}`);
     } catch (error) {
       console.log('Connection error:', error);
-      Alert.alert('Error', `Failed to connect to ${device.name}: ${error.message}`);
+      
+      // Try alternative connection method
+      try {
+        const connection = await RNBluetoothClassic.connectToDevice(device.id, {
+          DELIMITER: '\n',
+          SECURE_SOCKET: true, // Try secure connection
+        });
+        
+        setConnectedDevice(device);
+        setConnectionStatus('connected');
+        Alert.alert('Success', `Connected to ${device.name}`);
+      } catch (secondError) {
+        console.log('Second connection attempt failed:', secondError);
+        setConnectedDevice(null);
+        setConnectionStatus('disconnected');
+        Alert.alert('Error', `Failed to connect to ${device.name}: ${error.message || 'Connection failed'}`);
+      }
+    } finally {
+      setIsConnecting(false);
     }
   };
 
   // Disconnect from the current device
   const disconnectDevice = async () => {
+    if (!connectedDevice) return;
+    
+    setConnectionStatus('disconnecting');
+    
     try {
-      if (connectedDevice) {
-        await RNBluetoothClassic.disconnectFromDevice(connectedDevice.id);
-        setConnectedDevice(null);
-        Alert.alert('Disconnected', 'Printer disconnected successfully');
-      }
+      await RNBluetoothClassic.disconnectFromDevice(connectedDevice.id);
+      setConnectedDevice(null);
+      setConnectionStatus('disconnected');
+      Alert.alert('Disconnected', 'Printer disconnected successfully');
     } catch (error) {
       console.log('Disconnection error:', error);
-      Alert.alert('Error', 'Failed to disconnect');
+      // Even if we get an error, clear the state since the device is likely disconnected
+      setConnectedDevice(null);
+      setConnectionStatus('disconnected');
+      Alert.alert('Info', 'Printer may already be disconnected');
+    }
+  };
+
+  // Test connection to verify device is responsive
+  const testConnection = async () => {
+    if (!connectedDevice) {
+      Alert.alert('Error', 'Please connect to a printer first');
+      return;
+    }
+
+    try {
+      // Send a simple command to test connection
+      const deviceId = connectedDevice.id;
+      
+      // Send initialize command
+      await RNBluetoothClassic.writeToDevice(deviceId, '\x1B\x40');
+      
+      // Send a simple text to verify response
+      await RNBluetoothClassic.writeToDevice(deviceId, 'Connection Test\n');
+      
+      Alert.alert('Success', 'Printer is responsive and connected');
+    } catch (error) {
+      console.log('Connection test error:', error);
+      Alert.alert('Error', 'Printer is not responding: ' + error.message);
+      
+      // Try to reconnect
+      Alert.alert(
+        'Reconnect?',
+        'Would you like to try reconnecting to the printer?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reconnect',
+            onPress: () => connectToDevice(connectedDevice)
+          }
+        ]
+      );
     }
   };
 
@@ -217,8 +332,7 @@ const BluetoothPrinter = () => {
     }
   };
 
-  // Print invoice function for POS receipts
-  // Scan for new devices
+  // Scan for new devices with improved connection checking
   const scanForDevices = async () => {
     const hasPermission = await requestBluetoothPermissions();
     if (!hasPermission) {
@@ -232,20 +346,10 @@ const BluetoothPrinter = () => {
     setIsScanning(true);
     try {
       // Get paired devices first
-      await getPairedDevices();
+      const devices = await getPairedDevices();
       
-      // Check for already connected devices
-      const connectedDevices = await RNBluetoothClassic.getConnectedDevices();
-      if (connectedDevices.length > 0) {
-        // If we don't have a connected device set, or if it's different from the first connected device
-        if (!connectedDevice || connectedDevice.id !== connectedDevices[0].id) {
-          // Set the first connected device as the active device
-          setConnectedDevice(connectedDevices[0]);
-        }
-      } else if (connectedDevice) {
-        // If no devices are connected but we thought one was, clear the state
-        setConnectedDevice(null);
-      }
+      // Check for already connected devices (but only once)
+      await checkConnectedDevice();
     } catch (error) {
       console.log('Scan error:', error);
       Alert.alert('Error', 'Failed to scan for devices');
@@ -268,14 +372,36 @@ const BluetoothPrinter = () => {
         styles.deviceItem,
         connectedDevice && connectedDevice.id === item.id && styles.connectedDevice
       ]}
-      onPress={() => connectToDevice(item)}>
+      onPress={() => connectToDevice(item)}
+      disabled={isConnecting || connectionStatus === 'connecting'}>
       <Text style={styles.deviceName}>{item.name}</Text>
       <Text style={styles.deviceAddress}>{item.address || item.id}</Text>
       <Text style={styles.deviceStatus}>
         {connectedDevice && connectedDevice.id === item.id ? '● Connected' : '○ Disconnected'}
       </Text>
+      {(isConnecting || connectionStatus === 'connecting') && connectedDevice && connectedDevice.id === item.id && (
+        <Text style={styles.connectingText}>Connecting...</Text>
+      )}
     </TouchableOpacity>
   );
+
+  // Get connection status text and color
+  const getConnectionStatusInfo = () => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return { text: 'Connecting...', color: '#FF9800' };
+      case 'connected':
+        return { text: `Connected to ${connectedDevice?.name || 'Printer'}`, color: '#4CAF50' };
+      case 'checking':
+        return { text: 'Checking connection...', color: '#2196F3' };
+      case 'disconnecting':
+        return { text: 'Disconnecting...', color: '#FF9800' };
+      default:
+        return { text: 'Not Connected', color: '#F44336' };
+    }
+  };
+
+  const statusInfo = getConnectionStatusInfo();
 
   return (
     <View style={styles.container}>
@@ -283,20 +409,37 @@ const BluetoothPrinter = () => {
       
       <View style={styles.statusContainer}>
         <Text style={styles.statusLabel}>Connection Status:</Text>
-        <Text style={[styles.statusValue, connectedDevice ? styles.connected : styles.disconnected]}>
-          {connectedDevice ? `Connected to ${connectedDevice.name}` : 'Not Connected'}
-        </Text>
+        <View style={styles.statusContent}>
+          {connectionStatus === 'checking' || connectionStatus === 'connecting' || connectionStatus === 'disconnecting' ? (
+            <View style={styles.statusRow}>
+              <ActivityIndicator size="small" color={statusInfo.color} />
+              <Text style={[styles.statusValue, { color: statusInfo.color, marginLeft: 10 }]}>
+                {statusInfo.text}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.statusValue, { color: statusInfo.color }]}>
+              {statusInfo.text}
+            </Text>
+          )}
+        </View>
       </View>
       
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={scanForDevices} disabled={isScanning}>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={scanForDevices} 
+          disabled={isScanning || isConnecting || connectionStatus === 'connecting'}>
           <Text style={styles.buttonText}>
             {isScanning ? 'Scanning...' : 'Scan for Devices'}
           </Text>
         </TouchableOpacity>
         
         {connectedDevice && (
-          <TouchableOpacity style={[styles.button, styles.disconnectButton]} onPress={disconnectDevice}>
+          <TouchableOpacity 
+            style={[styles.button, styles.disconnectButton]} 
+            onPress={disconnectDevice} 
+            disabled={isConnecting || connectionStatus === 'disconnecting'}>
             <Text style={styles.buttonText}>Disconnect</Text>
           </TouchableOpacity>
         )}
@@ -304,15 +447,23 @@ const BluetoothPrinter = () => {
         <TouchableOpacity 
           style={[styles.button, styles.testButton]} 
           onPress={testPrint}
-          disabled={!connectedDevice}>
+          disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
           <Text style={styles.buttonText}>Test Print</Text>
+        </TouchableOpacity>
+
+        {/* Connection test button */}
+        <TouchableOpacity 
+          style={[styles.button, styles.connectionTestButton]} 
+          onPress={testConnection}
+          disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
+          <Text style={styles.buttonText}>Test Connection</Text>
         </TouchableOpacity>
 
         {/* Alternative print button */}
         <TouchableOpacity 
           style={[styles.button, styles.bufferButton]} 
           onPress={testPrintWithBuffer}
-          disabled={!connectedDevice}>
+          disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
           <Text style={styles.buttonText}>Test Print (Buffer)</Text>
         </TouchableOpacity>
       </View>
@@ -362,16 +513,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  statusContent: {
+    marginTop: 5,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   statusValue: {
     fontSize: 16,
-    marginTop: 5,
     fontWeight: '500',
-  },
-  connected: {
-    color: '#4CAF50',
-  },
-  disconnected: {
-    color: '#F44336',
   },
   buttonContainer: {
     flexDirection: 'column',
@@ -390,6 +541,9 @@ const styles = StyleSheet.create({
   },
   testButton: {
     backgroundColor: '#4CAF50',
+  },
+  connectionTestButton: {
+    backgroundColor: '#9C27B0',
   },
   bufferButton: {
     backgroundColor: '#FF9800',
@@ -437,6 +591,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
     fontWeight: '500',
+  },
+  connectingText: {
+    fontSize: 12,
+    color: '#FF9800',
+    marginTop: 3,
+    fontStyle: 'italic',
   },
   emptyMessage: {
     textAlign: 'center',

@@ -38,6 +38,7 @@ const ReportsAdmin = () => {
   const navigation = useNavigation();
   const [allowOrderSummary, setAllowOrderSummary] = useState(false);
   const [allowOrderStatus, setAllowOrderStatus] = useState(false);
+  const [allowInvoiceSummary, setAllowInvoiceSummary] = useState(false); // New state for invoice summary permission
 
   useFocusEffect(
     React.useCallback(() => {
@@ -65,15 +66,19 @@ const ReportsAdmin = () => {
         setAllowOrderSummary(user.allow_order_summary === 'Yes');
         // Set allowOrderStatus based on userDetails API response
         setAllowOrderStatus(user.allow_order_status === 'Yes');
+        // Set allowInvoiceSummary based on userDetails API response
+        setAllowInvoiceSummary(user.allow_invoicing === 'Yes'); // Using allow_invoicing for invoice summary
       } else {
         setAllowOrderSummary(false);
         setAllowOrderStatus(false);
+        setAllowInvoiceSummary(false); // Default to false
       }
     } catch (error) {
       console.error('Error fetching user details:', error);
       // Default to false if API fails
       setAllowOrderSummary(false);
       setAllowOrderStatus(false);
+      setAllowInvoiceSummary(false); // Default to false
     }
   };
 
@@ -83,6 +88,11 @@ const ReportsAdmin = () => {
 
   const handleOrderStatus = () => {
     navigation.navigate('AdminOrderStatus');
+  };
+
+  // New handler for invoice summary
+  const handleInvoiceSummary = () => {
+    navigation.navigate('InvoiceSummary');
   };
 
   
@@ -101,7 +111,7 @@ const ReportsAdmin = () => {
         <View style={styles.content}>
           
           {/* Check if any reporting options are enabled */}
-          {!allowOrderSummary && !allowOrderStatus ? (
+          {!allowOrderSummary && !allowOrderStatus && !allowInvoiceSummary ? (
             <View style={styles.noOptionsContainer}>
               <MaterialIcons name="report-problem" size={60} color={COLORS.text.secondary} />
               <Text style={[styles.noOptionsTitle, { fontSize: getScaledSize(18) }]}>No Reporting Options Available</Text>
@@ -138,6 +148,23 @@ const ReportsAdmin = () => {
               <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Track order status and delivery information</Text>
               <View style={styles.cardFooter}>
                 <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View status</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Invoice Summary Card - Only show if user has permission */}
+          {allowInvoiceSummary && (
+            <TouchableOpacity style={styles.card} onPress={handleInvoiceSummary} activeOpacity={0.8}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
+                  <MaterialIcons name="summarize" size={24} color="#10B981" />
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoice Summary</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View your invoice history and summaries</Text>
+              <View style={styles.cardFooter}>
+                <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View summary</Text>
                 <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -250,4 +277,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ReportsAdmin; 
+export default ReportsAdmin;
