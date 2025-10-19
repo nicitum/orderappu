@@ -82,9 +82,22 @@ class NotificationService {
       if (Platform.OS === 'android' && Platform.Version >= 33) {
         console.log('Requesting Android 13+ POST_NOTIFICATIONS permission...');
         if (PermissionsAndroid) {
-          const result = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-          );
+          // Check if the permission constant exists
+          const postNotificationsPermission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+          if (!postNotificationsPermission) {
+            console.warn('POST_NOTIFICATIONS permission not available');
+            // Try to get token anyway for older Android behavior
+            try {
+              await messaging().requestPermission();
+              console.log('Firebase messaging permission granted');
+              return true;
+            } catch (firebaseError) {
+              console.log('Firebase messaging permission error:', firebaseError);
+              return true;
+            }
+          }
+          
+          const result = await PermissionsAndroid.request(postNotificationsPermission);
           
           if (result === PermissionsAndroid.RESULTS.GRANTED) {
             console.log('POST_NOTIFICATIONS permission granted');

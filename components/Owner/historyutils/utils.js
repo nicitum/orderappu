@@ -15,7 +15,7 @@ export const handleOrderDetailsPress = async (orderId, expandedOrderDetailsId, s
         setExpandedOrderDetailsId(orderId);
         if (!orderDetails[orderId]) {
             console.log('Fetching products for order:', orderId);
-            const products = await fetchOrderProducts(orderId, console);
+            const products = await fetchOrderProducts(orderId);
             setOrderDetails((prevDetails) => ({ ...prevDetails, [orderId]: products }));
         }
     }
@@ -26,7 +26,7 @@ export const handleOrderDetailsPress = async (orderId, expandedOrderDetailsId, s
  */
 export const handleReorder = async (orderId, orders, fetchOrderProducts, setPendingReorderOrderId, setPendingReorderProducts, setShowDueDateModal, setSelectedDueDate, defaultDueOn, handleEditAndReorder, Toast, console) => {
     try {
-        const products = await fetchOrderProducts(orderId, console);
+        const products = await fetchOrderProducts(orderId);
         if (products && products.length > 0) {
             // Find the order object for this orderId
             const order = orders.find(o => o.id === orderId);
@@ -139,7 +139,7 @@ export const getCustomerName = async (customerId, customerNames, setCustomerName
         return customerNames[customerId];
     }
     
-    const name = await fetchCustomerName(customerId, console);
+    const name = await fetchCustomerName(customerId);
     if (name) {
         setCustomerNames(prev => ({ ...prev, [customerId]: name }));
     }

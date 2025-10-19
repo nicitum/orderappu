@@ -34,7 +34,8 @@ import {
   getCancellationStatusColor, 
   getConsolidatedStatus,
   styles,
-  detailStyles
+  detailStyles,
+  ProductItem
 } from './historyutils';
 import { 
   fetchOrders,
@@ -160,23 +161,22 @@ const OrderHistoryOwner = ({ route }) => {
           expandedOrderId, 
           setOrders, 
           setOrderDetails, 
-          setLoading,
-          console
+          setLoading
       );
   }, [expandedOrderId, fromDate, toDate]);
 
   const fetchAllProductsWrapper = useCallback(async () => {
-      await fetchAllProducts(setAllProductsData, console);
+      await fetchAllProducts(setAllProductsData); // Remove console parameter
   }, []);
 
   // Fetch client status for due date configuration
   const fetchClientStatusWrapper = async () => {
-      await fetchClientStatus(setDefaultDueOn, setMaxDueOn, setSelectedDueDate, console);
+      await fetchClientStatus(setDefaultDueOn, setMaxDueOn, setSelectedDueDate); // Remove console parameter
   };
 
   // Function to fetch customer name by customer ID (fallback)
   const fetchCustomerNameWrapper = async (customerId) => {
-      return await fetchCustomerName(customerId, console);
+      return await fetchCustomerName(customerId); // Remove console parameter
   };
 
   // Simple function to get customer name and cache it
@@ -243,7 +243,7 @@ const OrderHistoryOwner = ({ route }) => {
   }, [allProductsData]);
 
   const fetchOrderProductsWrapper = async (orderId) => {
-      return await fetchOrderProducts(orderId, console);
+      return await fetchOrderProducts(orderId); // Remove console parameter
   };
 
   const handleOrderDetailsPressWrapper = async (orderId) => {
@@ -305,41 +305,16 @@ const OrderHistoryOwner = ({ route }) => {
               {products.length > 0 ? (
                   products.map((product, index) => {
                       const prodData = allProductsMap.get(product.product_id);
-                      const imageUrl = prodData && prodData.image ? `http://${ipAddress}:8091/images/products/${prodData.image}` : null;
                       return (
-                          <View key={`${orderId}-${product.product_id}-${index}`} style={detailStyles.productRow}>
-                              <View style={detailStyles.imageColumn}>
-                                  <View style={detailStyles.productImageBox}>
-                                      {imageUrl ? (
-                                          <Image
-                                              source={{ uri: imageUrl }}
-                                              style={detailStyles.productImage}
-                                              resizeMode="contain"
-                                              onError={(e) => console.log('Order item image load error:', e.nativeEvent.error, prodData?.image)}
-                                          />
-                                      ) : (
-                                          <View style={detailStyles.productImagePlaceholder}>
-                                              <MaterialIcons name="image-not-supported" size={24} color="#9E9E9E" />
-                                          </View>
-                                      )}
-                                  </View>
-                              </View>
-                              <View style={detailStyles.productNameColumn}>
-                                  <Text 
-                                      style={[detailStyles.productNameText, { fontSize: getScaledSize(14) }]}
-                                      numberOfLines={2}
-                                      ellipsizeMode="tail"
-                                  >
-                                      {product.name || (prodData?.name || 'Product Name')}
-                                  </Text>
-                              </View>
-                              <View style={detailStyles.qtyColumn}>
-                                  <Text style={[detailStyles.qtyText, { fontSize: getScaledSize(14) }]}>{product.quantity}</Text>
-                              </View>
-                              <View style={detailStyles.priceColumn}>
-                                  <Text style={[detailStyles.priceText, { fontSize: getScaledSize(14) }]}>₹{product.price}</Text>
-                              </View>
-                          </View>
+                          <ProductItem 
+                              key={`${orderId}-${product.product_id}-${index}`}
+                              product={product}
+                              prodData={prodData}
+                              orderId={orderId}
+                              index={index}
+                              getScaledSize={getScaledSize}
+                              ipAddress={ipAddress}
+                          />
                       );
                   })
               ) : (

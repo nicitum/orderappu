@@ -72,47 +72,39 @@ const ProfilePage = ({ setIsLoggedIn }) => {
     );
 
     const adminItems = [
-       
         {
-            text: "Order Tracking",
-            icon: <MaterialIcons name="local-shipping" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("OrderTrackingScreen")
+            text: "Bluetooth Printer",
+            icon: <MaterialIcons name="print" size={24} color="#003366" />,
+            onPress: () => navigation.navigate("BluetoothPrinter")
         },
-        
-        
-        
-       
+        // Removed Order Tracking item
     ];
 
     const userItems = [
-       
         {
             text: "Shopping Cart",
             icon: <MaterialIcons name="shopping-cart" size={24} color="#003366" />,
             onPress: () => navigation.navigate("CartCustomer", { clearCartOnOpen: true })
         },
-        {
-            text: "Location Update",
-            icon: <MaterialIcons name="local-shipping" size={24} color="#003366" />,
-            onPress: () => navigation.navigate("OrderTrackingCustomerScreen")
-        },
+        // Removed Location Update item
         {
             text: "Delivery Status Update",
             icon: <MaterialIcons name="update" size={24} color="#003366" />,
             onPress: () => navigation.navigate("DeliveryStatusUpdate")
         },
-       
     ];
 
     const superAdminItems = [
-       
-    
+        {
+            text: "Bluetooth Printer",
+            icon: <MaterialIcons name="print" size={24} color="#003366" />,
+            onPress: () => navigation.navigate("BluetoothPrinter")
+        },
         {
             text: "Remarks",
             icon: <MaterialIcons name="rate-review" size={24} color="#003366" />,
             onPress: () => navigation.navigate("Remarks")
         },
-       
     ];
 
     return (
@@ -165,20 +157,6 @@ const ProfilePage = ({ setIsLoggedIn }) => {
                         </View>
                         <MaterialIcons name="chevron-right" size={24} color="#666" />
                     </TouchableOpacity>
-                    
-                    {/* Bluetooth Printer Menu Item */}
-                    <TouchableOpacity 
-                        style={styles.menuItem}
-                        onPress={() => navigation.navigate("BluetoothPrinter")}
-                    >
-                        <View style={styles.menuIconText}>
-                            <View style={styles.iconContainer}>
-                                <MaterialIcons name="print" size={24} color="#003366" />
-                            </View>
-                            <Text style={[styles.menuText, { fontSize: getScaledSize(16) }]}>Bluetooth Printer</Text>
-                        </View>
-                        <MaterialIcons name="chevron-right" size={24} color="#666" />
-                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.section}>
@@ -208,7 +186,7 @@ const ProfilePage = ({ setIsLoggedIn }) => {
             <View style={styles.footer}>
                 <View style={styles.creditContainer}>
                     <Text style={[styles.creditText, { fontSize: getScaledSize(12) }]}>
-                        Copyright © ORDER APPU Application
+                        Copyright © Appu OMS Application
                     </Text>
                     <Text style={[styles.creditText, { fontSize: getScaledSize(12) }]}>
                         Designed & Developed by Nicitum Technologies

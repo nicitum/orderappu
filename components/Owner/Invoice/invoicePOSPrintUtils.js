@@ -1,4 +1,12 @@
 import { fetchClientStatus } from './InvoiceDirectHelper';
+import * as InvoiceDirectHelper from './InvoiceDirectHelper';
+import { LICENSE_NO } from '../../../config';
+
+// Test function to verify import
+const testImport = () => {
+  console.log('InvoiceDirectHelper keys:', Object.keys(InvoiceDirectHelper));
+  console.log('fetchClientStatus exists:', typeof InvoiceDirectHelper.fetchClientStatus);
+};
 
 /**
  * Generate and print POS receipt for 2-inch thermal printer
@@ -80,7 +88,14 @@ export const printInvoicePOSPDF = async (invoiceData, customerData, deviceId, RN
     }
 
     // Fetch client status to get business information and GST method
+    console.log('About to call fetchClientStatus');
+    console.log('InvoiceDirectHelper:', InvoiceDirectHelper);
+    // Run test import
+    testImport();
+    const fetchClientStatus = InvoiceDirectHelper.fetchClientStatus;
+    console.log('fetchClientStatus function:', fetchClientStatus);
     const clientStatusResult = await fetchClientStatus();
+    console.log('clientStatusResult:', clientStatusResult);
     let clientData = {};
     let gstMethod = "Inclusive GST"; // Default to inclusive
     if (clientStatusResult.success) {
@@ -185,7 +200,7 @@ export const printInvoicePOSPDF = async (invoiceData, customerData, deviceId, RN
     printCommands.push('\x1B\x61\x01'); // Center align
     printCommands.push('\x1B\x21\x10'); // Double height
     // Use client data instead of hardcoded values
-    printCommands.push((clientData.client_name || 'ORDER APPU').toUpperCase() + '\n');
+    printCommands.push((clientData.client_name || 'Appu OMS').toUpperCase() + '\n');
     printCommands.push('\x1B\x21\x00'); // Normal size
     printCommands.push((clientData.client_address || 'BANGALORE - 560068') + '\n');
     if (clientData.gst_no) {

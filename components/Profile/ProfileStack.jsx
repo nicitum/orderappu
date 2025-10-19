@@ -4,8 +4,8 @@ import OrdersPage from './OrdersPage';
 import DeliveryStatusUpdate from './DeliveryStatusUpdate';
 import PlaceOrderAdmin from './PlaceOrderAdmin';
 import Remarks from './Remarks';
-import OrderTrackingScreen from './OrderTrackingScreen';
-import OrderTrackingCustomerScreen from './OrderTrackingCustomerScreen';
+// Removed OrderTrackingScreen import
+// Removed OrderTrackingCustomerScreen import
 import CartCustomer from '../Customer/CartCustomer';
 import Settings from './Settings';
 import FontSettings from './FontSettings';
@@ -69,24 +69,11 @@ const ProfileStack = () => {
     
 
 
-    
-
-
       
   
 
-      <Stack.Screen 
-        name="OrderTrackingScreen"
-        component={OrderTrackingScreen}
-        options={{ title: 'Order Tracking' }}
-      />
-
-
-      <Stack.Screen 
-        name="OrderTrackingCustomerScreen"
-        component={OrderTrackingCustomerScreen}
-        options={{ title: 'Order Tracking Customer' }}
-      />
+      {/* Removed OrderTrackingScreen route */}
+      {/* Removed OrderTrackingCustomerScreen route */}
 
       <Stack.Screen
         name="CartCustomer"

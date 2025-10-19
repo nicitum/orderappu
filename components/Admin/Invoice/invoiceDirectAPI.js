@@ -1,8 +1,3 @@
-/**
- * Sample implementation of the invoice_direct API route
- * This shows how collections data should be properly handled in the backend
- */
-
 // API to create direct invoice and insert products into order_products table
 router.post('/invoice_direct', async (req, res) => {
     try {
@@ -16,7 +11,8 @@ router.post('/invoice_direct', async (req, res) => {
             customer_name, 
             route, 
             placed_on, 
-            billed_by 
+            billed_by,
+            summary
         } = req.body;
 
         // Validate required fields
@@ -74,10 +70,23 @@ router.post('/invoice_direct', async (req, res) => {
             }
         }
 
+        // Process summary data - ensure it's properly formatted for database insertion
+        let summaryValue = null;
+        if (summary !== undefined && summary !== null) {
+            try {
+                // If it's already a string, use it as is; otherwise stringify it
+                summaryValue = typeof summary === 'string' ? summary : JSON.stringify(summary);
+            } catch (stringifyError) {
+                console.warn('Failed to stringify summary data:', stringifyError);
+                // If stringify fails, store as null
+                summaryValue = null;
+            }
+        }
+
         // 1. Insert into direct_invoice table
         const insertInvoiceQuery = `
-            INSERT INTO direct_invoice (invoice_number, invoice_amount, customer_id, customer_name, route, created_at, adjustments, collections, billed_by)
-            VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(), ?, ?, ?)
+            INSERT INTO direct_invoice (invoice_number, invoice_amount, customer_id, customer_name, route, created_at, adjustments, collections, billed_by, summary)
+            VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(), ?, ?, ?, ?)
         `;
         await executeQuery(insertInvoiceQuery, [
             invoice_number, 
@@ -87,7 +96,8 @@ router.post('/invoice_direct', async (req, res) => {
             route || null, 
             adjustments || null, 
             collectionsValue, 
-            billed_by || null
+            billed_by || null,
+            summaryValue
         ]);
 
         // 2. Insert products into order_products table
@@ -171,6 +181,7 @@ router.post('/invoice_direct', async (req, res) => {
                 products_count: products.length,
                 collections: collections || null,
                 billed_by: billed_by || null,
+                summary: summary || null,
                 created_at: Math.floor(Date.now() / 1000)
             }
         });
@@ -249,11 +260,35 @@ router.get('/fetch_di_summary', async (req, res) => {
             }
         }
 
+        // Process summary data, handling both string and object cases
+        let summaryData = null;
+        if (invoiceData.summary) {
+            try {
+                // If it's already an object, use it as is
+                if (typeof invoiceData.summary === 'object' && !Array.isArray(invoiceData.summary)) {
+                    summaryData = invoiceData.summary;
+                } 
+                // If it's a string, parse it
+                else if (typeof invoiceData.summary === 'string') {
+                    summaryData = JSON.parse(invoiceData.summary);
+                }
+                // For any other case, keep it as is
+                else {
+                    summaryData = invoiceData.summary;
+                }
+            } catch (parseError) {
+                console.warn('Failed to parse summary data:', parseError);
+                // If parsing fails, keep the original data
+                summaryData = invoiceData.summary;
+            }
+        }
+
         // Prepare response data
         const responseData = {
             invoice: {
                 ...invoiceData,
-                collections: collectionsData
+                collections: collectionsData,
+                summary: summaryData
             },
             items: itemsResult
         };
@@ -288,5 +323,3 @@ router.get('/fetch_di_summary', async (req, res) => {
         });
     }
 });
-
-module.exports = router;

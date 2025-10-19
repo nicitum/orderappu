@@ -1,11 +1,11 @@
-import { ipAddress } from '../../../services/urls.js';
-import { checkTokenAndRedirect } from '../../../services/auth.js';
+import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config'; // Import the license number
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkTokenAndRedirect } from '../../../services/auth';
 import { jwtDecode } from 'jwt-decode';
 import moment from 'moment';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// API helpers for AdminCartPage
-export class AdminCartAPI {
+export class CartAPI {
   // Fetch user permissions
   static async fetchUserPermissions(navigation) {
     try {
@@ -36,7 +36,7 @@ export class AdminCartAPI {
   static async fetchClientStatus() {
     try {
       console.log('Fetching client status...');
-      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+      const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache',

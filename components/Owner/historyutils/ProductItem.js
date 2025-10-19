@@ -11,7 +11,6 @@ const ProductItem = ({
   getScaledSize,
   ipAddress
 }) => {
-  console.log("Rendering ProductItem with product:", product, "prodData:", prodData);
   const imageUrl = prodData && prodData.image ? `http://${ipAddress}:8091/images/products/${prodData.image}` : null;
   
   return (

@@ -1,8 +1,9 @@
-import { ipAddress } from '../../services/urls';
-import { checkTokenAndRedirect } from '../../services/auth';
+import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config'; // Import the license number
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkTokenAndRedirect } from '../../../services/auth';
 import { jwtDecode } from 'jwt-decode';
 import moment from 'moment';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Fetch client status for due date configuration
@@ -10,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const fetchClientStatus = async (setdefaultDueOn, setMaxDueOn, console) => {
   try {
     console.log('Fetching client status...');
-    const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+    const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache',

@@ -1,4 +1,4 @@
-package com.orderappu
+package com.appuoms
 
 import android.app.Application
 import com.facebook.react.PackageList

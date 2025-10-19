@@ -297,41 +297,6 @@ const BluetoothPrinter = () => {
     }
   };
 
-  // Alternative print function using Buffer (if string doesn't work)
-  const testPrintWithBuffer = async () => {
-    if (!connectedDevice) {
-      Alert.alert('Error', 'Please connect to a printer first');
-      return;
-    }
-
-    try {
-      const deviceId = connectedDevice.id;
-      
-      // Create a buffer with all ESC/POS commands
-      const printData = [
-        '\x1B\x40', // Initialize
-        '\x1B\x61\x01', // Center align
-        'LOGON SYSTEMS\n',
-        'LS-P11 Printer Test\n',
-        '--------------------------\n',
-        '\x1B\x61\x00', // Left align
-        'Test Date: ' + new Date().toLocaleDateString() + '\n',
-        'Item: React Native Thermal Print\n',
-        'Status: SUCCESS\n\n\n\n',
-        '\x1D\x56\x00' // Cut paper
-      ].join('');
-
-      // Convert to buffer and send
-      const buffer = Buffer.from(printData, 'utf8');
-      await RNBluetoothClassic.writeToDevice(deviceId, buffer);
-      
-      Alert.alert('Success', 'Test print completed!');
-    } catch (error) {
-      console.log('Buffer print error:', error);
-      Alert.alert('Error', 'Failed to print with buffer: ' + error.message);
-    }
-  };
-
   // Scan for new devices with improved connection checking
   const scanForDevices = async () => {
     const hasPermission = await requestBluetoothPermissions();
@@ -374,14 +339,18 @@ const BluetoothPrinter = () => {
       ]}
       onPress={() => connectToDevice(item)}
       disabled={isConnecting || connectionStatus === 'connecting'}>
-      <Text style={styles.deviceName}>{item.name}</Text>
-      <Text style={styles.deviceAddress}>{item.address || item.id}</Text>
-      <Text style={styles.deviceStatus}>
-        {connectedDevice && connectedDevice.id === item.id ? '● Connected' : '○ Disconnected'}
-      </Text>
-      {(isConnecting || connectionStatus === 'connecting') && connectedDevice && connectedDevice.id === item.id && (
-        <Text style={styles.connectingText}>Connecting...</Text>
-      )}
+      <View style={styles.deviceInfo}>
+        <Text style={styles.deviceName}>{item.name}</Text>
+        <Text style={styles.deviceAddress}>{item.address || item.id}</Text>
+      </View>
+      <View style={styles.deviceStatusContainer}>
+        <Text style={[
+          styles.deviceStatus,
+          connectedDevice && connectedDevice.id === item.id ? styles.connectedStatus : styles.disconnectedStatus
+        ]}>
+          {connectedDevice && connectedDevice.id === item.id ? 'Connected' : 'Disconnected'}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 
@@ -407,8 +376,11 @@ const BluetoothPrinter = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Bluetooth Printer Setup</Text>
       
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusLabel}>Connection Status:</Text>
+      <View style={styles.statusCard}>
+        <View style={styles.statusHeader}>
+          <Text style={styles.statusLabel}>Connection Status</Text>
+          <View style={[styles.statusIndicator, { backgroundColor: statusInfo.color }]} />
+        </View>
         <View style={styles.statusContent}>
           {connectionStatus === 'checking' || connectionStatus === 'connecting' || connectionStatus === 'disconnecting' ? (
             <View style={styles.statusRow}>
@@ -425,46 +397,39 @@ const BluetoothPrinter = () => {
         </View>
       </View>
       
-      <View style={styles.buttonContainer}>
+      <View style={styles.actionButtonsContainer}>
         <TouchableOpacity 
-          style={styles.button} 
+          style={[styles.actionButton, styles.scanButton]} 
           onPress={scanForDevices} 
           disabled={isScanning || isConnecting || connectionStatus === 'connecting'}>
-          <Text style={styles.buttonText}>
+          <Text style={styles.actionButtonText}>
             {isScanning ? 'Scanning...' : 'Scan for Devices'}
           </Text>
         </TouchableOpacity>
         
         {connectedDevice && (
           <TouchableOpacity 
-            style={[styles.button, styles.disconnectButton]} 
+            style={[styles.actionButton, styles.disconnectButton]} 
             onPress={disconnectDevice} 
             disabled={isConnecting || connectionStatus === 'disconnecting'}>
-            <Text style={styles.buttonText}>Disconnect</Text>
+            <Text style={styles.actionButtonText}>Disconnect</Text>
           </TouchableOpacity>
         )}
-        
+      </View>
+      
+      <View style={styles.functionButtonsContainer}>
         <TouchableOpacity 
-          style={[styles.button, styles.testButton]} 
+          style={[styles.functionButton, styles.testPrintButton]} 
           onPress={testPrint}
           disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
-          <Text style={styles.buttonText}>Test Print</Text>
+          <Text style={styles.functionButtonText}>Test Print</Text>
         </TouchableOpacity>
 
-        {/* Connection test button */}
         <TouchableOpacity 
-          style={[styles.button, styles.connectionTestButton]} 
+          style={[styles.functionButton, styles.testConnectionButton]} 
           onPress={testConnection}
           disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
-          <Text style={styles.buttonText}>Test Connection</Text>
-        </TouchableOpacity>
-
-        {/* Alternative print button */}
-        <TouchableOpacity 
-          style={[styles.button, styles.bufferButton]} 
-          onPress={testPrintWithBuffer}
-          disabled={!connectedDevice || isConnecting || connectionStatus !== 'connected'}>
-          <Text style={styles.buttonText}>Test Print (Buffer)</Text>
+          <Text style={styles.functionButtonText}>Test Connection</Text>
         </TouchableOpacity>
       </View>
       
@@ -488,30 +453,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
     marginBottom: 20,
-    color: '#333',
+    color: '#2c3e50',
   },
-  statusContainer: {
+  statusCard: {
     backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 8,
+    padding: 20,
+    borderRadius: 12,
     marginBottom: 20,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
+  },
+  statusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   statusLabel: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#34495e',
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   statusContent: {
     marginTop: 5,
@@ -524,40 +500,69 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  buttonContainer: {
-    flexDirection: 'column',
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
-  button: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 15,
+  actionButton: {
+    flex: 1,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 8,
-    marginBottom: 10,
+    borderRadius: 10,
+    marginHorizontal: 5,
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  scanButton: {
+    backgroundColor: '#3498db',
   },
   disconnectButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#e74c3c',
   },
-  testButton: {
-    backgroundColor: '#4CAF50',
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  connectionTestButton: {
-    backgroundColor: '#9C27B0',
+  functionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  bufferButton: {
-    backgroundColor: '#FF9800',
+  functionButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginHorizontal: 5,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-  buttonText: {
+  testPrintButton: {
+    backgroundColor: '#2ecc71',
+  },
+  testConnectionButton: {
+    backgroundColor: '#9b59b6',
+  },
+  functionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 15,
+    color: '#34495e',
   },
   deviceList: {
     flex: 1,
@@ -565,44 +570,56 @@ const styles = StyleSheet.create({
   deviceItem: {
     backgroundColor: '#fff',
     padding: 15,
-    borderRadius: 8,
-    marginBottom: 10,
+    borderRadius: 10,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  connectedDevice: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+  deviceInfo: {
+    flex: 1,
   },
   deviceName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#2c3e50',
   },
   deviceAddress: {
     fontSize: 14,
-    color: '#666',
+    color: '#7f8c8d',
     marginTop: 3,
+  },
+  deviceStatusContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   deviceStatus: {
-    fontSize: 14,
-    marginTop: 5,
-    fontWeight: '500',
-  },
-  connectingText: {
     fontSize: 12,
-    color: '#FF9800',
-    marginTop: 3,
-    fontStyle: 'italic',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  connectedStatus: {
+    color: '#27ae60',
+  },
+  disconnectedStatus: {
+    color: '#e74c3c',
+  },
+  connectedDevice: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#27ae60',
   },
   emptyMessage: {
     textAlign: 'center',
-    color: '#666',
+    color: '#7f8c8d',
     fontSize: 16,
     marginTop: 20,
+    fontStyle: 'italic',
   },
 });
 

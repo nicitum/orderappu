@@ -1,55 +1,52 @@
-import { ipAddress } from '../../../services/urls.js';
-import { checkTokenAndRedirect } from '../../services/auth.js';
-import { jwtDecode } from 'jwt-decode';
+import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config'; // Import the license number
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import moment from 'moment';
+import { jwtDecode } from 'jwt-decode';
+import { checkTokenAndRedirect } from '../../../services/auth';
 
 /**
- * Load cart from storage
+ * Load cart from AsyncStorage
+ * This function loads the cart items and customer data from storage
+ * and updates the state using the provided setter functions
  */
 export const loadCartFromStorage = async (setCartItems, setSelectedCustomer, console) => {
   try {
     const savedCart = await AsyncStorage.getItem('ownerCart');
+    const savedCustomer = await AsyncStorage.getItem('ownerCartCustomer');
+    
     if (savedCart) {
       setCartItems(JSON.parse(savedCart));
     }
     
-    // Load customer from storage
-    const savedCustomer = await AsyncStorage.getItem('ownerCartCustomer');
     if (savedCustomer) {
-      const parsedCustomer = JSON.parse(savedCustomer);
-      // Apply the same fallback logic for saved customers
-      if (!parsedCustomer.name || parsedCustomer.name === parsedCustomer.customer_id.toString()) {
-        parsedCustomer.name = `Customer ${parsedCustomer.customer_id}`;
-        console.log('Applied fallback name from storage:', parsedCustomer.name);
-      }
-      setSelectedCustomer(parsedCustomer);
+      setSelectedCustomer(JSON.parse(savedCustomer));
     }
   } catch (error) {
-    console.error('Error loading owner cart:', error);
+    console.error('Error loading owner cart from storage:', error);
   }
 };
 
 /**
- * Save cart to storage
+ * Save cart to AsyncStorage
  */
 export const saveCartToStorage = async (cartItems, console) => {
   try {
     await AsyncStorage.setItem('ownerCart', JSON.stringify(cartItems));
   } catch (error) {
-    console.error('Error saving owner cart:', error);
+    console.error('Error saving owner cart to storage:', error);
   }
 };
 
 /**
- * Fetch user permissions
+ * Load products from API
  */
-export const fetchUserPermissions = async (setAllowProductEdit, navigation, console) => {
+export const loadProducts = async (setProducts, setFilteredProducts, setBrands, setCategories, setLoading, navigation, Alert, console) => {
+  setLoading(true);
   try {
     const token = await checkTokenAndRedirect(navigation);
     if (!token) return;
 
-    const response = await fetch(`http://${ipAddress}:8091/userDetails`, {
+    const response = await fetch(`http://${ipAddress}:8091/products`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -58,17 +55,134 @@ export const fetchUserPermissions = async (setAllowProductEdit, navigation, cons
 
     if (response.ok) {
       const data = await response.json();
-      const user = data.user;
       
-      // Set allowProductEdit based on userDetails API response
-      setAllowProductEdit(user.allow_product_edit === 'Yes');
+      // Filter by enable_product - handle new backend values
+      // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
+      const enabledProducts = data.filter(p => p.enable_product !== "Mask");
+      
+      // Extract unique brands and categories from enabled products only
+      const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
+      const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
+      
+      setProducts(enabledProducts);
+      setFilteredProducts(enabledProducts);
+      setBrands(uniqueBrands);
+      setCategories(uniqueCategories);
     } else {
-      setAllowProductEdit(false);
+      throw new Error('Failed to load products');
     }
   } catch (error) {
-    console.error('Error fetching user details:', error);
-    // Default to false if API fails
-    setAllowProductEdit(false);
+    console.error('Error loading products:', error);
+    Alert.alert('Error', 'Failed to load products');
+  } finally {
+    setLoading(false);
+  }
+};
+
+/**
+ * Place order API call
+ */
+export const placeOrder = async (
+  cartItems,
+  selectedCustomer,
+  selectedDueDate,
+  getOrderType,
+  setIsPlacingOrder,
+  clearCart,
+  navigation,
+  Toast,
+  console
+) => {
+  console.log('Place order called with:', { cartItems, selectedCustomer, selectedDueDate });
+  
+  if (cartItems.length === 0) {
+    Toast.show({ type: 'error', text1: 'Error', text2: 'Please add products to the order' });
+    return;
+  }
+  if (!selectedCustomer) {
+    Toast.show({ type: 'error', text1: 'Error', text2: 'No customer selected' });
+    return;
+  }
+  
+  // Check if customer_id exists
+  if (!selectedCustomer.customer_id) {
+    console.error('Customer ID missing:', selectedCustomer);
+    Toast.show({ type: 'error', text1: 'Error', text2: 'Customer ID is missing' });
+    return;
+  }
+  
+  setIsPlacingOrder(true);
+  try {
+    const token = await AsyncStorage.getItem('userAuthToken');
+    if (!token) throw new Error('No auth token found');
+
+    // Prepare products for API
+    const productsPayload = cartItems.map((item) => ({
+      product_id: item.product_id || item.id,
+      quantity: item.quantity || 1,
+      price: item.price,
+      name: item.name,
+      category: item.category || '',
+      gst_rate: item.gst_rate || 0
+    }));
+
+    // Get order type
+    const orderType = getOrderType();
+    
+    // Log the request data
+    const requestData = {
+      customer_id: selectedCustomer.customer_id,
+      order_type: orderType,
+      products: productsPayload,
+      entered_by: jwtDecode(token).username,
+      due_on: selectedDueDate.toISOString().split('T')[0]
+    };
+    
+    console.log('Sending order request:', requestData);
+
+    // Call /on-behalf-2 API for fresh orders
+    const res = await fetch(`http://${ipAddress}:8091/on-behalf-2`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData),
+    });
+
+    const data = await res.json();
+    console.log('Order API response:', res.status, data);
+    
+    // Check for successful response - handle different success formats
+    // The API might return success as a message instead of a success property
+    const isSuccessful = res.ok && (
+      data.success === true || 
+      data.status === 'success' || 
+      (data.message && data.message.toLowerCase().includes('success')) ||
+      (data.message && data.message.toLowerCase().includes('placed'))
+    );
+    
+    if (isSuccessful) {
+      Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Owner custom order placed successfully!' });
+      clearCart();
+      navigation.goBack();
+    } else {
+      // Handle different error formats
+      const errorMessage = data.message || data.error || 'Failed to place order';
+      throw new Error(errorMessage);
+    }
+  } catch (err) {
+    console.error('Order placement error:', err);
+    // Even if there's an error, if it contains "success" in the message, treat it as success
+    if (err.message && err.message.toLowerCase().includes('success')) {
+      Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Owner custom order placed successfully!' });
+      clearCart();
+      navigation.goBack();
+    } else {
+      Toast.show({ type: 'error', text1: 'Order Failed', text2: err.message || 'An unexpected error occurred' });
+    }
+  } finally {
+    setIsPlacingOrder(false);
   }
 };
 
@@ -78,7 +192,7 @@ export const fetchUserPermissions = async (setAllowProductEdit, navigation, cons
 export const fetchClientStatus = async (setDefaultDueOn, setMaxDueOn, setSelectedDueDate, console) => {
   try {
     console.log('Fetching client status...');
-    const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+    const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache',
@@ -122,108 +236,5 @@ export const fetchClientStatus = async (setDefaultDueOn, setMaxDueOn, setSelecte
   } catch (error) {
     console.error('Error fetching client status:', error);
     // Keep default values if API fails
-  }
-};
-
-/**
- * Load products
- */
-export const loadProducts = async (setProducts, setFilteredProducts, setBrands, setCategories, setLoading, navigation, Alert, console) => {
-  setLoading(true);
-  try {
-    // Fetch products
-    const token = await checkTokenAndRedirect(navigation);
-    if (!token) return;
-
-    const response = await fetch(`http://${ipAddress}:8091/products`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      }
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      
-      // Filter by enable_product - handle new backend values
-      // "Mask" = don't display at all, "Inactive" = display but grayed out, "None" = display normally
-      const enabledProducts = data.filter(p => p.enable_product !== "Mask");
-      
-      setProducts(enabledProducts);
-      setFilteredProducts(enabledProducts);
-      
-      // Extract unique brands and categories from enabled products only
-      const uniqueBrands = ['All', ...new Set(enabledProducts.map(p => p.brand))];
-      const uniqueCategories = ['All', ...new Set(enabledProducts.map(p => p.category))];
-      setBrands(uniqueBrands);
-      setCategories(uniqueCategories);
-    }
-  } catch (error) {
-    console.error('Error loading products:', error);
-    Alert.alert('Error', 'Failed to load products');
-  } finally {
-    setLoading(false);
-  }
-};
-
-/**
- * Place order
- */
-export const placeOrder = async (
-  cartItems, 
-  selectedCustomer, 
-  selectedDueDate, 
-  getOrderType, 
-  setIsPlacingOrder, 
-  clearCart, 
-  navigation, 
-  Toast, 
-  console
-) => {
-  if (cartItems.length === 0) {
-    Toast.show({ type: 'error', text1: 'Error', text2: 'Please add products to the order' });
-    return;
-  }
-  if (!selectedCustomer) {
-    Toast.show({ type: 'error', text1: 'Error', text2: 'No customer selected' });
-    return;
-  }
-  setIsPlacingOrder(true);
-  try {
-    const token = await AsyncStorage.getItem('userAuthToken');
-    if (!token) throw new Error('No auth token found');
-    // Prepare products for API
-    const productsPayload = cartItems.map((item) => ({
-      product_id: item.product_id || item.id,
-      quantity: item.quantity || 1,
-      price: item.price,
-      name: item.name,
-      category: item.category || '',
-      gst_rate: item.gst_rate || 0
-    }));
-    // Call /on-behalf-2 API for fresh orders
-    const res = await fetch(`http://${ipAddress}:8091/on-behalf-2`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        customer_id: selectedCustomer.customer_id,
-        order_type: getOrderType(),
-        products: productsPayload,
-        entered_by: jwtDecode(token).username,
-        due_on: moment(selectedDueDate).format('YYYY-MM-DD') // Add due_on parameter
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to place custom order.');
-    Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Owner custom order placed successfully!' });
-    clearCart();
-    navigation.goBack();
-  } catch (err) {
-    Toast.show({ type: 'error', text1: 'Order Failed', text2: err.message });
-  } finally {
-    setIsPlacingOrder(false);
   }
 };

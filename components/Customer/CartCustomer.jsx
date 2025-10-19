@@ -14,6 +14,7 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
@@ -28,7 +29,7 @@ import { ipAddress } from '../../services/urls';
 import { checkTokenAndRedirect } from '../../services/auth';
 
 // Import from cartutils
-import { COLORS, formatCurrency, styles } from './cartutils';
+import { COLORS, formatCurrency } from './cartutils';
 import { 
   fetchClientStatus,
   loadCartAndProducts,
@@ -48,6 +49,10 @@ import {
   handlePlaceOrderClick,
   handleConfirmDueDate
 } from './cartutils/utils';
+
+// Get screen dimensions
+const { width, height } = Dimensions.get('window');
+const isTablet = width >= 768;
 
 const CartCustomer = ({ hideHeader = false }) => {
   const { getScaledSize } = useFontScale();
@@ -137,143 +142,184 @@ const CartCustomer = ({ hideHeader = false }) => {
     await placeOrder(cart, cartProducts, selectedDueDate, navigation, setIsPlacingOrder, setCart, Alert, console);
   };
 
-  const renderCartItem = ({ item }) => {
+  // New modern cart item component
+  const renderModernCartItem = ({ item }) => {
     const quantity = cart[item.id];
-    if (!quantity) return null; // Only skip rendering if quantity is explicitly unset, not if it's 0
+    if (!quantity) return null;
     
     const imageUrl = item.image ? { uri: `http://${ipAddress}:8091/images/products/${item.image}` } : null;
-    // Remove GST calculation: just use discountPrice and price as-is
     const discountPrice = Number(item.discountPrice) || 0;
     const price = Number(item.price) || 0;
     const totalPrice = discountPrice * quantity;
+    const savings = (price - discountPrice) * quantity;
 
     return (
-      <View style={styles.cartItemContainer}>
-        <View style={styles.cartItemImageWrapper}>
+      <View style={modernStyles.cartItemCard}>
+        {/* Product Image */}
+        <View style={modernStyles.cartItemImageContainer}>
           {imageUrl ? (
             <Image 
               source={imageUrl} 
-              style={styles.cartItemImage} 
-              resizeMode="contain"
-              onError={(e) => console.log("Image loading error", e.nativeEvent.error)}
+              style={modernStyles.cartItemImage} 
+              resizeMode="cover"
             />
           ) : (
-            <View style={styles.imagePlaceholder}>
-              <Icon name="image-not-supported" size={40} color={COLORS.text.tertiary} />
+            <View style={modernStyles.imagePlaceholder}>
+              <Icon name="image-not-supported" size={30} color={COLORS.text.tertiary} />
             </View>
           )}
         </View>
-        
-        <View style={styles.cartItemDetails}>
-          <Text style={[styles.cartItemName, { fontSize: getScaledSize(16) }]} numberOfLines={2}>{item.name}</Text>
-          {/* Show MRP scratched, then Selling Price, no GST calculation */}
-          {item.price ? (
-            <Text style={[styles.originalPrice, { fontSize: getScaledSize(12) }]}>{formatCurrency(price)}</Text>
-          ) : null}
-          <Text style={[styles.cartItemPrice, { fontSize: getScaledSize(14) }]}>
-            {formatCurrency(discountPrice)} x {quantity} = {formatCurrency(totalPrice)}
+
+        {/* Product Details */}
+        <View style={modernStyles.cartItemDetails}>
+          <Text style={[modernStyles.cartItemName, { fontSize: getScaledSize(16) }]} numberOfLines={2}>
+            {item.name}
           </Text>
-          <View style={styles.quantityContainer}>
+          
+          {/* Price Information */}
+          <View style={modernStyles.priceContainer}>
+            <Text style={[modernStyles.currentPrice, { fontSize: getScaledSize(16) }]}>
+              {formatCurrency(discountPrice)}
+            </Text>
+            {price > discountPrice && (
+              <Text style={[modernStyles.originalPrice, { fontSize: getScaledSize(12) }]}>
+                {formatCurrency(price)}
+              </Text>
+            )}
+          </View>
+          
+          {/* Savings Badge */}
+          {savings > 0 && (
+            <View style={modernStyles.savingsBadge}>
+              <Text style={modernStyles.savingsText}>
+                Save {formatCurrency(savings)}
+              </Text>
+            </View>
+          )}
+          
+          {/* Quantity Controls */}
+          <View style={modernStyles.quantityControls}>
             <TouchableOpacity 
-              style={styles.quantityButton} 
+              style={modernStyles.quantityButton}
               onPress={() => handleDecreaseQuantity(item.id, setCart)}
-              disabled={quantity <= 0}
+              disabled={quantity <= 1}
             >
-              <Icon name="remove" size={18} color={COLORS.text.light} />
+              <Icon name="remove" size={20} color={quantity <= 1 ? COLORS.text.tertiary : COLORS.primary} />
             </TouchableOpacity>
-            <TextInput
-              style={styles.quantityInput}
-              value={quantity.toString()}
-              onChangeText={(value) => handleQuantityChange(item.id, value, setCart)}
-              onBlur={() => handleQuantityBlur(item.id, quantity.toString(), setCart)}
-              keyboardType="numeric"
-              selectTextOnFocus={true}
-              maxLength={3}
-            />
+            
+            <View style={modernStyles.quantityDisplay}>
+              <Text style={[modernStyles.quantityText, { fontSize: getScaledSize(16) }]}>
+                {quantity}
+              </Text>
+            </View>
+            
             <TouchableOpacity 
-              style={styles.quantityButton} 
+              style={modernStyles.quantityButton}
               onPress={() => handleIncreaseQuantity(item.id, setCart)}
             >
-              <Icon name="add" size={18} color={COLORS.text.light} />
+              <Icon name="add" size={20} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.cartItemDeleteButton}
-          onPress={() => deleteCartItem(item.id, cart, setCart, setCartProducts)}
-        >
-          <Icon name="delete" size={20} style={styles.cartItemDeleteIcon} color={COLORS.error} />
-        </TouchableOpacity>
+
+        {/* Right Side - Total & Delete */}
+        <View style={modernStyles.cartItemActions}>
+          <Text style={[modernStyles.itemTotal, { fontSize: getScaledSize(16) }]}>
+            {formatCurrency(totalPrice)}
+          </Text>
+          <TouchableOpacity
+            style={modernStyles.deleteButton}
+            onPress={() => deleteCartItem(item.id, cart, setCart, setCartProducts)}
+          >
+            <Icon name="delete-outline" size={24} color={COLORS.error} />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
-  const renderProductItem = ({ item }) => {
+  // New modern product item for add more modal
+  const renderModernProductItem = ({ item }) => {
     const imageUrl = item.image ? { uri: `http://${ipAddress}:8091/images/products/${item.image}` } : null;
     const inCartQuantity = cart[item.id] || 0;
-    
-    // Check if product is inactive
     const isInactive = item.enable_product === "Inactive";
     
     return (
       <TouchableOpacity 
         style={[
-          styles.productCard,
-          isInactive && styles.inactiveProductCard
+          modernStyles.productCard,
+          isInactive && modernStyles.inactiveProductCard
         ]}
         onPress={() => {
-          // Don't allow adding inactive products to cart
           if (isInactive) return;
           
-          // Add to cart or increase quantity
           if (inCartQuantity === 0) {
             setCart(prev => ({ ...prev, [item.id]: 1 }));
           } else {
             setCart(prev => ({ ...prev, [item.id]: inCartQuantity + 1 }));
           }
-          // Ensure product metadata is saved so totals and rendering work
           upsertCartItemMeta(item, setCartProducts, AsyncStorage, console);
-          // Close modal
           setShowAddMoreModal(false);
         }}
         disabled={isInactive}
       >
-        <View style={styles.productImageWrapper}>
+        <View style={modernStyles.productImageWrapper}>
           {imageUrl ? (
             <Image 
               source={imageUrl} 
               style={[
-                styles.productImage,
-                isInactive && styles.inactiveProductImage
+                modernStyles.productImage,
+                isInactive && modernStyles.inactiveProductImage
               ]} 
-              resizeMode="contain"
-              onError={(e) => console.log("Product image loading error", e.nativeEvent.error)}
+              resizeMode="cover"
             />
           ) : (
-            <View style={styles.productImagePlaceholder}>
-              <Icon name="image-not-supported" size={30} color={COLORS.text.tertiary} />
+            <View style={modernStyles.productImagePlaceholder}>
+              <Icon name="image-not-supported" size={24} color={COLORS.text.tertiary} />
             </View>
           )}
         </View>
         
-        <View style={styles.productInfo}>
+        <View style={modernStyles.productInfo}>
           <Text style={[
-            styles.productName,
-            isInactive && styles.inactiveProductText,
+            modernStyles.productName,
+            isInactive && modernStyles.inactiveProductText,
             { fontSize: getScaledSize(14) }
-          ]} numberOfLines={2}>{item.name}</Text>
-          <Text style={[
-            styles.productPrice,
-            isInactive && styles.inactiveProductText,
-            { fontSize: getScaledSize(14) }
-          ]}>{formatCurrency(item.discountPrice || item.price || 0)}</Text>
+          ]} numberOfLines={2}>
+            {item.name}
+          </Text>
+          
+          <View style={modernStyles.productPriceContainer}>
+            <Text style={[
+              modernStyles.productPrice,
+              isInactive && modernStyles.inactiveProductText,
+              { fontSize: getScaledSize(15) }
+            ]}>
+              {formatCurrency(item.discountPrice || item.price || 0)}
+            </Text>
+            
+            {item.price && item.discountPrice && item.price > item.discountPrice && (
+              <Text style={[
+                modernStyles.originalPriceSmall,
+                { fontSize: getScaledSize(12) }
+              ]}>
+                {formatCurrency(item.price)}
+              </Text>
+            )}
+          </View>
+          
           {isInactive ? (
-            <View style={styles.inactiveBadge}>
-              <Text style={[styles.inactiveBadgeText, { fontSize: getScaledSize(12) }]}>UNAVAILABLE</Text>
+            <View style={modernStyles.inactiveBadge}>
+              <Text style={[modernStyles.inactiveBadgeText, { fontSize: getScaledSize(11) }]}>
+                UNAVAILABLE
+              </Text>
             </View>
           ) : inCartQuantity > 0 && (
-            <View style={styles.inCartBadge}>
-              <Text style={[styles.inCartText, { fontSize: getScaledSize(12) }]}>In Cart: {inCartQuantity}</Text>
+            <View style={modernStyles.inCartBadge}>
+              <Icon name="check" size={12} color={COLORS.secondary} />
+              <Text style={[modernStyles.inCartText, { fontSize: getScaledSize(11) }]}>
+                In Cart: {inCartQuantity}
+              </Text>
             </View>
           )}
         </View>
@@ -281,254 +327,287 @@ const CartCustomer = ({ hideHeader = false }) => {
     );
   };
 
+  // Calculate cart totals
+  const totalItems = Object.values(cart).reduce((sum, qty) => sum + (qty || 0), 0);
   const totalAmount = calculateTotalAmount(cart, cartProducts);
-  const cartItemCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
-  const isCartEmpty = cartItemCount === 0;
 
-  const clearCartWrapper = () => {
-    clearCart(setCart, setCartProducts);
-  };
+  if (loading) {
+    return (
+      <SafeAreaView style={modernStyles.safeArea}>
+        <View style={modernStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={[modernStyles.loadingText, { fontSize: getScaledSize(16) }]}>
+            Loading your cart...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  // Apply filters
-  const applyFiltersWrapper = (brand, category) => {
-    applyFilters(brand, category, searchTerm, products, setFilteredProducts);
-  };
+  const cartItems = Object.entries(cart)
+    .map(([id, quantity]) => {
+      const product = cartProducts.find(p => p.id === parseInt(id));
+      return product ? { ...product, id: parseInt(id) } : null;
+    })
+    .filter(Boolean);
+
+  if (cartItems.length === 0) {
+    return (
+      <SafeAreaView style={modernStyles.safeArea}>
+        <View style={modernStyles.emptyCartContainer}>
+          <Icon name="shopping-cart" size={80} color={COLORS.text.tertiary} />
+          <Text style={[modernStyles.emptyCartTitle, { fontSize: getScaledSize(22) }]}>
+            Your cart is empty
+          </Text>
+          <Text style={[modernStyles.emptyCartMessage, { fontSize: getScaledSize(16) }]}>
+            Add some products to your cart and they will appear here
+          </Text>
+          <TouchableOpacity 
+            style={modernStyles.shopNowButton}
+            onPress={() => setShowAddMoreModal(true)}
+          >
+            <Text style={[modernStyles.shopNowButtonText, { fontSize: getScaledSize(16) }]}>
+              Browse Products
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+    <SafeAreaView style={modernStyles.safeArea}>
+      <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
       
+      {/* Header */}
       {!hideHeader && (
-        <View style={styles.headerContainer}>
+        <View style={modernStyles.header}>
           <TouchableOpacity 
-            style={styles.backButton}
+            style={modernStyles.headerButton}
             onPress={() => navigation.goBack()}
           >
             <Icon name="arrow-back" size={24} color={COLORS.text.light} />
           </TouchableOpacity>
           
-          <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}>Your Cart</Text>
+          <View style={modernStyles.headerTitleContainer}>
+            <Text style={[modernStyles.headerTitle, { fontSize: getScaledSize(18) }]}>
+              Shopping Cart
+            </Text>
+            <Text style={[modernStyles.headerSubtitle, { fontSize: getScaledSize(14) }]}>
+              {totalItems} item{totalItems !== 1 ? 's' : ''}
+            </Text>
+          </View>
           
           <TouchableOpacity 
-            style={styles.searchButton}
-            onPress={() => setShowAddMoreModal(true)}
+            style={modernStyles.headerButton}
+            onPress={() => clearCart(setCart, setCartProducts)}
           >
-            <Icon name="add-shopping-cart" size={24} color={COLORS.text.light} />
+            <Icon name="delete" size={24} color={COLORS.text.light} />
           </TouchableOpacity>
         </View>
       )}
-      
-      <View style={styles.container}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={[styles.loadingText, { fontSize: getScaledSize(16) }]}>Loading your cart...</Text>
-          </View>
-        ) : isCartEmpty ? (
-          <View style={styles.emptyCartContainer}>
-            <Icon name="shopping-cart" size={80} color={COLORS.text.tertiary} />
-            <Text style={[styles.emptyCartTitle, { fontSize: getScaledSize(20) }]}>Your cart is empty</Text>
-            <Text style={[styles.emptyCartMessage, { fontSize: getScaledSize(16) }]}>Add items to start shopping</Text>
-            <TouchableOpacity 
-              style={styles.shopNowButton}
-              onPress={() => setShowAddMoreModal(true)}
-            >
-              <Text style={[styles.shopNowButtonText, { fontSize: getScaledSize(16) }]}>Shop Now</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <View style={styles.cartHeader}>
-              <Text style={[styles.cartItemCountText, { fontSize: getScaledSize(16) }]}>{cartItemCount} item(s) in cart</Text>
-              <TouchableOpacity 
-                style={styles.clearCartButton}
-                onPress={clearCartWrapper}
-              >
-                <Icon name="delete" size={16} color={COLORS.error} />
-                <Text style={[styles.clearCartButtonText, { fontSize: getScaledSize(14) }]}>Clear Cart</Text>
-              </TouchableOpacity>
+
+      {/* Cart Items */}
+      <FlatList
+        data={cartItems}
+        renderItem={renderModernCartItem}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={modernStyles.cartList}
+        showsVerticalScrollIndicator={false}
+        ListFooterComponent={
+          <View style={modernStyles.cartSummary}>
+            <View style={modernStyles.summaryRow}>
+              <Text style={[modernStyles.summaryLabel, { fontSize: getScaledSize(16) }]}>
+                Subtotal
+              </Text>
+              <Text style={[modernStyles.summaryValue, { fontSize: getScaledSize(16) }]}>
+                {formatCurrency(totalAmount)}
+              </Text>
             </View>
             
-            <FlatList
-              data={cartProducts}
-              renderItem={renderCartItem}
-              keyExtractor={item => item.id.toString()}
-              contentContainerStyle={styles.cartList}
-              showsVerticalScrollIndicator={false}
-            />
-            
-            <View style={styles.footerContainer}>
-              <View style={styles.totalContainer}>
-                <Text style={[styles.totalLabel, { fontSize: getScaledSize(18) }]}>Total Amount (incl. GST):</Text>
-                <Text style={[styles.totalAmount, { fontSize: getScaledSize(20) }]}>{formatCurrency(totalAmount)}</Text>
-              </View>
-              
-              <View style={styles.actionButtonsContainer}>
-                <TouchableOpacity 
-                  style={styles.addMoreButton}
-                  onPress={() => setShowAddMoreModal(true)}
-                >
-                  <Text style={[styles.addMoreButtonText, { fontSize: getScaledSize(16) }]}>Add More Items</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.checkoutButton}
-                  onPress={handlePlaceOrderClickWrapper}
-                  disabled={isPlacingOrder}
-                >
-                  {isPlacingOrder ? (
-                    <ActivityIndicator size="small" color={COLORS.text.light} />
-                  ) : (
-                    <Text style={[styles.checkoutButtonText, { fontSize: getScaledSize(16) }]}>Place Order</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+            <View style={modernStyles.summaryRow}>
+              <Text style={[modernStyles.summaryLabel, { fontSize: getScaledSize(16) }]}>
+                GST
+              </Text>
+              <Text style={[modernStyles.summaryValue, { fontSize: getScaledSize(16) }]}>
+                {formatCurrency(0)}
+              </Text>
             </View>
-          </>
-        )}
+            
+            <View style={modernStyles.totalRow}>
+              <Text style={[modernStyles.totalLabel, { fontSize: getScaledSize(18) }]}>
+                Total
+              </Text>
+              <Text style={[modernStyles.totalValue, { fontSize: getScaledSize(18) }]}>
+                {formatCurrency(totalAmount)}
+              </Text>
+            </View>
+          </View>
+        }
+      />
+
+      {/* Footer - Action Buttons */}
+      <View style={modernStyles.footer}>
+        <TouchableOpacity 
+          style={modernStyles.addButton}
+          onPress={() => setShowAddMoreModal(true)}
+        >
+          <Icon name="add-shopping-cart" size={20} color={COLORS.primary} />
+          <Text style={[modernStyles.addButtonText, { fontSize: getScaledSize(16) }]}>
+            Add More
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={modernStyles.checkoutButton}
+          onPress={handlePlaceOrderClickWrapper}
+          disabled={isPlacingOrder}
+        >
+          {isPlacingOrder ? (
+            <ActivityIndicator size="small" color={COLORS.text.light} />
+          ) : (
+            <Text style={[modernStyles.checkoutButtonText, { fontSize: getScaledSize(16) }]}>
+              Place Order • {formatCurrency(totalAmount)}
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
-      
-      {/* Add More Items Modal */}
+
+      {/* Add More Products Modal */}
       <Modal
-        animationType="slide"
-        transparent={false}
         visible={showAddMoreModal}
+        animationType="slide"
         onRequestClose={() => setShowAddMoreModal(false)}
       >
-        <SafeAreaView style={styles.modalSafeArea}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { fontSize: getScaledSize(18) }]}>Add More Items</Text>
+        <SafeAreaView style={modernStyles.modalSafeArea}>
+          {/* Modal Header */}
+          <View style={modernStyles.modalHeader}>
             <TouchableOpacity 
-              style={styles.closeModalButton}
+              style={modernStyles.closeModalButton}
               onPress={() => setShowAddMoreModal(false)}
             >
               <Icon name="close" size={24} color={COLORS.text.primary} />
             </TouchableOpacity>
+            <Text style={[modernStyles.modalTitle, { fontSize: getScaledSize(18) }]}>
+              Add Products
+            </Text>
+            <View style={{ width: 24 }} /> {/* Spacer for alignment */}
           </View>
-          
-          <View style={styles.searchContainer}>
-            <View style={styles.searchWrapper}>
-              <Icon name="search" size={20} color={COLORS.text.tertiary} style={styles.searchIcon} />
+
+          {/* Search and Filters */}
+          <View style={modernStyles.searchContainer}>
+            <View style={modernStyles.searchWrapper}>
+              <Icon name="search" size={20} color={COLORS.text.tertiary} style={modernStyles.searchIcon} />
               <TextInput
-                style={styles.searchInput}
+                style={[modernStyles.searchInput, { fontSize: getScaledSize(16) }]}
                 placeholder="Search products..."
                 value={searchTerm}
-                onChangeText={(text) => {
-                  setSearchTerm(text);
-                  // Filter products based on search term
-                  if (text) {
-                    const filtered = products.filter(p => 
-                      p.name.toLowerCase().includes(text.toLowerCase())
-                    );
-                    setFilteredProducts(filtered);
-                  } else {
-                    setFilteredProducts(products);
-                  }
-                }}
+                onChangeText={setSearchTerm}
+                placeholderTextColor={COLORS.text.tertiary}
               />
             </View>
-          </View>
-          
-          <View style={styles.filterContainer}>
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={selectedBrand}
-                onValueChange={(itemValue) => {
-                  setSelectedBrand(itemValue);
-                  // Apply brand filter
-                  applyFiltersWrapper(itemValue, selectedCategory);
-                }}
-                style={styles.picker}
-                dropdownIconColor={COLORS.text.primary}
-              >
-                {brands.map((brand, index) => (
-                  <Picker.Item key={index} label={brand} value={brand} />
-                ))}
-              </Picker>
-            </View>
             
-            <View style={styles.pickerWrapper}>
-              <Picker
-                selectedValue={selectedCategory}
-                onValueChange={(itemValue) => {
-                  setSelectedCategory(itemValue);
-                  // Apply category filter
-                  applyFiltersWrapper(selectedBrand, itemValue);
-                }}
-                style={styles.picker}
-                dropdownIconColor={COLORS.text.primary}
-              >
-                {categories.map((category, index) => (
-                  <Picker.Item key={index} label={category} value={category} />
-                ))}
-              </Picker>
+            <View style={modernStyles.filterContainer}>
+              <View style={modernStyles.pickerWrapper}>
+                <Picker
+                  selectedValue={selectedBrand}
+                  style={modernStyles.picker}
+                  onValueChange={setSelectedBrand}
+                  dropdownIconColor={COLORS.text.tertiary}
+                >
+                  {brands.map(brand => (
+                    <Picker.Item key={brand} label={brand} value={brand} color={COLORS.text.primary} />
+                  ))}
+                </Picker>
+              </View>
+              
+              <View style={modernStyles.pickerWrapper}>
+                <Picker
+                  selectedValue={selectedCategory}
+                  style={modernStyles.picker}
+                  onValueChange={setSelectedCategory}
+                  dropdownIconColor={COLORS.text.tertiary}
+                >
+                  {categories.map(category => (
+                    <Picker.Item key={category} label={category} value={category} color={COLORS.text.primary} />
+                  ))}
+                </Picker>
+              </View>
             </View>
           </View>
-          
+
+          {/* Product List */}
           <FlatList
             data={filteredProducts}
-            renderItem={renderProductItem}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={styles.productList}
-            numColumns={2}
+            renderItem={renderModernProductItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={modernStyles.productList}
+            numColumns={isTablet ? 3 : 2}
             showsVerticalScrollIndicator={false}
+            columnWrapperStyle={isTablet ? modernStyles.columnWrapper : undefined}
           />
         </SafeAreaView>
       </Modal>
 
-      {/* Due Date Modal */}
+      {/* Due Date Selection Modal */}
       <Modal
         visible={showDueDateModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowDueDateModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.dueDateModal}>
-            <View style={styles.dueDateModalHeader}>
-              <Text style={[styles.dueDateModalTitle, { fontSize: getScaledSize(18) }]}>Select Due Date</Text>
-              <TouchableOpacity
+        <View style={modernStyles.modalOverlay}>
+          <View style={modernStyles.dueDateModal}>
+            <View style={modernStyles.dueDateModalHeader}>
+              <Text style={[modernStyles.dueDateModalTitle, { fontSize: getScaledSize(18) }]}>
+                Select Due Date
+              </Text>
+              <TouchableOpacity 
+                style={modernStyles.closeDueDateButton}
                 onPress={() => setShowDueDateModal(false)}
-                style={styles.closeDueDateButton}
               >
-                <Icon name="close" size={24} color={COLORS.text.primary} />
+                <Icon name="close" size={24} color={COLORS.text.tertiary} />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.dueDateContent}>
-              <Text style={[styles.dueDateLabel, { fontSize: getScaledSize(16) }]}>
-                When would you like this order to be delivered?
+            <View style={modernStyles.dueDateContent}>
+              <Text style={[modernStyles.dueDateLabel, { fontSize: getScaledSize(15) }]}>
+                Choose when you would like to receive your order
               </Text>
               
-              <TouchableOpacity
-                style={styles.datePickerButton}
+              <TouchableOpacity 
+                style={modernStyles.datePickerButton}
                 onPress={showDatePicker}
               >
                 <Icon name="calendar-today" size={20} color={COLORS.primary} />
-                <Text style={[styles.datePickerButtonText, { fontSize: getScaledSize(16) }]}>
-                  {moment(selectedDueDate).format('DD MMM, YYYY')}
+                <Text style={[modernStyles.datePickerButtonText, { fontSize: getScaledSize(16) }]}>
+                  {moment(selectedDueDate).format('ddd, MMM D, YYYY')}
                 </Text>
-                <Icon name="keyboard-arrow-down" size={20} color={COLORS.primary} />
+                <Icon name="arrow-drop-down" size={24} color={COLORS.text.tertiary} />
               </TouchableOpacity>
               
-              <Text style={[styles.dueDateNote, { fontSize: getScaledSize(14) }]}>
-                Note: This date will be used by our delivery team to schedule your order delivery.
+              <Text style={[modernStyles.dueDateNote, { fontSize: getScaledSize(13) }]}>
+                Orders are typically delivered within 1-2 business days
               </Text>
             </View>
             
-            <View style={styles.dueDateModalFooter}>
-              <TouchableOpacity
-                style={styles.cancelDueDateButton}
+            <View style={modernStyles.dueDateModalFooter}>
+              <TouchableOpacity 
+                style={modernStyles.cancelDueDateButton}
                 onPress={() => setShowDueDateModal(false)}
               >
-                <Text style={[styles.cancelDueDateButtonText, { fontSize: getScaledSize(16) }]}>Cancel</Text>
+                <Text style={[modernStyles.cancelDueDateButtonText, { fontSize: getScaledSize(16) }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               
-              <TouchableOpacity
-                style={styles.confirmDueDateButton}
+              <TouchableOpacity 
+                style={modernStyles.confirmDueDateButton}
                 onPress={handleConfirmDueDateWrapper}
               >
-                <Text style={[styles.confirmDueDateButtonText, { fontSize: getScaledSize(16) }]}>Confirm & Place Order</Text>
+                <Text style={[modernStyles.confirmDueDateButtonText, { fontSize: getScaledSize(16) }]}>
+                  Confirm
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -541,25 +620,535 @@ const CartCustomer = ({ hideHeader = false }) => {
         mode="date"
         onConfirm={handleConfirmDate}
         onCancel={hideDatePicker}
-        date={selectedDueDate}
-        minimumDate={new Date()} // Can't select past dates
-        maximumDate={(() => {
-          // Calculate maximum selectable date based on max_due_on
-          console.log('Calculating maximumDate, maxDueOn =', maxDueOn);
-          if (maxDueOn === 0) {
-            console.log('maxDueOn is 0, returning today only');
-            return new Date(); // Only today if max_due_on is 0
-          }
-          const maxDate = new Date();
-          // If max_due_on is 2, we want: today + tomorrow = 2 days total
-          // So we add (maxDueOn - 1) to get exactly maxDueOn days including today
-          maxDate.setDate(maxDate.getDate() + (maxDueOn - 1));
-          console.log('maxDueOn is', maxDueOn, ', setting max date to:', maxDate, '(allowing exactly', maxDueOn, 'days including today)');
-          return maxDate;
-        })()}
+        minimumDate={new Date()}
+        maximumDate={new Date(new Date().setDate(new Date().getDate() + maxDueOn))}
       />
     </SafeAreaView>
   );
 };
+
+// Modern Styles
+const modernStyles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: COLORS.text.secondary,
+  },
+  emptyCartContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyCartTitle: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  emptyCartMessage: {
+    color: COLORS.text.tertiary,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  shopNowButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  shopNowButtonText: {
+    color: COLORS.text.light,
+    fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  headerButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontWeight: '700',
+    color: COLORS.text.light,
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  cartList: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  cartItemCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  cartItemImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLORS.background,
+  },
+  cartItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+  },
+  cartItemDetails: {
+    flex: 1,
+    marginLeft: 16,
+    justifyContent: 'space-between',
+  },
+  cartItemName: {
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: 4,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currentPrice: {
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginRight: 8,
+  },
+  originalPrice: {
+    color: COLORS.text.tertiary,
+    textDecorationLine: 'line-through',
+  },
+  savingsBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  savingsText: {
+    color: COLORS.secondary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityDisplay: {
+    marginHorizontal: 12,
+    minWidth: 30,
+    alignItems: 'center',
+  },
+  quantityText: {
+    fontWeight: '600',
+    color: COLORS.text.primary,
+  },
+  cartItemActions: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingLeft: 16,
+  },
+  itemTotal: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 16,
+  },
+  cartSummary: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  summaryLabel: {
+    color: COLORS.text.secondary,
+  },
+  summaryValue: {
+    color: COLORS.text.primary,
+    fontWeight: '500',
+  },
+  totalLabel: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  totalValue: {
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  addButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  addButtonText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  checkoutButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  checkoutButtonText: {
+    color: COLORS.text.light,
+    fontWeight: '600',
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  closeModalButton: {
+    padding: 4,
+  },
+  modalTitle: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  searchContainer: {
+    backgroundColor: COLORS.surface,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.text.primary,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  pickerWrapper: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  picker: {
+    color: COLORS.text.primary,
+  },
+  productList: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+  },
+  productCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  productImageWrapper: {
+    width: '100%',
+    height: 140,
+    backgroundColor: COLORS.background,
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+  },
+  productInfo: {
+    padding: 12,
+  },
+  productName: {
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: 8,
+  },
+  productPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productPrice: {
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginRight: 8,
+  },
+  originalPriceSmall: {
+    color: COLORS.text.tertiary,
+    textDecorationLine: 'line-through',
+  },
+  inCartBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  inCartText: {
+    color: COLORS.secondary,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  inactiveProductCard: {
+    opacity: 0.6,
+  },
+  inactiveProductImage: {
+    opacity: 0.5,
+  },
+  inactiveProductText: {
+    color: COLORS.text.tertiary,
+  },
+  inactiveBadge: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  inactiveBadgeText: {
+    color: COLORS.text.tertiary,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dueDateModal: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  dueDateModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  dueDateModalTitle: {
+    fontWeight: '700',
+    color: COLORS.text.primary,
+  },
+  closeDueDateButton: {
+    padding: 4,
+  },
+  dueDateContent: {
+    padding: 24,
+  },
+  dueDateLabel: {
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  datePickerButtonText: {
+    flex: 1,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    textAlign: 'center',
+  },
+  dueDateNote: {
+    color: COLORS.text.tertiary,
+    textAlign: 'center',
+    marginTop: 20,
+    lineHeight: 20,
+  },
+  dueDateModalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+  },
+  cancelDueDateButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  cancelDueDateButtonText: {
+    color: COLORS.text.secondary,
+    fontWeight: '600',
+  },
+  confirmDueDateButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  confirmDueDateButtonText: {
+    color: COLORS.text.light,
+    fontWeight: '600',
+  },
+});
 
 export default CartCustomer;

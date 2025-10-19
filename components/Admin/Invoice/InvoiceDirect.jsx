@@ -55,7 +55,7 @@ import {
     TotalAmountDisplay,
     GSTAwareTotalDisplay,
     CreateButton,
-    styles
+    styles as invoiceDirectStyles
 } from './InvoiceDirectComponents';
 
 import { useFontScale } from '../../../App';
@@ -266,6 +266,103 @@ const savePDFToDownloads = async (pdfBytes, fileName) => {
     }
 };
 
+// Helper function to generate summary data in the required JSON format
+const generateInvoiceSummary = (products, gstMethod, clientState, customerState) => {
+  try {
+    // Calculate item-level details
+    const items = products.map(product => {
+      const quantity = parseFloat(product.quantity || 0);
+      const rate = parseFloat(product.price || 0);
+      const gstRate = parseFloat(product.gst_rate || 0);
+      
+      let amount, taxableValue, gstAmount, lineTotal;
+      
+      if (gstMethod === "Inclusive GST") {
+        // For inclusive GST, the rate already includes GST
+        lineTotal = quantity * rate; // This is the total including GST
+        taxableValue = gstRate > 0 ? lineTotal / (1 + gstRate / 100) : lineTotal;
+        gstAmount = lineTotal - taxableValue;
+        amount = taxableValue; // Base amount without GST
+      } else {
+        // For exclusive GST, we calculate GST on top of the base price
+        amount = quantity * rate; // Base amount without GST
+        gstAmount = amount * (gstRate / 100);
+        lineTotal = amount + gstAmount; // Total including GST
+        taxableValue = amount; // Same as amount for exclusive GST
+      }
+      
+      // Calculate CGST, SGST, IGST
+      // Use IGST when client state is NOT equal to customer state, otherwise split into CGST/SGST
+      const useIgst = clientState !== customerState;
+      let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+      
+      if (useIgst) {
+        igstAmount = gstAmount;
+      } else {
+        cgstAmount = gstAmount / 2;
+        sgstAmount = gstAmount / 2;
+      }
+      
+      return {
+        rate: rate,
+        unit: "Pcs",
+        brand: product.brand || "",
+        amount: parseFloat(amount.toFixed(2)),
+        category: product.category || "",
+        gst_rate: gstRate,
+        hsn_code: product.hsn_code || "",
+        quantity: quantity,
+        gst_amount: parseFloat(gstAmount.toFixed(2)),
+        line_total: parseFloat(lineTotal.toFixed(2)),
+        product_id: product.product_id,
+        cgst_amount: parseFloat(cgstAmount.toFixed(2)),
+        gst_percent: gstRate,
+        igst_amount: parseFloat(igstAmount.toFixed(2)),
+        sgst_amount: parseFloat(sgstAmount.toFixed(2)),
+        product_code: product.product_code || "",
+        product_name: product.name || "",
+        taxable_rate: parseFloat(taxableValue.toFixed(2)),
+        taxable_value: parseFloat(taxableValue.toFixed(2))
+      };
+    });
+    
+    // Calculate totals
+    const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+    const totalGst = items.reduce((sum, item) => sum + item.gst_amount, 0);
+    const totalCgst = items.reduce((sum, item) => sum + item.cgst_amount, 0);
+    const totalSgst = items.reduce((sum, item) => sum + item.sgst_amount, 0);
+    const totalIgst = items.reduce((sum, item) => sum + item.igst_amount, 0);
+    const totalTaxableValue = items.reduce((sum, item) => sum + item.taxable_value, 0);
+    const grandTotal = subtotal + totalGst;
+    const totalGstRate = items.reduce((sum, item) => sum + item.gst_rate, 0);
+    // Use IGST when client state is NOT equal to customer state, otherwise split into CGST/SGST
+    const useIgst = clientState !== customerState;
+    
+    const summaryData = {
+      items: items,
+      totals: {
+        subtotal: parseFloat(subtotal.toFixed(2)),
+        use_igst: useIgst,
+        total_gst: parseFloat(totalGst.toFixed(2)),
+        gst_method: gstMethod,
+        total_cgst: parseFloat(totalCgst.toFixed(2)),
+        total_igst: parseFloat(totalIgst.toFixed(2)),
+        total_sgst: parseFloat(totalSgst.toFixed(2)),
+        grand_total: parseFloat(grandTotal.toFixed(2)),
+        total_gst_rate: totalGstRate,
+        total_taxable_value: parseFloat(totalTaxableValue.toFixed(2))
+      },
+      gst_method: gstMethod,
+      client_state: clientState,
+      customer_state: customerState
+    };
+    
+    return summaryData;
+  } catch (error) {
+    console.error('Error generating invoice summary:', error);
+    return null;
+  }
+};
 
 const InvoiceDirect = () => {
     const navigation = useNavigation();
@@ -298,6 +395,8 @@ const InvoiceDirect = () => {
     const [generatedPDFData, setGeneratedPDFData] = useState(null);
     const [customerData, setCustomerData] = useState(null);
     const [gstMethod, setGstMethod] = useState('Inclusive GST'); // Default to inclusive
+    const [clientState, setClientState] = useState(''); // Initialize as empty, will be set from API
+    const [customerState, setCustomerState] = useState(''); // Initialize as empty, will be set from API
     
     // Bank account and collections states
     const [bankAccounts, setBankAccounts] = useState([]);
@@ -316,6 +415,9 @@ const InvoiceDirect = () => {
     const [gstTotals, setGstTotals] = useState({
         subtotal: '0.00',
         gstAmount: '0.00',
+        cgstAmount: '0.00',
+        sgstAmount: '0.00',
+        igstAmount: '0.00',
         grandTotal: '0.00',
         gstMethod: 'Inclusive GST'
     });
@@ -348,6 +450,12 @@ const InvoiceDirect = () => {
 
         fetchBankAccounts();
     }, []);
+
+    // Load all users and client status when component mounts
+    useEffect(() => {
+        loadAllUsers();
+        loadClientStatus();
+    }, [loadAllUsers, loadClientStatus]);
 
     // Fetch all users
     const loadAllUsers = useCallback(async () => {
@@ -393,6 +501,26 @@ const InvoiceDirect = () => {
         }
     }, []);
 
+    // Fetch client status to get GST method and client state
+    const loadClientStatus = useCallback(async () => {
+        try {
+            const result = await fetchClientStatus();
+            if (result.success) {
+                setGstMethod(result.data.gst_method || 'Inclusive GST');
+                setClientState(result.data.state || '');
+                console.log('Client status loaded:', result.data);
+            } else {
+                console.warn('Failed to fetch client status, using defaults:', result.error);
+                setGstMethod('Inclusive GST'); // Default to inclusive
+                setClientState(''); // Empty default
+            }
+        } catch (error) {
+            console.error('Error loading client status:', error);
+            setGstMethod('Inclusive GST'); // Default to inclusive
+            setClientState(''); // Empty default
+        }
+    }, []);
+
     // Filter users based on search query
     const handleSearch = (query) => {
         setSearchQuery(query);
@@ -410,13 +538,17 @@ const InvoiceDirect = () => {
             const result = await fetchCustomerData(user.customer_id);
             if (result.success) {
                 setCustomerData(result.data);
+                // Set customer state from the customer data
+                setCustomerState(result.data.state || '');
             } else {
                 console.warn('Failed to fetch customer data:', result.error);
                 setCustomerData(null);
+                setCustomerState(''); // Empty default
             }
         } catch (error) {
             console.error('Error fetching customer data:', error);
             setCustomerData(null);
+            setCustomerState(''); // Empty default
         }
         
         setShowSearchModal(true);
@@ -618,8 +750,98 @@ const InvoiceDirect = () => {
     
     // Calculate GST-aware totals when selected products change
     useEffect(() => {
+        // Calculate GST-aware totals for display with IGST logic
+        const calculateGSTAwareTotalWithIGST = async () => {
+            try {
+                // Fetch client status to get GST method
+                const clientStatusResult = await fetchClientStatus();
+                let gstMethod = "Inclusive GST"; // Default to inclusive
+                if (clientStatusResult.success) {
+                    gstMethod = clientStatusResult.data.gst_method || clientStatusResult.data.gstMethod || "Inclusive GST";
+                }
+                
+                const isInclusive = gstMethod === "Inclusive GST";
+                let totalTaxableValue = 0;
+                let totalGstAmount = 0;
+                
+                if (isInclusive) {
+                    // For inclusive GST, the price already includes GST
+                    selectedProducts.forEach(item => {
+                        const qty = parseFloat(item.quantity || 0);
+                        const price = parseFloat(item.price || 0); // This is the GST-inclusive price
+                        const gstRate = parseFloat(item.gst_rate || 0);
+                        
+                        // For inclusive GST, the price already includes GST
+                        const priceIncludingGst = qty * price; // This is the total (Rate * Qty)
+                        const taxableValue = gstRate > 0 ? priceIncludingGst / (1 + gstRate / 100) : priceIncludingGst;
+                        const gstAmount = priceIncludingGst - taxableValue;
+                        
+                        totalTaxableValue += taxableValue;
+                        totalGstAmount += gstAmount;
+                    });
+                } else {
+                    // For exclusive GST, we calculate GST on top of the base price
+                    selectedProducts.forEach(item => {
+                        const qty = parseFloat(item.quantity || 0);
+                        const price = parseFloat(item.price || 0);
+                        const gstRate = parseFloat(item.gst_rate || 0);
+                        
+                        const taxableValue = qty * price; // Base amount without GST (Rate * Qty)
+                        const gstAmount = taxableValue * (gstRate / 100);
+                        
+                        totalTaxableValue += taxableValue;
+                        totalGstAmount += gstAmount;
+                    });
+                }
+                
+                const grandTotal = totalTaxableValue + totalGstAmount;
+                
+                // Determine if IGST should be used (when client state is NOT equal to customer state)
+                const useIgst = clientState && customerState && clientState !== customerState;
+                
+                let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+                
+                if (useIgst) {
+                    // Use IGST for interstate transactions
+                    igstAmount = totalGstAmount;
+                } else {
+                    // Split GST into CGST/SGST for intrastate transactions
+                    cgstAmount = totalGstAmount / 2;
+                    sgstAmount = totalGstAmount / 2;
+                }
+                
+                return {
+                    subtotal: parseFloat(totalTaxableValue).toFixed(2),
+                    gstAmount: parseFloat(totalGstAmount).toFixed(2),
+                    cgstAmount: parseFloat(cgstAmount).toFixed(2),
+                    sgstAmount: parseFloat(sgstAmount).toFixed(2),
+                    igstAmount: parseFloat(igstAmount).toFixed(2),
+                    grandTotal: parseFloat(grandTotal).toFixed(2),
+                    gstMethod: gstMethod
+                };
+            } catch (error) {
+                console.error('Error calculating GST-aware total:', error);
+                // Fallback to simple calculation
+                const simpleTotal = selectedProducts.reduce((sum, product) => {
+                    const price = parseFloat(product.price) || 0;
+                    const quantity = parseInt(product.quantity) || 0;
+                    return sum + (price * quantity);
+                }, 0);
+                
+                return {
+                    subtotal: parseFloat(simpleTotal).toFixed(2),
+                    gstAmount: "0.00",
+                    cgstAmount: "0.00",
+                    sgstAmount: "0.00",
+                    igstAmount: "0.00",
+                    grandTotal: parseFloat(simpleTotal).toFixed(2),
+                    gstMethod: "Inclusive GST"
+                };
+            }
+        };
+        
         // Calculate GST-aware totals for display
-        calculateGSTAwareTotal(selectedProducts).then(totals => {
+        calculateGSTAwareTotalWithIGST().then(totals => {
             setGstTotals(totals);
         }).catch(error => {
             console.error('Error calculating GST totals:', error);
@@ -628,11 +850,14 @@ const InvoiceDirect = () => {
             setGstTotals({
                 subtotal: parseFloat(simpleTotal).toFixed(2),
                 gstAmount: "0.00",
+                cgstAmount: "0.00",
+                sgstAmount: "0.00",
+                igstAmount: "0.00",
                 grandTotal: parseFloat(simpleTotal).toFixed(2),
                 gstMethod: "Inclusive GST"
             });
         });
-    }, [selectedProducts]);
+    }, [selectedProducts, clientState, customerState]);
 
     // Generate invoice number using API
     const generateInvoiceNumberHandler = async () => {
@@ -742,7 +967,14 @@ const InvoiceDirect = () => {
                 customerPhone: customerData?.phone || 'N/A',
                 customerId: selectedUser?.customer_id || null,  // Add missing customer_id
                 customerRoute: customerData?.route || null,  // Add customer route
-                collections: collectionsData  // Add collections data
+                collections: collectionsData,  // Add collections data
+                placed_on: Math.floor(Date.now() / 1000), // Add placed_on timestamp
+                summary: generateInvoiceSummary(
+                    selectedProducts, 
+                    gstMethod, // Use the fetched GST method
+                    clientState || 'Karnataka', // Use the fetched client state or default to Karnataka
+                    customerState || customerData?.state || clientState || 'Karnataka' // Use customer state or fallback to client state or default to Karnataka
+                )
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -1097,7 +1329,7 @@ const InvoiceDirect = () => {
             <SelectedProductItem
                 item={item}
                 onQuantityChange={updateProductQuantityHandler}
-                styles={styles}
+                styles={invoiceDirectStyles}
                 getScaledSize={getScaledSize}
             />
         );
@@ -1109,11 +1341,11 @@ const InvoiceDirect = () => {
     }, [loadAllUsers, loadGSTMethod]);
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={invoiceDirectStyles.safeArea}>
             <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
             
             {/* Header */}
-            <View style={styles.header}>
+            <View style={invoiceDirectStyles.header}>
                  <TouchableOpacity 
                      onPress={retrievedInvoice && generatedPDFData ? cancelPDFHandler :
                               showInvoiceRetrieval ? handleBackFromRetrieval :
@@ -1121,19 +1353,19 @@ const InvoiceDirect = () => {
                               selectedUser ? handleBackToUsers :
                               showExistingCustomers ? () => setShowExistingCustomers(false) :
                               () => navigation.goBack()}
-                     style={styles.backButton}
+                     style={invoiceDirectStyles.backButton}
                  >
                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
                 </TouchableOpacity>
-                <View style={styles.headerContent}>
-                     <Text style={[styles.headerTitle, { fontSize: getScaledSize(20) }]}> 
+                <View style={invoiceDirectStyles.headerContent}>
+                     <Text style={[invoiceDirectStyles.headerTitle, { fontSize: getScaledSize(20) }]}> 
                          {retrievedInvoice && generatedPDFData ? 'Invoice PDF Ready' :
                           showInvoiceRetrieval ? 'Retrieve Invoice' :
                           showInvoiceCreation ? 'Create Invoice' : 
                           selectedUser ? 'Select Products' : 
                           showExistingCustomers ? 'Existing Customers' : 'Direct Invoice'}
                      </Text>
-                     <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}> 
+                     <Text style={[invoiceDirectStyles.headerSubtitle, { fontSize: getScaledSize(14) }]}> 
                          {retrievedInvoice && generatedPDFData ? 'Share or cancel to continue' :
                           showInvoiceRetrieval ? 'Enter invoice number to retrieve' :
                           showInvoiceCreation ? `Invoice for ${selectedUser?.username || `Customer ${selectedUser?.customer_id}`}` :
@@ -1146,7 +1378,7 @@ const InvoiceDirect = () => {
                  {!selectedUser && !showInvoiceRetrieval && !(retrievedInvoice && generatedPDFData) && !showExistingCustomers && (
                     <TouchableOpacity 
                         onPress={() => setShowInvoiceRetrieval(true)}
-                        style={styles.createInvoiceButton}
+                        style={invoiceDirectStyles.createInvoiceButton}
                     >
                         <MaterialIcons name="search" size={20} color={COLORS.text.light} />
                     </TouchableOpacity>
@@ -1155,14 +1387,14 @@ const InvoiceDirect = () => {
                      <View style={{ flexDirection: 'row', gap: 10 }}>
                          <TouchableOpacity 
                              onPress={() => setShowSearchModal(true)}
-                             style={styles.createInvoiceButton}
+                             style={invoiceDirectStyles.createInvoiceButton}
                          >
                              <MaterialIcons name="add" size={20} color={COLORS.text.light} />
                          </TouchableOpacity>
                          {selectedProducts.length > 0 && (
                              <TouchableOpacity 
                                  onPress={() => setShowInvoiceCreation(true)}
-                                 style={styles.createInvoiceButton}
+                                 style={invoiceDirectStyles.createInvoiceButton}
                              >
                                  <MaterialIcons name="receipt" size={20} color={COLORS.text.light} />
                              </TouchableOpacity>
@@ -1172,29 +1404,29 @@ const InvoiceDirect = () => {
             </View>
 
             {/* Content */}
-            <View style={styles.container}>
+            <View style={invoiceDirectStyles.container}>
                 {retrievedInvoice && generatedPDFData ? (
                     // PDF Ready View (after invoice creation)
-                    <View style={styles.content}>
-                        <View style={styles.card}>
-                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice PDF Generated</Text>
+                    <View style={invoiceDirectStyles.content}>
+                        <View style={invoiceDirectStyles.card}>
+                            <Text style={[invoiceDirectStyles.title, { fontSize: getScaledSize(24) }]}>Invoice PDF Generated</Text>
                             
                             {/* Invoice Info */}
-                            <View style={styles.invoiceInfoContainer}>
-                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
-                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
+                            <View style={invoiceDirectStyles.invoiceInfoContainer}>
+                                <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
                                     {retrievedInvoice.invoice?.invoice_number || retrievedInvoice.invoice_info?.invoice_number || retrievedInvoice.invoice_number || 'N/A'}
                                 </Text>
-                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
-                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
+                                <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
                                     Rs {retrievedInvoice.invoice?.invoice_amount || retrievedInvoice.invoice_info?.invoice_amount || retrievedInvoice.invoice_amount || '0'}
                                 </Text>
-                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
-                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
+                                <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
                                     {retrievedInvoice.items?.length || retrievedInvoice.products?.length || retrievedInvoice.invoice_info?.total_items || 'N/A'}
                                 </Text>
-                                <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
-                                    <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
+                                <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}> 
+                                    <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
                                     {retrievedInvoice.invoice?.created_at 
                                         ? new Date(retrievedInvoice.invoice.created_at * 1000).toLocaleDateString()
                                         : retrievedInvoice.invoice_info?.created_at
@@ -1207,9 +1439,9 @@ const InvoiceDirect = () => {
                             </View>
 
                             {/* Action Buttons */}
-                            <View style={styles.pdfActionButtons}>
+                            <View style={invoiceDirectStyles.pdfActionButtons}>
                                 <TouchableOpacity
-                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    style={[invoiceDirectStyles.shareButton, isSharingPDF && invoiceDirectStyles.shareButtonDisabled]}
                                     onPress={downloadPDFHandler}
                                     disabled={isSharingPDF}
                                     activeOpacity={0.8}
@@ -1219,13 +1451,13 @@ const InvoiceDirect = () => {
                                     ) : (
                                         <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                    <Text style={[invoiceDirectStyles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Downloading...' : 'Download PDF'}
                                     </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    style={[invoiceDirectStyles.shareButton, isSharingPDF && invoiceDirectStyles.shareButtonDisabled]}
                                     onPress={sharePDFHandler}
                                     disabled={isSharingPDF}
                                     activeOpacity={0.8}
@@ -1235,13 +1467,13 @@ const InvoiceDirect = () => {
                                     ) : (
                                         <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                    <Text style={[invoiceDirectStyles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
                                     </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                    style={[invoiceDirectStyles.shareButton, isSharingPDF && invoiceDirectStyles.shareButtonDisabled]}
                                     onPress={printPOSPDFHandler}
                                     disabled={isSharingPDF}
                                     activeOpacity={0.8}
@@ -1251,33 +1483,33 @@ const InvoiceDirect = () => {
                                     ) : (
                                         <MaterialIcons name="print" size={24} color={COLORS.text.light} />
                                     )}
-                                    <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                    <Text style={[invoiceDirectStyles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                         {isSharingPDF ? 'Printing...' : 'Print Receipt'}
                                     </Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={styles.cancelButton}
+                                    style={invoiceDirectStyles.cancelButton}
                                     onPress={cancelPDFHandler}
                                     activeOpacity={0.8}
                                 >
                                     <MaterialIcons name="arrow-back" size={24} color={COLORS.text.light} />
-                                    <Text style={[styles.cancelButtonText, { fontSize: getScaledSize(16) }]}>Back to Menu</Text>
+                                    <Text style={[invoiceDirectStyles.cancelButtonText, { fontSize: getScaledSize(16) }]}>Back to Menu</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
                 ) : showInvoiceRetrieval ? (
                     // Invoice Retrieval View
-                    <View style={styles.content}>
-                        <View style={styles.card}>
-                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Retrieve Invoice</Text>
+                    <View style={invoiceDirectStyles.content}>
+                        <View style={invoiceDirectStyles.card}>
+                            <Text style={[invoiceDirectStyles.title, { fontSize: getScaledSize(24) }]}>Retrieve Invoice</Text>
                             
                             {/* Invoice Number Input */}
-                            <View style={styles.inputContainer}>
-                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(16) }]}>Invoice Number</Text>
+                            <View style={invoiceDirectStyles.inputContainer}>
+                                <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(16) }]}>Invoice Number</Text>
                                 <TextInput
-                                    style={styles.textInput}
+                                    style={invoiceDirectStyles.textInput}
                                     placeholder="Enter invoice number..."
                                     value={searchInvoiceNumber}
                                     onChangeText={setSearchInvoiceNumber}
@@ -1287,7 +1519,7 @@ const InvoiceDirect = () => {
 
                             {/* Generate Button */}
                             <TouchableOpacity
-                                style={[styles.createButton, (isGeneratingInvoice || isGeneratingPDF) && styles.createButtonDisabled]}
+                                style={[invoiceDirectStyles.createButton, (isGeneratingInvoice || isGeneratingPDF) && invoiceDirectStyles.createButtonDisabled]}
                                 onPress={generateInvoiceHandler}
                                 disabled={isGeneratingInvoice || isGeneratingPDF}
                             >
@@ -1296,49 +1528,49 @@ const InvoiceDirect = () => {
                                 ) : (
                                     <MaterialIcons name="picture-as-pdf" size={20} color={COLORS.text.light} />
                                 )}
-                                <Text style={[styles.createButtonText, { fontSize: getScaledSize(16) }]}>                                    {isGeneratingInvoice ? 'Retrieving Invoice...' : 
+                                <Text style={[invoiceDirectStyles.createButtonText, { fontSize: getScaledSize(16) }]}>                                    {isGeneratingInvoice ? 'Retrieving Invoice...' : 
                                      isGeneratingPDF ? 'Generating PDF...' : 'Generate Invoice PDF'}
                                 </Text>
                             </TouchableOpacity>
 
                             {/* Retrieved Invoice Display */}
                             {retrievedInvoice && (
-                                <View style={styles.retrievedInvoiceContainer}>
-                                    <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Invoice Details</Text>
+                                <View style={invoiceDirectStyles.retrievedInvoiceContainer}>
+                                    <Text style={[invoiceDirectStyles.sectionTitle, { fontSize: getScaledSize(18) }]}>Invoice Details</Text>
                                     
                                     {/* Invoice Info */}
-                                    <View style={styles.invoiceInfoContainer}>
-                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
-                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
+                                    <View style={invoiceDirectStyles.invoiceInfoContainer}>
+                                        <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                            <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Invoice Number: </Text>
                                             {retrievedInvoice.invoice_info.invoice_number}
                                         </Text>
-                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
-                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
+                                        <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                            <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Amount: </Text>
                                             Rs {retrievedInvoice.invoice_info.invoice_amount}
                                         </Text>
-                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
-                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
+                                        <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                            <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Total Items: </Text>
                                             {retrievedInvoice.invoice_info.total_items}
                                         </Text>
-                                        <Text style={[styles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
-                                            <Text style={[styles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
+                                        <Text style={[invoiceDirectStyles.invoiceInfoText, { fontSize: getScaledSize(15) }]}>
+                                            <Text style={[invoiceDirectStyles.invoiceInfoLabel, { fontSize: getScaledSize(15) }]}>Created: </Text>
                                             {new Date(retrievedInvoice.invoice_info.created_at).toLocaleDateString()}
                                         </Text>
                                     </View>
 
                                     {/* Products List */}
-                                    <View style={styles.productsContainer}>
-                                        <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Products ({retrievedInvoice.items?.length || retrievedInvoice.products?.length || 0})</Text>
+                                    <View style={invoiceDirectStyles.productsContainer}>
+                                        <Text style={[invoiceDirectStyles.sectionTitle, { fontSize: getScaledSize(18) }]}>Products ({retrievedInvoice.items?.length || retrievedInvoice.products?.length || 0})</Text>
                                         <FlatList
                                             data={retrievedInvoice.items || retrievedInvoice.products || []}
                                             renderItem={({ item }) => (
-                                                <View style={styles.retrievedProductItem}>
-                                                    <Text style={[styles.retrievedProductName, { fontSize: getScaledSize(14) }]}>{item.name}</Text>
-                                                    <Text style={[styles.retrievedProductDetails, { fontSize: getScaledSize(12) }]}> 
+                                                <View style={invoiceDirectStyles.retrievedProductItem}>
+                                                    <Text style={[invoiceDirectStyles.retrievedProductName, { fontSize: getScaledSize(14) }]}>{item.name}</Text>
+                                                    <Text style={[invoiceDirectStyles.retrievedProductDetails, { fontSize: getScaledSize(12) }]}> 
                                                         Qty: {item.quantity} × Rs {item.price} = Rs {item.item_total || (item.quantity * item.price)}
                                                     </Text>
                                                     {item.approved_qty !== item.quantity && (
-                                                        <Text style={[styles.retrievedProductApproved, { fontSize: getScaledSize(12) }]}> 
+                                                        <Text style={[invoiceDirectStyles.retrievedProductApproved, { fontSize: getScaledSize(12) }]}> 
                                                             Approved: {item.approved_qty} × Rs {item.approved_price} = Rs {item.approved_item_total || (item.approved_qty * item.approved_price)}
                                                         </Text>
                                                     )}
@@ -1346,15 +1578,15 @@ const InvoiceDirect = () => {
                                             )}
                                             keyExtractor={(item, index) => index.toString()}
                                             showsVerticalScrollIndicator={false}
-                                            style={styles.retrievedProductsList}
+                                            style={invoiceDirectStyles.retrievedProductsList}
                                         />
                                     </View>
 
                                     {/* Share and Download PDF Buttons */}
                                     {generatedPDFData && (
-                                        <View style={styles.pdfActionButtons}>
+                                        <View style={invoiceDirectStyles.pdfActionButtons}>
                                             <TouchableOpacity
-                                                style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                                style={[invoiceDirectStyles.shareButton, isSharingPDF && invoiceDirectStyles.shareButtonDisabled]}
                                                 onPress={downloadPDFHandler}
                                                 disabled={isSharingPDF}
                                                 activeOpacity={0.8}
@@ -1364,13 +1596,13 @@ const InvoiceDirect = () => {
                                                 ) : (
                                                     <MaterialIcons name="file-download" size={24} color={COLORS.text.light} />
                                                 )}
-                                                <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                                <Text style={[invoiceDirectStyles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                                     {isSharingPDF ? 'Downloading...' : 'Download PDF'}
                                                 </Text>
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
-                                                style={[styles.shareButton, isSharingPDF && styles.shareButtonDisabled]}
+                                                style={[invoiceDirectStyles.shareButton, isSharingPDF && invoiceDirectStyles.shareButtonDisabled]}
                                                 onPress={sharePDFHandler}
                                                 disabled={isSharingPDF}
                                                 activeOpacity={0.8}
@@ -1380,7 +1612,7 @@ const InvoiceDirect = () => {
                                                 ) : (
                                                     <MaterialIcons name="ios-share" size={24} color={COLORS.text.light} />
                                                 )}
-                                                <Text style={[styles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
+                                                <Text style={[invoiceDirectStyles.shareButtonText, { fontSize: getScaledSize(16) }]}> 
                                                     {isSharingPDF ? 'Sharing...' : 'Share Invoice'}
                                                 </Text>
                                             </TouchableOpacity>
@@ -1392,13 +1624,13 @@ const InvoiceDirect = () => {
                     </View>
                  ) : showExistingCustomers ? (
                     // Existing Customers View
-                    <View style={styles.content}>
-                        <View style={styles.card}>
-                            <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Select a Customer</Text>
-                            <Animated.View style={[styles.searchContainer, { opacity: fadeAnim }]}> 
+                    <View style={invoiceDirectStyles.content}>
+                        <View style={invoiceDirectStyles.card}>
+                            <Text style={[invoiceDirectStyles.title, { fontSize: getScaledSize(24) }]}>Select a Customer</Text>
+                            <Animated.View style={[invoiceDirectStyles.searchContainer, { opacity: fadeAnim }]}> 
                                 <MaterialIcons name="search" size={22} color={COLORS.primary} style={{ marginRight: 8 }} />
                                 <TextInput
-                                    style={styles.searchInput}
+                                    style={invoiceDirectStyles.searchInput}
                                     placeholder="Search customers by name..."
                                     value={searchQuery}
                                     onChangeText={handleSearch}
@@ -1407,13 +1639,13 @@ const InvoiceDirect = () => {
                             </Animated.View>
                             
                             {loading ? (
-                                <LoadingComponent text="Loading customers..." styles={styles} />
+                                <LoadingComponent text="Loading customers..." styles={invoiceDirectStyles} />
                             ) : error ? (
-                                <ErrorComponent error={error} onRetry={loadAllUsers} styles={styles} />
+                                <ErrorComponent error={error} onRetry={loadAllUsers} styles={invoiceDirectStyles} />
                             ) : filteredUsers.length === 0 ? (
                                 <NoDataComponent 
                                     message={searchQuery ? 'No customers found matching your search.' : 'No customers found.'} 
-                                    styles={styles} 
+                                    styles={invoiceDirectStyles} 
                                 />
                             ) : (
                                 <FlatList
@@ -1423,77 +1655,77 @@ const InvoiceDirect = () => {
                                         <UserCard
                                             item={item}
                                             onPress={() => handleUserSelect(item)}
-                                            styles={styles}
+                                            styles={invoiceDirectStyles}
                                             getScaledSize={getScaledSize}
                                         />
                                     )}
                                     showsVerticalScrollIndicator={false}
-                                    style={styles.flatListStyle}
+                                    style={invoiceDirectStyles.flatListStyle}
                                 />
                             )}
                         </View>
                     </View>
                 ) : showInvoiceCreation ? (
                      // Invoice Creation View - Scrollable
-                     <View style={styles.container}>
+                     <View style={invoiceDirectStyles.container}>
                          <ScrollView 
-                             style={styles.scrollView}
-                             contentContainerStyle={styles.scrollContent}
+                             style={invoiceDirectStyles.scrollView}
+                             contentContainerStyle={invoiceDirectStyles.scrollContent}
                              showsVerticalScrollIndicator={true}
                          >
-                             <View style={styles.content}>
-                                 <View style={styles.card}>
-                                     <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Create Direct Invoice</Text>
+                             <View style={invoiceDirectStyles.content}>
+                                 <View style={invoiceDirectStyles.card}>
+                                     <Text style={[invoiceDirectStyles.title, { fontSize: getScaledSize(24) }]}>Create Direct Invoice</Text>
                                      
                                      {/* Invoice Number Display */}
                                      <InvoiceNumberDisplay
                                          invoiceNumber={invoiceNumber}
-                                         styles={styles}
+                                         styles={invoiceDirectStyles}
                                          getScaledSize={getScaledSize}
                                      />
 
                                      {/* Add More Products Button */}
                                      <TouchableOpacity 
-                                         style={styles.addProductButton}
+                                         style={invoiceDirectStyles.addProductButton}
                                          onPress={() => setShowSearchModal(true)}
                                      >
                                          <MaterialIcons name="add" size={24} color={COLORS.text.light} />
-                                         <Text style={[styles.addProductButtonText, { fontSize: getScaledSize(16) }]}>Add More Products</Text>
+                                         <Text style={[invoiceDirectStyles.addProductButtonText, { fontSize: getScaledSize(16) }]}>Add More Products</Text>
                                      </TouchableOpacity>
 
                                      {/* Selected Products */}
-                                     <View style={styles.selectedProductsContainer}>
-                                         <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Selected Products ({selectedProducts.length})</Text>
+                                     <View style={invoiceDirectStyles.selectedProductsContainer}>
+                                         <Text style={[invoiceDirectStyles.sectionTitle, { fontSize: getScaledSize(18) }]}>Selected Products ({selectedProducts.length})</Text>
                                          {selectedProducts.map((item, index) => (
                                              <SelectedProductItem
                                                  key={item.product_id.toString()}
                                                  item={item}
                                                  onQuantityChange={updateProductQuantityHandler}
-                                                 styles={styles}
+                                                 styles={invoiceDirectStyles}
                                                  getScaledSize={getScaledSize}
                                              />
                                          ))}
                                      </View>
 
                                      {/* Collections Section */}
-                                     <View style={styles.selectedProductsContainer}>
-                                        <Text style={[styles.sectionTitle, { fontSize: getScaledSize(18) }]}>Payment Collection</Text>
+                                     <View style={invoiceDirectStyles.selectedProductsContainer}>
+                                        <Text style={[invoiceDirectStyles.sectionTitle, { fontSize: getScaledSize(18) }]}>Payment Collection</Text>
                                         
                                         {/* Invoice Amount */}
-                                        <View style={[styles.inputContainer, { marginBottom: 10 }]}> 
-                                            <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>Invoice Amount</Text>
+                                        <View style={[invoiceDirectStyles.inputContainer, { marginBottom: 10 }]}> 
+                                            <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>Invoice Amount</Text>
                                             <TextInput
-                                                style={[styles.textInput, { fontSize: getScaledSize(16), backgroundColor: '#f0f0f0' }]}
+                                                style={[invoiceDirectStyles.textInput, { fontSize: getScaledSize(16), backgroundColor: '#f0f0f0' }]}
                                                 value={`₹${collections.invoiceAmount.toFixed(2)}`}
                                                 editable={false}
                                             />
                                         </View>
                                         
                                         {/* Cash Tendered */}
-                                        <View style={[styles.inputContainer, { marginBottom: 10 }]}> 
-                                            <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>Cash Tendered</Text>
+                                        <View style={[invoiceDirectStyles.inputContainer, { marginBottom: 10 }]}> 
+                                            <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>Cash Tendered</Text>
                                             <TextInput
-                                                style={[styles.textInput, { fontSize: getScaledSize(16) }]}
+                                                style={[invoiceDirectStyles.textInput, { fontSize: getScaledSize(16) }]}
                                                 placeholder="Enter cash tendered amount"
                                                 value={collections.tendered === '' ? '' : collections.tendered.toString()}
                                                 onChangeText={(value) => handleCollectionsChange('tendered', value)}
@@ -1505,9 +1737,9 @@ const InvoiceDirect = () => {
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                                             {/* UPI Payment */}
                                             <View style={{ flex: 0.48 }}>
-                                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>UPI</Text>
+                                                <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>UPI</Text>
                                                 <TextInput
-                                                    style={[styles.textInput, { fontSize: getScaledSize(16) }]}
+                                                    style={[invoiceDirectStyles.textInput, { fontSize: getScaledSize(16) }]}
                                                     placeholder="UPI amount"
                                                     value={collections.upi === '' ? '' : collections.upi.toString()}
                                                     onChangeText={(value) => handleCollectionsChange('upi', value)}
@@ -1515,7 +1747,7 @@ const InvoiceDirect = () => {
                                                 />
                                                 {collections.upi > 0 && (
                                                     <View style={{ marginTop: 5 }}>
-                                                        <Text style={[styles.inputLabel, { fontSize: getScaledSize(12) }]}>Select UPI Account</Text>
+                                                        <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(12) }]}>Select UPI Account</Text>
                                                         <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 5 }}>
                                                             <Picker
                                                                 selectedValue={selectedUpiAccount}
@@ -1546,9 +1778,9 @@ const InvoiceDirect = () => {
                                             
                                             {/* Cheque Payment */}
                                             <View style={{ flex: 0.48 }}>
-                                                <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>Cheque</Text>
+                                                <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>Cheque</Text>
                                                 <TextInput
-                                                    style={[styles.textInput, { fontSize: getScaledSize(16) }]}
+                                                    style={[invoiceDirectStyles.textInput, { fontSize: getScaledSize(16) }]}
                                                     placeholder="Cheque amount"
                                                     value={collections.cheque === '' ? '' : collections.cheque.toString()}
                                                     onChangeText={(value) => handleCollectionsChange('cheque', value)}
@@ -1556,7 +1788,7 @@ const InvoiceDirect = () => {
                                                 />
                                                 {collections.cheque > 0 && (
                                                     <View style={{ marginTop: 5 }}>
-                                                        <Text style={[styles.inputLabel, { fontSize: getScaledSize(12) }]}>Select Cheque Account</Text>
+                                                        <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(12) }]}>Select Cheque Account</Text>
                                                         <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 5 }}>
                                                             <Picker
                                                                 selectedValue={selectedChequeAccount}
@@ -1587,20 +1819,20 @@ const InvoiceDirect = () => {
                                         </View>
                                         
                                         {/* Cash (Auto-calculated) */}
-                                        <View style={[styles.inputContainer, { marginBottom: 10 }]}> 
-                                            <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>Cash (Auto-calculated)</Text>
+                                        <View style={[invoiceDirectStyles.inputContainer, { marginBottom: 10 }]}> 
+                                            <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>Cash (Auto-calculated)</Text>
                                             <TextInput
-                                                style={[styles.textInput, { fontSize: getScaledSize(16), backgroundColor: '#f0f0f0' }]}
+                                                style={[invoiceDirectStyles.textInput, { fontSize: getScaledSize(16), backgroundColor: '#f0f0f0' }]}
                                                 value={`₹${collections.cash.toFixed(2)}`}
                                                 editable={false}
                                             />
                                         </View>
                                         
                                         {/* Balance */}
-                                        <View style={[styles.inputContainer, { marginBottom: 10 }]}> 
-                                            <Text style={[styles.inputLabel, { fontSize: getScaledSize(14) }]}>Balance</Text>
+                                        <View style={[invoiceDirectStyles.inputContainer, { marginBottom: 10 }]}> 
+                                            <Text style={[invoiceDirectStyles.inputLabel, { fontSize: getScaledSize(14) }]}>Balance</Text>
                                             <TextInput
-                                                style={[styles.textInput, { 
+                                                style={[invoiceDirectStyles.textInput, { 
                                                     fontSize: getScaledSize(16), 
                                                     backgroundColor: collections.balance < 0 ? '#ffebee' : '#f0f0f0',
                                                     color: collections.balance < 0 ? '#f44336' : '#000'
@@ -1614,7 +1846,9 @@ const InvoiceDirect = () => {
                                      {/* GST-Aware Total Amount */}
                                      <GSTAwareTotalDisplay
                                          gstTotals={gstTotals}
-                                         styles={styles}
+                                         clientState={clientState}
+                                         customerState={customerState}
+                                         styles={invoiceDirectStyles}
                                          getScaledSize={getScaledSize}
                                      />
                                  </View>
@@ -1622,34 +1856,34 @@ const InvoiceDirect = () => {
                          </ScrollView>
                          
                          {/* Fixed Create Invoice Button */}
-                         <View style={styles.fixedButtonContainer}>
+                         <View style={invoiceDirectStyles.fixedButtonContainer}>
                              <CreateButton
                                  onPress={createDirectInvoiceHandler}
                                  isLoading={isCreatingInvoice}
-                                 styles={styles}
+                                 styles={invoiceDirectStyles}
                                  getScaledSize={getScaledSize}
                              />
                          </View>
                      </View>
                  ) : (
                      // Customer Type Selection View
-                     <View style={styles.content}>
-                         <View style={styles.card}>
-                             <Text style={[styles.title, { fontSize: getScaledSize(24) }]}>Invoice Options</Text>
-                             <Text style={[styles.subtitle, { fontSize: getScaledSize(16) }]}>Choose how you want to create the invoice</Text>
+                     <View style={invoiceDirectStyles.content}>
+                         <View style={invoiceDirectStyles.card}>
+                             <Text style={[invoiceDirectStyles.title, { fontSize: getScaledSize(24) }]}>Invoice Options</Text>
+                             <Text style={[invoiceDirectStyles.subtitle, { fontSize: getScaledSize(16) }]}>Choose how you want to create the invoice</Text>
                              
                              {/* Existing Customers Option */}
                              <TouchableOpacity 
-                                 style={styles.optionButton}
+                                 style={invoiceDirectStyles.optionButton}
                                  onPress={() => setShowExistingCustomers(true)}
                                  activeOpacity={0.8}
                              >
-                                 <View style={styles.optionIconContainer}>
+                                 <View style={invoiceDirectStyles.optionIconContainer}>
                                      <MaterialIcons name="people" size={24} color={COLORS.primary} />
                                  </View>
-                                 <View style={styles.optionContent}>
-                                     <Text style={[styles.optionTitle, { fontSize: getScaledSize(16) }]}>Existing Customers</Text>
-                                     <Text style={[styles.optionDescription, { fontSize: getScaledSize(13) }]}>Select from registered customers</Text>
+                                 <View style={invoiceDirectStyles.optionContent}>
+                                     <Text style={[invoiceDirectStyles.optionTitle, { fontSize: getScaledSize(16) }]}>Existing Customers</Text>
+                                     <Text style={[invoiceDirectStyles.optionDescription, { fontSize: getScaledSize(13) }]}>Select from registered customers</Text>
                                  </View>
                                  <MaterialIcons name="arrow-forward-ios" size={16} color={COLORS.text.secondary} />
                              </TouchableOpacity>

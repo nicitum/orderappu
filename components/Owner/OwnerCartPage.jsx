@@ -25,17 +25,17 @@ import moment from 'moment';
 import Toast from 'react-native-toast-message';
 import SearchProductModal_1 from './searchProductModal_1.jsx';
 import { useFontScale } from '../../App';
+import { ipAddress } from '../../services/urls'; // Import ipAddress
 
 // Import from cartutils
 import { COLORS, formatCurrency, styles } from './cartutils';
 import { 
   loadCartFromStorage,
   saveCartToStorage,
-  fetchUserPermissions,
   fetchClientStatus,
   loadProducts,
   placeOrder
-} from './cartutils/apiHelpers';
+} from './cartutils'; // Import from index file instead of apiHelpers directly
 import { 
   addToCart,
   removeFromCart,
@@ -92,7 +92,6 @@ const OwnerCartPage = () => {
   // Load cart from storage on mount
   useEffect(() => {
     loadCartFromStorage(setCartItems, setSelectedCustomer, console);
-    fetchUserPermissions(setAllowProductEdit, navigation, console);
   }, []);
 
   // Monitor state changes for debugging

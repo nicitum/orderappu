@@ -21,3 +21,4 @@ export {
   handleConfirmFrom,
   handleConfirmTo
 } from './utils';
+export { default as ProductItem } from './ProductItem';

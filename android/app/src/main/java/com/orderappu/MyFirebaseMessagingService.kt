@@ -1,4 +1,4 @@
-package com.orderappu
+package com.appuoms
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

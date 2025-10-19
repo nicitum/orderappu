@@ -25,7 +25,7 @@ import LoadingIndicator from "./general/Loader";
 import ErrorMessage from "./general/errorMessage";
 import { useNavigation } from '@react-navigation/native';
 import { useFontScale } from '../App';
-import NotificationService from '../services/NotificationService';
+// import NotificationService from '../services/NotificationService';
 // Remove the test button import
 
 const { width, height } = Dimensions.get('window');
@@ -40,6 +40,7 @@ const LoginPage = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [tempToken, setTempToken] = useState("");
   const [clientImage, setClientImage] = useState(null);
+  const [clientName, setClientName] = useState(null); // Added state for client name
   const [error, setError] = useState("");
   const passwordInput = useRef();
   const [checkingSession, setCheckingSession] = useState(true);
@@ -89,7 +90,13 @@ const LoginPage = () => {
            setError("Client account is inactive");
         }
 
-        const imageFileName = clientStatusData.data[0].image;
+        // Set client name from API response
+        const clientData = clientStatusData.data[0];
+        if (clientData && clientData.client_name) {
+          setClientName(clientData.client_name);
+        }
+
+        const imageFileName = clientData.image;
         console.log('=== IMAGE INFORMATION ON MOUNT ===');
         console.log('Image filename from API on mount:', imageFileName);
         
@@ -134,9 +141,7 @@ const LoginPage = () => {
   };
 
   // Get FCM token and send to backend with customerId
-  // Commented out FCM token registration as requested
-  /*
-  const handleFcmTokenRegistration = async (customerId) => {
+  /*const handleFcmTokenRegistration = async (customerId) => {
     try {
       // Request permission first
       const permissionGranted = await NotificationService.requestNotificationPermission();
@@ -167,8 +172,7 @@ const LoginPage = () => {
       console.error('Error in FCM token registration:', error);
       return false;
     }
-  };
-  */
+  };*/
 
   const handleLogin = async () => {
     Keyboard.dismiss();
@@ -214,17 +218,17 @@ const LoginPage = () => {
           ["userAuthToken", data.token]
         ]);
         
-        // Commented out FCM token registration as requested
-        // const tokenRegistered = await handleFcmTokenRegistration(decoded.id);
+        // Register FCM token with customerId and wait for confirmation
+        /*const tokenRegistered = await handleFcmTokenRegistration(decoded.id);
         
-        // if (tokenRegistered) {
+        if (tokenRegistered) {
             // Token registration completed
           
           // Show login success notification from backend
-          // await showLoginSuccessNotification();
-        // } else {
-        //   console.warn('FCM token registration failed, skipping login notification');
-        // }
+          await showLoginSuccessNotification();
+        } else {
+          console.warn('FCM token registration failed, skipping login notification');
+        }*/
         
         navigation.reset({
           index: 0,
@@ -242,9 +246,7 @@ const LoginPage = () => {
   };
 
   // Show login success notification via backend
-  // Commented out login success notification as requested
-  /*
-  const showLoginSuccessNotification = async () => {
+  /*const showLoginSuccessNotification = async () => {
     try {
       console.log('=== SENDING LOGIN SUCCESS NOTIFICATION ===');
       
@@ -259,7 +261,7 @@ const LoginPage = () => {
       const notificationPayload = {
         targetUserId: customerId,  // Changed to match the expected format
         title: 'Login Successful',
-        body: 'Happy Diwali In Advance . Welcome to our application.',
+        body: 'Happy Navaratri . Welcome to our application.',
         data: {
           type: 'login_success',
           timestamp: new Date().toISOString()
@@ -290,8 +292,7 @@ const LoginPage = () => {
       console.error('Error sending login success notification:', error);
       // Notification is optional, so we don't block the login flow
     }
-  };
-  */
+  };*/
 
   const handlePasswordChangeSuccess = async () => {
     setShowPasswordModal(false);
@@ -302,7 +303,7 @@ const LoginPage = () => {
         ["userAuthToken", tempToken]
       ]);
       
-      // Commented out FCM token registration as requested
+      // Register FCM token with customerId
       // await handleFcmTokenRegistration(decoded.id);
       
       // Small delay to ensure token is registered before sending notification
@@ -336,7 +337,7 @@ const LoginPage = () => {
         
         <View style={styles.topLogoContainer}>
           <Image 
-            source={require("../assets/logo.jpg")} 
+            source={require("../assets/logo_3.jpg")} 
             style={styles.topLogo} 
             resizeMode="contain"
           />
@@ -366,6 +367,16 @@ const LoginPage = () => {
               }}
             />
             )}
+            {/* Display client name if available */}
+            {clientName && (
+              <Text style={[styles.clientName, { fontSize: getScaledSize(16) }]}>
+                Company Name: {clientName}
+              </Text>
+            )}
+            {/* Display hardcoded version */}
+            <Text style={[styles.versionText, { fontSize: getScaledSize(14) }]}>
+              Version: EXP001
+            </Text>
             <Text style={[styles.tagline, { fontSize: getScaledSize(20) }]}>Streamline Your Business Orders</Text>
             <Text style={[styles.taglineSubtext, { fontSize: getScaledSize(14) }]}>Fast • Reliable • Efficient</Text>
             <Text style={[styles.welcomeText, { fontSize: getScaledSize(28) }]}>Welcome Back</Text>
@@ -490,6 +501,18 @@ const styles = StyleSheet.create({
     height: width * 0.4,
     marginBottom: 12,
     borderRadius: 8,
+  },
+  clientName: {
+    fontWeight: '600',
+    color: '#003366',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  versionText: {
+    color: '#666666',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   tagline: {
     fontWeight: '600',

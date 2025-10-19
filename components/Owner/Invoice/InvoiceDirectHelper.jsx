@@ -4,6 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../../services/urls';
 import Share from 'react-native-share';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { LICENSE_NO } from '../../config'; // Import the license number
+
+// Get license number from environment
+const getLicenseNo = () => process.env.LICENSE_NO || 'APPU0009';
 
 // Helper to get token
 const getToken = async () => {
@@ -109,7 +113,7 @@ export const fetchProducts = async () => {
 export const fetchClientStatus = async () => {
   try {
     console.log('=== FETCHING CLIENT STATUS FOR INVOICE PREFIX AND GST METHOD ===');
-    const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+    const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
       method: "GET",
       headers: { "Content-Type": "application/json" }
     });
@@ -256,7 +260,9 @@ export const createDirectInvoice = async (invoiceData) => {
             customer_id: invoiceData.customerId || null,
             route: invoiceData.customerRoute || null,  // Changed from customer_route to route
             billed_by: billedBy,  // Add billed_by from decoded token
-            collections: invoiceData.collections || null
+            collections: invoiceData.collections || null,
+            placed_on: invoiceData.placed_on || Math.floor(Date.now() / 1000), // Use provided placed_on or generate new timestamp
+            summary: invoiceData.summary || null // Add summary field
         };
 
         console.log('Creating direct invoice with collections data:', JSON.stringify(requestBody, null, 2));
@@ -626,7 +632,7 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
         
         // Company and Customer Info - Side by side with more space
         page.drawText("Invoice From:", { x: 50, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
-        page.drawText("Order Appu", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
+        page.drawText("Appu OMS", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
         page.drawText("Bangalore - 560068", { x: 50, y: 705, size: 10, font: helveticaFont, color: secondaryColor });
         page.drawText("GST: 29XXXXX1234Z1Z5", { x: 50, y: 690, size: 10, font: helveticaFont, color: secondaryColor });
         
@@ -1100,10 +1106,14 @@ export const calculateGSTAwareTotal = async (selectedProducts) => {
         }
         
         const grandTotal = totalTaxableValue + totalGstAmount;
+        const cgstAmount = totalGstAmount / 2;
+        const sgstAmount = totalGstAmount / 2;
         
         return {
             subtotal: parseFloat(totalTaxableValue).toFixed(2),
             gstAmount: parseFloat(totalGstAmount).toFixed(2),
+            cgstAmount: parseFloat(cgstAmount).toFixed(2),
+            sgstAmount: parseFloat(sgstAmount).toFixed(2),
             grandTotal: parseFloat(grandTotal).toFixed(2),
             gstMethod: gstMethod
         };
@@ -1119,6 +1129,8 @@ export const calculateGSTAwareTotal = async (selectedProducts) => {
         return {
             subtotal: parseFloat(simpleTotal).toFixed(2),
             gstAmount: "0.00",
+            cgstAmount: "0.00",
+            sgstAmount: "0.00",
             grandTotal: parseFloat(simpleTotal).toFixed(2),
             gstMethod: "Inclusive GST"
         };

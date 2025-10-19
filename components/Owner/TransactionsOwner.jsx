@@ -38,10 +38,6 @@ const TransactionsOwner = () => {
     navigation.navigate('PlaceOrderOwner');
   };
 
-  const handleInvoice = () => {
-    navigation.navigate('InvoiceOwner');
-  };
-
   const handleOrderAcceptance = () => {
     navigation.navigate('OrderAcceptOwner');
   };
@@ -106,21 +102,6 @@ const TransactionsOwner = () => {
             <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>Edit and modify existing orders</Text>
             <View style={styles.cardFooter}>
               <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>Manage orders</Text>
-              <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Invoice Card */}
-          <TouchableOpacity style={styles.card} onPress={handleInvoice} activeOpacity={0.8}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
-                <MaterialIcons name="receipt" size={24} color="#10B981" />
-              </View>
-            </View>
-            <Text style={[styles.cardTitle, { fontSize: getScaledSize(15) }]}>Invoice Against Orders</Text>
-            <Text style={[styles.cardSubtitle, { fontSize: getScaledSize(12) }]}>View and manage invoices</Text>
-            <View style={styles.cardFooter}>
-              <Text style={[styles.cardAction, { fontSize: getScaledSize(12) }]}>View all</Text>
               <Ionicons name="arrow-forward" size={16} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>

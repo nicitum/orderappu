@@ -1,21 +1,64 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
 import axios from "axios";
-import { ipAddress } from "../../services/urls";
+import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config'; // Import the license number
 import moment from 'moment';
 
 // Fetch orders for customer within date range
 export const fetchCustomerOrders = async (fromDate, toDate) => {
     try {
         const token = await AsyncStorage.getItem("userAuthToken");
-        const decodedToken = jwtDecode(token);
-        const customerId = decodedToken.id1;
+        if (!token) {
+            throw new Error("Authentication token not found. Please log in again.");
+        }
+        
+        console.log("Retrieved token from storage:", token.substring(0, 50) + "..."); // Log first 50 chars of token
+        
+        let decodedToken;
+        try {
+            decodedToken = jwtDecode(token);
+        } catch (decodeError) {
+            console.error("Error decoding JWT token:", decodeError);
+            throw new Error("Invalid authentication token. Please log in again.");
+        }
+        
+        console.log("FULL DECODED TOKEN:", JSON.stringify(decodedToken, null, 2)); // Log the entire token for debugging
+        
+        // Use the correct customer ID from the token
+        // Based on the logs, we need to use the "id" field which should contain the customer ID like "CMR0001"
+        // If "id" is not available, fall back to "id1" but log a warning
+        let customerId;
+        if (decodedToken.id && typeof decodedToken.id === 'string' && decodedToken.id.startsWith('CMR')) {
+            customerId = decodedToken.id;
+        } else if (decodedToken.id) {
+            // If id exists but doesn't start with CMR, use it but log a warning
+            console.warn("Customer ID doesn't start with 'CMR', using as-is:", decodedToken.id);
+            customerId = decodedToken.id;
+        } else if (decodedToken.id1) {
+            // Log a warning if we're using id1 as it might be the internal ID
+            console.warn("Using id1 as customer ID. This might be incorrect:", decodedToken.id1);
+            customerId = decodedToken.id1;
+        } else {
+            throw new Error("Unable to determine customer ID from token. Token structure: " + JSON.stringify(decodedToken));
+        }
 
-        const from = moment(fromDate).format("YYYY-MM-DD");
-        const to = moment(toDate).format("YYYY-MM-DD");
+        console.log("Using customer ID:", customerId);
 
+        // Convert dates to Unix timestamps (as required by the new API)
+        // For the 'from' date, use the start of the day (00:00:00)
+        const fromDateObj = new Date(fromDate);
+        fromDateObj.setHours(0, 0, 0, 0);
+        const fromTimestamp = Math.floor(fromDateObj.getTime() / 1000);
+        
+        // For the 'to' date, use the end of the day (23:59:59)
+        const toDateObj = new Date(toDate);
+        toDateObj.setHours(23, 59, 59, 999);
+        const toTimestamp = Math.floor(toDateObj.getTime() / 1000);
+
+        // Construct the URL with query parameters
         const baseUrl = `http://${ipAddress}:8091/get-customer-orders/${customerId}`;
-        const url = `${baseUrl}?from=${from}&to=${to}`;
+        const url = `${baseUrl}?from=${fromTimestamp}&to=${toTimestamp}`;
 
         const headers = {
             Authorization: `Bearer ${token}`,
@@ -24,6 +67,8 @@ export const fetchCustomerOrders = async (fromDate, toDate) => {
 
         console.log("FETCH CUSTOMER ORDERS - Request URL:", url);
         console.log("FETCH CUSTOMER ORDERS - Request Headers:", headers);
+        console.log("FETCH CUSTOMER ORDERS - From Date:", fromDateObj, "Timestamp:", fromTimestamp);
+        console.log("FETCH CUSTOMER ORDERS - To Date:", toDateObj, "Timestamp:", toTimestamp);
 
         const ordersResponse = await fetch(url, { headers });
 
@@ -39,7 +84,18 @@ export const fetchCustomerOrders = async (fromDate, toDate) => {
 
         const ordersData = await ordersResponse.json();
         console.log("FETCH CUSTOMER ORDERS - Response Data:", ordersData);
-        return ordersData.orders || [];
+        
+        // The new API returns orders WITHOUT order_products
+        // So we just need to return the orders array
+        if (ordersData && Array.isArray(ordersData.orders)) {
+            return ordersData.orders;
+        } else if (Array.isArray(ordersData)) {
+            // Handle case where API directly returns an array of orders
+            return ordersData;
+        } else {
+            console.warn("FETCH CUSTOMER ORDERS - Unexpected response format:", ordersData);
+            return [];
+        }
     } catch (fetchOrdersError) {
         console.error("FETCH CUSTOMER ORDERS - Fetch Error:", fetchOrdersError);
         throw new Error(fetchOrdersError.message || "Failed to fetch customer orders.");
@@ -73,7 +129,7 @@ export const fetchAllProducts = async () => {
 export const fetchClientStatus = async () => {
     try {
         console.log('Fetching client status...');
-        const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
             method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache',
@@ -108,6 +164,7 @@ export const fetchClientStatus = async () => {
 };
 
 // Fetch order products by order ID
+// This function is needed as the new API does NOT include order_products in the response
 export const fetchOrderProducts = async (orderId) => {
     try {
         const token = await AsyncStorage.getItem("userAuthToken");
@@ -119,9 +176,21 @@ export const fetchOrderProducts = async (orderId) => {
             `http://${ipAddress}:8091/order-products?orderId=${orderId}`,
             { headers: { Authorization: `Bearer ${token}` } }
         );
-        return response.data;
+        
+        // Log the response for debugging
+        console.log("FETCH ORDER PRODUCTS - Response for order", orderId, ":", response.data);
+        
+        // Ensure we return an array
+        if (Array.isArray(response.data)) {
+            return response.data;
+        } else if (response.data && Array.isArray(response.data.products)) {
+            return response.data.products;
+        } else {
+            console.warn("FETCH ORDER PRODUCTS - Unexpected response format for order", orderId, ":", response.data);
+            return [];
+        }
     } catch (error) {
-        console.error("Error fetching order products:", error);
+        console.error("Error fetching order products for order", orderId, ":", error);
         throw error;
     }
 };

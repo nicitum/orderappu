@@ -82,9 +82,9 @@ android {
         pickFirst '**/libc++_shared.so'
     }
 
-    namespace "com.orderappu"
+    namespace "com.appuoms"
     defaultConfig {
-        applicationId "com.orderappu"
+        applicationId "com.appuoms"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

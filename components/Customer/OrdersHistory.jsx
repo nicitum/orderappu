@@ -45,8 +45,14 @@ const OrdersHistory = () => {
   const navigation = useNavigation();
   const [expandedOrderDetailsId, setExpandedOrderDetailsId] = useState(null);
   const [orderDetails, setOrderDetails] = useState({});
-  const [fromDate, setFromDate] = useState(new Date());
-  const [toDate, setToDate] = useState(new Date());
+  
+  // Set initial dates to cover a reasonable range (last 30 days)
+  const today = new Date();
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+  
+  const [fromDate, setFromDate] = useState(thirtyDaysAgo);
+  const [toDate, setToDate] = useState(today);
   const [isFromPickerVisible, setFromPickerVisible] = useState(false);
   const [isToPickerVisible, setToPickerVisible] = useState(false);
   const [allProductsData, setAllProductsData] = useState([]);
@@ -186,10 +192,12 @@ const OrdersHistory = () => {
       setExpandedOrderDetailsId(orderId);
       if (!orderDetails[orderId]) {
         try {
+          console.log("Fetching order products for order", orderId);
           const products = await fetchOrderProducts(orderId);
+          console.log("Received products for order", orderId, ":", products);
           setOrderDetails(prevDetails => ({ ...prevDetails, [orderId]: products }));
         } catch (error) {
-          console.error("Error fetching order products:", error);
+          console.error("Error fetching order products for order", orderId, ":", error);
           Toast.show({
             type: 'error',
             text1: 'Error',
@@ -202,9 +210,11 @@ const OrdersHistory = () => {
 
   const renderOrderDetails = (orderId) => {
     const products = orderDetails[orderId];
+    console.log("Rendering order details for order", orderId, "with products:", products);
     const allProductsMap = new Map(allProductsData.map(p => [p.id, p]));
     
     if (!expandedOrderDetailsId || expandedOrderDetailsId !== orderId || !products) {
+      console.log("Not rendering order details for order", orderId, "expandedOrderDetailsId:", expandedOrderDetailsId, "products:", products);
       return null;
     }
 
@@ -227,8 +237,9 @@ const OrdersHistory = () => {
           </View>
         </View>
 
-        {products.length > 0 ? (
+        {products && products.length > 0 ? (
           products.map((product, index) => {
+            console.log("Rendering product", product, "at index", index);
             const prodData = allProductsMap.get(product.product_id);
             return (
               <ProductItem 
@@ -303,7 +314,9 @@ const OrdersHistory = () => {
 
   const handleReorder = async (order) => {
     try {
+      console.log("Fetching products for reorder of order", order.id);
       const products = await fetchOrderProducts(order.id);
+      console.log("Received products for reorder of order", order.id, ":", products);
       if (products && products.length > 0) {
         // Set current reorder order and show due date modal
         setCurrentReorderOrder({ ...order, products });
@@ -616,9 +629,9 @@ const OrdersHistory = () => {
         maximumDate={(() => {
           // Calculate maximum selectable date based on max_due_on
           console.log('Calculating maximumDate, maxDueOn =', maxDueOn);
-          if (maxDueOn === 0) {
-            console.log('maxDueOn is 0, returning today only');
-            return new Date(); // Only today if max_due_on is 0
+          if (!maxDueOn || maxDueOn <= 0) {
+            console.log('maxDueOn is invalid, returning today only');
+            return new Date(); // Only today if max_due_on is 0 or invalid
           }
           const maxDate = new Date();
           // If max_due_on is 2, we want: today + tomorrow = 2 days total

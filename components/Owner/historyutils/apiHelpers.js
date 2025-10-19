@@ -4,72 +4,112 @@ import { checkTokenAndRedirect } from "../../services/auth";
 import { jwtDecode } from "jwt-decode";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import moment from 'moment';
+import { LICENSE_NO } from '../../config'; // Import the license number
 
 /**
- * Fetch orders from the API
+ * Fetch orders for owner within date range
+ * Since there's no range endpoint, we'll fetch orders for each date in the range
  */
 export const fetchOrders = async (fromDate, toDate, expandedOrderId, setOrders, setOrderDetails, setLoading, console) => {
     setLoading(true);
-  
     try {
         const token = await AsyncStorage.getItem("userAuthToken");
-        if (!token) throw new Error("No authentication token found");
-
-        // Date range filter
-        const from = moment(fromDate).format("YYYY-MM-DD");
-        const to = moment(toDate).format("YYYY-MM-DD");
-        const url = `http://${ipAddress}:8091/get-orders-sa/?from=${from}&to=${to}`;
-
-        const response = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-        });
-        console.log("FETCH ADMIN ORDERS - Response Data:", response.data);
-
-        if (!response.data || !response.data.status) {
-            throw new Error(response.data?.message || "No valid data received from server");
+        if (!token) {
+            throw new Error("Authentication token missing");
         }
 
-        const fetchedOrders = response.data.orders;
-        console.log("Fetched orders:", fetchedOrders);
-
-        setOrders(fetchedOrders);
-
-        // If we have an expanded order ID and the order exists in the fetched orders,
-        // fetch its details automatically
-        if (expandedOrderId && fetchedOrders.some(order => order.id === expandedOrderId)) {
-            const products = await fetchOrderProducts(expandedOrderId, console);
-            setOrderDetails((prevDetails) => ({ ...prevDetails, [expandedOrderId]: products }));
-        }
-
-    } catch (error) {
-        const errorMessage = error.response?.data?.message ||
-            error.message ||
-            "Failed to fetch admin orders";
+        // Generate all dates in the range
+        const dates = [];
+        const currentDate = moment(fromDate);
+        const endDate = moment(toDate);
         
-        console.error("FETCH ADMIN ORDERS - Error:", error);
+        while (currentDate <= endDate) {
+            dates.push(currentDate.format("YYYY-MM-DD"));
+            currentDate.add(1, 'day');
+        }
+
+        // Fetch orders for each date
+        const allOrders = [];
+        const headers = {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        };
+
+        for (const date of dates) {
+            try {
+                const url = `http://${ipAddress}:8091/get-orders-sa?date=${date}`;
+                console.log("FETCH OWNER ORDERS - Request URL:", url);
+                
+                const ordersResponse = await fetch(url, { headers });
+                
+                if (ordersResponse.ok) {
+                    const ordersData = await ordersResponse.json();
+                    if (ordersData.orders && Array.isArray(ordersData.orders)) {
+                        allOrders.push(...ordersData.orders);
+                    }
+                } else {
+                    console.warn(`Failed to fetch orders for date ${date}:`, ordersResponse.status);
+                }
+            } catch (dateError) {
+                console.error(`Error fetching orders for date ${date}:`, dateError);
+            }
+        }
+
+        // Remove duplicates based on order ID
+        const uniqueOrders = Array.from(new Map(allOrders.map(order => [order.id, order])).values());
+        
+        // Sort by placed_on timestamp descending (newest first)
+        uniqueOrders.sort((a, b) => b.placed_on - a.placed_on);
+        
+        setOrders(uniqueOrders);
+        
+        // If there's an expanded order ID, fetch its details
+        if (expandedOrderId && uniqueOrders.some(order => order.id === expandedOrderId)) {
+            try {
+                const orderDetailsResponse = await fetch(
+                    `http://${ipAddress}:8091/order-products?orderId=${expandedOrderId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (orderDetailsResponse.ok) {
+                    const detailsData = await orderDetailsResponse.json();
+                    setOrderDetails(prev => ({ ...prev, [expandedOrderId]: detailsData }));
+                }
+            } catch (detailsError) {
+                console.error("Error fetching order details:", detailsError);
+            }
+        }
+        
+        console.log('Fetched owner orders:', uniqueOrders);
+    } catch (fetchOrdersError) {
+        console.error("FETCH OWNER ORDERS - Fetch Error:", fetchOrdersError);
+        throw new Error(fetchOrdersError.message || "Failed to fetch owner orders.");
     } finally {
         setLoading(false);
     }
 };
 
 /**
- * Fetch all products from the API
+ * Fetch all products for images
  */
 export const fetchAllProducts = async (setAllProductsData, console) => {
     try {
         const token = await AsyncStorage.getItem("userAuthToken");
-        if (!token) throw new Error("Authentication token missing");
+        if (!token) {
+            throw new Error("Authentication token missing");
+        }
         const response = await fetch(`http://${ipAddress}:8091/products`, {
             headers: { Authorization: `Bearer ${token}` },
         });
-        if (!response.ok) throw new Error("Failed to fetch products");
+        
+        if (!response.ok) {
+            throw new Error("Failed to fetch products");
+        }
+        
         const data = await response.json();
         setAllProductsData(data);
     } catch (error) {
         console.error("Error fetching all products:", error);
+        throw error;
     }
 };
 
@@ -79,7 +119,7 @@ export const fetchAllProducts = async (setAllProductsData, console) => {
 export const fetchClientStatus = async (setDefaultDueOn, setMaxDueOn, setSelectedDueDate, console) => {
     try {
         console.log('Fetching client status...');
-        const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
             method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache',
@@ -161,7 +201,7 @@ export const fetchCustomerName = async (customerId, console) => {
  */
 export const fetchOrderProducts = async (orderId, console) => {
     try {
-        const token = await checkTokenAndRedirect(navigation);
+        const token = await AsyncStorage.getItem("userAuthToken");
         if (!token) throw new Error("No authorization token found.");
 
         const response = await axios.get(

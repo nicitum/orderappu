@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from "jwt-decode";
 import axios from "axios";
-import { ipAddress } from "../../services/urls";
+import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config'; // Import the license number
 import moment from 'moment';
 
 // Fetch orders for admin within date range
@@ -73,7 +74,7 @@ export const fetchAllProducts = async () => {
 export const fetchClientStatus = async () => {
     try {
         console.log('Fetching client status...');
-        const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+        const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
             method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache',

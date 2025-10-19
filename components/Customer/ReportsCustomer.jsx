@@ -35,10 +35,6 @@ const ReportsCustomer = () => {
   const navigation = useNavigation();
   const { getScaledSize } = useFontScale();
 
-  const handleInvoiceDisplay = () => {
-    navigation.navigate('CustomerInvoicePage');
-  };
-
   const handleOrderHistory = () => {
     navigation.navigate('OrdersHistory');
   };
@@ -60,21 +56,6 @@ const ReportsCustomer = () => {
             <Text style={[styles.cardSubtitleSmall, { fontSize: getScaledSize(12) }]}>View all your past orders</Text>
             <View style={styles.cardFooterSmall}>
               <Text style={[styles.cardActionSmall, { fontSize: getScaledSize(12) }]}>View history</Text>
-              <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
-            </View>
-          </TouchableOpacity>
-
-          {/* Invoice Display Card */}
-          <TouchableOpacity style={styles.smallCard} onPress={handleInvoiceDisplay} activeOpacity={0.8}>
-            <View style={styles.cardHeaderSmall}>
-              <View style={[styles.iconContainerSmall, { backgroundColor: '#FEF3C7' }]}> 
-                <MaterialIcons name="receipt" size={20} color="#F59E0B" />
-              </View>
-            </View>
-            <Text style={[styles.cardTitleSmall, { fontSize: getScaledSize(15) }]}>Invoice Display</Text>
-            <Text style={[styles.cardSubtitleSmall, { fontSize: getScaledSize(12) }]}>View all your invoices</Text>
-            <View style={styles.cardFooterSmall}>
-              <Text style={[styles.cardActionSmall, { fontSize: getScaledSize(12) }]}>View invoices</Text>
               <Ionicons name="arrow-forward" size={14} color={COLORS.text.secondary} />
             </View>
           </TouchableOpacity>

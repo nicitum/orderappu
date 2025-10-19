@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ipAddress } from '../../../services/urls';
+import { LICENSE_NO } from '../../config';
 import Share from 'react-native-share';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { jwtDecode } from 'jwt-decode';
@@ -118,7 +119,7 @@ export const fetchProducts = async () => {
 export const fetchClientStatus = async () => {
   try {
     console.log('=== FETCHING CLIENT STATUS FOR INVOICE PREFIX AND GST METHOD ===');
-    const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+    const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
       method: "GET",
       headers: { "Content-Type": "application/json" }
     });
@@ -256,16 +257,31 @@ export const createDirectInvoice = async (invoiceData) => {
         const decodedToken = JSON.parse(atob(authToken.split('.')[1]));
         const billedBy = decodedToken.username;
         
+        // Calculate round off value (difference between invoice_amount and rounded amount)
+        const totalAmount = parseFloat(invoiceData.totalAmount);
+        const roundedAmount = Math.round(totalAmount);
+        const roundOff = parseFloat((roundedAmount - totalAmount).toFixed(2));
+        
+        // Prepare adjustments array with roundOff
+        const adjustments = [
+            {
+                roundOff: roundOff
+            }
+        ];
+        
         const requestBody = {
             invoice_number: invoiceData.invoiceNumber,
             products: invoiceData.products,
-            invoice_amount: invoiceData.totalAmount,
+            invoice_amount: totalAmount,
             customer_name: invoiceData.customerName || null,
             customer_phone: invoiceData.customerPhone || null,
             customer_id: invoiceData.customerId || null,
-            route: invoiceData.customerRoute || null,  // Changed from customer_route to route
-            billed_by: billedBy,  // Add billed_by from decoded token
-            collections: invoiceData.collections || null
+            route: invoiceData.customerRoute || null,
+            billed_by: billedBy,
+            collections: invoiceData.collections || null,
+            adjustments: adjustments,
+            placed_on: Math.floor(Date.now() / 1000), // Add placed_on timestamp
+            summary: invoiceData.summary || null // Use the summary from invoiceData or null if not provided
         };
 
         console.log('Creating direct invoice with collections data:', JSON.stringify(requestBody, null, 2));
@@ -635,7 +651,7 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
         
         // Company and Customer Info - Side by side with more space
         page.drawText("Invoice From:", { x: 50, y: 740, size: 12, font: helveticaBoldFont, color: textColor });
-        page.drawText("Order Appu", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
+        page.drawText("Appu OMS", { x: 50, y: 720, size: 14, font: helveticaFont, color: textColor });
         page.drawText("Bangalore - 560068", { x: 50, y: 705, size: 10, font: helveticaFont, color: secondaryColor });
         page.drawText("GST: 29XXXXX1234Z1Z5", { x: 50, y: 690, size: 10, font: helveticaFont, color: secondaryColor });
         
@@ -848,10 +864,29 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
         
         // Totals - Aligned to right, clean box with GST details
         const totalsY = itemY - 10;
-        page.drawRectangle({ x: 350, y: totalsY - 120, width: 195, height: 120, color: backgroundColor });
+        page.drawRectangle({ x: 350, y: totalsY - 135, width: 195, height: 135, color: backgroundColor });
         
         let currentTotalsY = totalsY - 20;
         const totalsSpacing = 15;
+        
+        // Extract roundOff from adjustments if available
+        let roundOffAmount = "0.00";
+        if (invoiceInfo.adjustments) {
+            try {
+                const adjustments = typeof invoiceInfo.adjustments === 'string' 
+                    ? JSON.parse(invoiceInfo.adjustments) 
+                    : invoiceInfo.adjustments;
+                
+                if (Array.isArray(adjustments) && adjustments.length > 0) {
+                    const roundOffAdjustment = adjustments.find(adj => adj.roundOff !== undefined);
+                    if (roundOffAdjustment) {
+                        roundOffAmount = parseFloat(roundOffAdjustment.roundOff).toFixed(2);
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to parse adjustments for roundOff:", e);
+            }
+        }
         
         page.drawText("Subtotal (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
         page.drawText(subTotal, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
@@ -871,6 +906,11 @@ export const generateInvoicePDF = async (invoiceData, customerData = null) => {
         
         page.drawText("SGST (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
         page.drawText(sgstAmount, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
+        currentTotalsY -= totalsSpacing;
+        
+        // Add Round Off amount
+        page.drawText("Round Off (Rs.):", { x: 360, y: currentTotalsY, size: 10, font: helveticaBoldFont, color: textColor });
+        page.drawText(roundOffAmount, { x: 480, y: currentTotalsY, size: 10, font: helveticaFont, color: textColor });
         currentTotalsY -= totalsSpacing;
         
         page.drawLine({ start: { x: 360, y: currentTotalsY + 5 }, end: { x: 535, y: currentTotalsY + 5 }, thickness: 0.5, color: secondaryColor });
@@ -1109,10 +1149,14 @@ export const calculateGSTAwareTotal = async (selectedProducts) => {
         }
         
         const grandTotal = totalTaxableValue + totalGstAmount;
+        const cgstAmount = totalGstAmount / 2;
+        const sgstAmount = totalGstAmount / 2;
         
         return {
             subtotal: parseFloat(totalTaxableValue).toFixed(2),
             gstAmount: parseFloat(totalGstAmount).toFixed(2),
+            cgstAmount: parseFloat(cgstAmount).toFixed(2),
+            sgstAmount: parseFloat(sgstAmount).toFixed(2),
             grandTotal: parseFloat(grandTotal).toFixed(2),
             gstMethod: gstMethod
         };
@@ -1128,6 +1172,8 @@ export const calculateGSTAwareTotal = async (selectedProducts) => {
         return {
             subtotal: parseFloat(simpleTotal).toFixed(2),
             gstAmount: "0.00",
+            cgstAmount: "0.00",
+            sgstAmount: "0.00",
             grandTotal: parseFloat(simpleTotal).toFixed(2),
             gstMethod: "Inclusive GST"
         };

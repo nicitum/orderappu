@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { jwtDecode } from 'jwt-decode';
+import { LICENSE_NO } from './config'; // Import the license number
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { View, Text, StyleSheet } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { jwtDecode } from "jwt-decode";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFontScale } from '../App';
 
@@ -39,7 +40,7 @@ const TabNavigator = () => {
 
     const checkClientStatus = async () => {
         try {
-            const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+            const clientStatusResponse = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
                 method: "GET",
                 headers: { "Content-Type": "application/json" }
             });

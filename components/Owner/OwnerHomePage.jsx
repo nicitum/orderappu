@@ -107,7 +107,7 @@ const OwnerHomePage = () => {
         <View style={styles.headerContent}>
           <Image source={require("../../assets/logo.jpg")} style={styles.logo} resizeMode="contain" />
           <View style={styles.headerTextContainer}>
-            <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Order Appu</Text>
+            <Text style={[styles.headerTitle, { fontSize: getScaledSize(24) }]}>Appu OMS</Text>
             <Text style={[styles.headerSubtitle, { fontSize: getScaledSize(14) }]}>Owner's Dashboard</Text>
           </View>
         </View>

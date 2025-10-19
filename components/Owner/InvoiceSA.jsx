@@ -312,7 +312,7 @@ const InvoiceOwner = ({ navigation }) => {
       // Header
       page.drawRectangle({ x: 0, y: 780, width: 595.28, height: 60, color: primaryColor });
       page.drawText("INVOICE", { x: 250, y: 805, size: 28, font: helveticaBoldFont, color: rgb(1, 1, 1) });
-      page.drawText("Order Appu", { x: 50, y: 750, size: 18, font: helveticaBoldFont, color: primaryColor });
+      page.drawText("Appu OMS", { x: 50, y: 750, size: 18, font: helveticaBoldFont, color: primaryColor });
       page.drawText("Bangalore - 560068", { x: 50, y: 730, size: 10, font: helveticaFont, color: secondaryColor });
 
       // Invoice Details

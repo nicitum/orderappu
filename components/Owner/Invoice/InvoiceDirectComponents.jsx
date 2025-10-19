@@ -262,28 +262,52 @@ export const TotalAmountDisplay = ({
 // GST-aware total amount display component
 export const GSTAwareTotalDisplay = ({ 
     gstTotals, 
+    clientState,
+    customerState,
     styles,
     getScaledSize
-}) => (
-    <View style={[styles.totalContainer, { flexDirection: 'column', alignItems: 'flex-start' }]}> 
-        <Text style={[styles.totalLabel, { fontSize: getScaledSize(16), marginBottom: 8 }]}>Invoice Summary:</Text>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
-            <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>Subtotal:</Text>
-            <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.subtotal || '0.00'}</Text>
+}) => {
+    // Determine if IGST should be used (when client state is NOT equal to customer state)
+    const useIgst = clientState && customerState && clientState !== customerState;
+    console.log('testing igst', useIgst)
+    
+    return (
+        <View style={[styles.totalContainer, { flexDirection: 'column', alignItems: 'flex-start' }]}> 
+            <Text style={[styles.totalLabel, { fontSize: getScaledSize(16), marginBottom: 8 }]}>Invoice Summary:</Text>
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
+                <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>Subtotal:</Text>
+                <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.subtotal || '0.00'}</Text>
+            </View>
+            
+            {useIgst ? (
+                // Display IGST without bifurcations when states are different
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
+                    <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>IGST ({gstTotals?.gstMethod || 'Inclusive'}):</Text>
+                    <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.igstAmount || '0.00'}</Text>
+                </View>
+            ) : (
+                // Display CGST/SGST bifurcations when states are the same or when either state is missing
+                <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
+                        <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>CGST ({gstTotals?.gstMethod || 'Inclusive'}):</Text>
+                        <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.cgstAmount || '0.00'}</Text>
+                    </View>
+                    
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
+                        <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>SGST ({gstTotals?.gstMethod || 'Inclusive'}):</Text>
+                        <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.sgstAmount || '0.00'}</Text>
+                    </View>
+                </>
+            )}
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8, marginTop: 4 }}>
+                <Text style={[styles.totalLabel, { fontSize: getScaledSize(16) }]}>Grand Total:</Text>
+                <Text style={[styles.totalAmount, { fontSize: getScaledSize(18) }]}>Rs.{gstTotals?.grandTotal || '0.00'}</Text>
+            </View>
         </View>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
-            <Text style={[styles.totalLabel, { fontSize: getScaledSize(14), fontWeight: '500' }]}>GST ({gstTotals?.gstMethod || 'Inclusive'}):</Text>
-            <Text style={[styles.totalAmount, { fontSize: getScaledSize(14) }]}>Rs.{gstTotals?.gstAmount || '0.00'}</Text>
-        </View>
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8, marginTop: 4 }}>
-            <Text style={[styles.totalLabel, { fontSize: getScaledSize(16) }]}>Grand Total:</Text>
-            <Text style={[styles.totalAmount, { fontSize: getScaledSize(18) }]}>Rs.{gstTotals?.grandTotal || '0.00'}</Text>
-        </View>
-    </View>
-);
+    );
+};
 
 // Create button component
 export const CreateButton = ({ 

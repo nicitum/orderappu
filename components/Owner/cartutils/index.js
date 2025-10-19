@@ -3,10 +3,9 @@ export { default as styles } from './styles';
 export { 
   loadCartFromStorage,
   saveCartToStorage,
-  fetchUserPermissions,
-  fetchClientStatus,
   loadProducts,
-  placeOrder
+  placeOrder,
+  fetchClientStatus
 } from './apiHelpers';
 export { 
   addToCart,

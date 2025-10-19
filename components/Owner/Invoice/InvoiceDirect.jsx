@@ -266,6 +266,103 @@ const savePDFToDownloads = async (pdfBytes, fileName) => {
     }
 };
 
+// Helper function to generate summary data in the required JSON format
+const generateInvoiceSummary = (products, gstMethod, clientState, customerState) => {
+  try {
+    // Calculate item-level details
+    const items = products.map(product => {
+      const quantity = parseFloat(product.quantity || 0);
+      const rate = parseFloat(product.price || 0);
+      const gstRate = parseFloat(product.gst_rate || 0);
+      
+      let amount, taxableValue, gstAmount, lineTotal;
+      
+      if (gstMethod === "Inclusive GST") {
+        // For inclusive GST, the rate already includes GST
+        lineTotal = quantity * rate; // This is the total including GST
+        taxableValue = gstRate > 0 ? lineTotal / (1 + gstRate / 100) : lineTotal;
+        gstAmount = lineTotal - taxableValue;
+        amount = taxableValue; // Base amount without GST
+      } else {
+        // For exclusive GST, we calculate GST on top of the base price
+        amount = quantity * rate; // Base amount without GST
+        gstAmount = amount * (gstRate / 100);
+        lineTotal = amount + gstAmount; // Total including GST
+        taxableValue = amount; // Same as amount for exclusive GST
+      }
+      
+      // Calculate CGST, SGST, IGST
+      // Use IGST when client state is NOT equal to customer state, otherwise split into CGST/SGST
+      const useIgst = clientState !== customerState;
+      let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+      
+      if (useIgst) {
+        igstAmount = gstAmount;
+      } else {
+        cgstAmount = gstAmount / 2;
+        sgstAmount = gstAmount / 2;
+      }
+      
+      return {
+        rate: rate,
+        unit: "Pcs",
+        brand: product.brand || "",
+        amount: parseFloat(amount.toFixed(2)),
+        category: product.category || "",
+        gst_rate: gstRate,
+        hsn_code: product.hsn_code || "",
+        quantity: quantity,
+        gst_amount: parseFloat(gstAmount.toFixed(2)),
+        line_total: parseFloat(lineTotal.toFixed(2)),
+        product_id: product.product_id,
+        cgst_amount: parseFloat(cgstAmount.toFixed(2)),
+        gst_percent: gstRate,
+        igst_amount: parseFloat(igstAmount.toFixed(2)),
+        sgst_amount: parseFloat(sgstAmount.toFixed(2)),
+        product_code: product.product_code || "",
+        product_name: product.name || "",
+        taxable_rate: parseFloat(taxableValue.toFixed(2)),
+        taxable_value: parseFloat(taxableValue.toFixed(2))
+      };
+    });
+    
+    // Calculate totals
+    const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+    const totalGst = items.reduce((sum, item) => sum + item.gst_amount, 0);
+    const totalCgst = items.reduce((sum, item) => sum + item.cgst_amount, 0);
+    const totalSgst = items.reduce((sum, item) => sum + item.sgst_amount, 0);
+    const totalIgst = items.reduce((sum, item) => sum + item.igst_amount, 0);
+    const totalTaxableValue = items.reduce((sum, item) => sum + item.taxable_value, 0);
+    const grandTotal = subtotal + totalGst;
+    const totalGstRate = items.reduce((sum, item) => sum + item.gst_rate, 0);
+    // Use IGST when client state is NOT equal to customer state, otherwise split into CGST/SGST
+    const useIgst = clientState !== customerState;
+    
+    const summaryData = {
+      items: items,
+      totals: {
+        subtotal: parseFloat(subtotal.toFixed(2)),
+        use_igst: useIgst,
+        total_gst: parseFloat(totalGst.toFixed(2)),
+        gst_method: gstMethod,
+        total_cgst: parseFloat(totalCgst.toFixed(2)),
+        total_igst: parseFloat(totalIgst.toFixed(2)),
+        total_sgst: parseFloat(totalSgst.toFixed(2)),
+        grand_total: parseFloat(grandTotal.toFixed(2)),
+        total_gst_rate: totalGstRate,
+        total_taxable_value: parseFloat(totalTaxableValue.toFixed(2))
+      },
+      gst_method: gstMethod,
+      client_state: clientState,
+      customer_state: customerState
+    };
+    
+    return summaryData;
+  } catch (error) {
+    console.error('Error generating invoice summary:', error);
+    return null;
+  }
+};
 
 const InvoiceDirect = () => {
     const navigation = useNavigation();
@@ -298,6 +395,8 @@ const InvoiceDirect = () => {
     const [generatedPDFData, setGeneratedPDFData] = useState(null);
     const [customerData, setCustomerData] = useState(null);
     const [gstMethod, setGstMethod] = useState('Inclusive GST'); // Default to inclusive
+    const [clientState, setClientState] = useState(''); // Initialize as empty, will be set from API
+    const [customerState, setCustomerState] = useState(''); // Initialize as empty, will be set from API
     
     // Bank account and collections states
     const [bankAccounts, setBankAccounts] = useState([]);
@@ -316,6 +415,9 @@ const InvoiceDirect = () => {
     const [gstTotals, setGstTotals] = useState({
         subtotal: '0.00',
         gstAmount: '0.00',
+        cgstAmount: '0.00',
+        sgstAmount: '0.00',
+        igstAmount: '0.00',
         grandTotal: '0.00',
         gstMethod: 'Inclusive GST'
     });
@@ -349,6 +451,26 @@ const InvoiceDirect = () => {
         fetchBankAccounts();
     }, []);
 
+    // Fetch client status to get GST method and client state
+    const loadClientStatus = useCallback(async () => {
+        try {
+            const result = await fetchClientStatus();
+            if (result.success) {
+                setGstMethod(result.data.gst_method || 'Inclusive GST');
+                setClientState(result.data.state || '');
+                console.log('Client status loaded:', result.data);
+            } else {
+                console.warn('Failed to fetch client status, using defaults:', result.error);
+                setGstMethod('Inclusive GST'); // Default to inclusive
+                setClientState(''); // Empty default
+            }
+        } catch (error) {
+            console.error('Error loading client status:', error);
+            setGstMethod('Inclusive GST'); // Default to inclusive
+            setClientState(''); // Empty default
+        }
+    }, []);
+    
     // Fetch all users
     const loadAllUsers = useCallback(async () => {
         try {
@@ -381,8 +503,8 @@ const InvoiceDirect = () => {
         try {
             const result = await fetchClientStatus();
             if (result.success) {
-                setGstMethod(result.data.gstMethod || 'Inclusive GST');
-                console.log('GST Method loaded:', result.data.gstMethod);
+                setGstMethod(result.data.gst_method || 'Inclusive GST');
+                console.log('GST Method loaded:', result.data.gst_method);
             } else {
                 console.warn('Failed to fetch GST method, using default:', result.error);
                 setGstMethod('Inclusive GST'); // Default to inclusive
@@ -410,13 +532,17 @@ const InvoiceDirect = () => {
             const result = await fetchCustomerData(user.customer_id);
             if (result.success) {
                 setCustomerData(result.data);
+                // Set customer state from the customer data
+                setCustomerState(result.data.state || '');
             } else {
                 console.warn('Failed to fetch customer data:', result.error);
                 setCustomerData(null);
+                setCustomerState(''); // Empty default
             }
         } catch (error) {
             console.error('Error fetching customer data:', error);
             setCustomerData(null);
+            setCustomerState(''); // Empty default
         }
         
         setShowSearchModal(true);
@@ -443,6 +569,7 @@ const InvoiceDirect = () => {
         setIsGeneratingPDF(false);
         setIsSharingPDF(false);
     };
+
 
     // Handle product addition from search modal
     const handleAddProduct = async (product) => {
@@ -618,8 +745,98 @@ const InvoiceDirect = () => {
     
     // Calculate GST-aware totals when selected products change
     useEffect(() => {
+        // Calculate GST-aware totals for display with IGST logic
+        const calculateGSTAwareTotalWithIGST = async () => {
+            try {
+                // Fetch client status to get GST method
+                const clientStatusResult = await fetchClientStatus();
+                let gstMethod = "Inclusive GST"; // Default to inclusive
+                if (clientStatusResult.success) {
+                    gstMethod = clientStatusResult.data.gst_method || clientStatusResult.data.gstMethod || "Inclusive GST";
+                }
+                
+                const isInclusive = gstMethod === "Inclusive GST";
+                let totalTaxableValue = 0;
+                let totalGstAmount = 0;
+                
+                if (isInclusive) {
+                    // For inclusive GST, the price already includes GST
+                    selectedProducts.forEach(item => {
+                        const qty = parseFloat(item.quantity || 0);
+                        const price = parseFloat(item.price || 0); // This is the GST-inclusive price
+                        const gstRate = parseFloat(item.gst_rate || 0);
+                        
+                        // For inclusive GST, the price already includes GST
+                        const priceIncludingGst = qty * price; // This is the total (Rate * Qty)
+                        const taxableValue = gstRate > 0 ? priceIncludingGst / (1 + gstRate / 100) : priceIncludingGst;
+                        const gstAmount = priceIncludingGst - taxableValue;
+                        
+                        totalTaxableValue += taxableValue;
+                        totalGstAmount += gstAmount;
+                    });
+                } else {
+                    // For exclusive GST, we calculate GST on top of the base price
+                    selectedProducts.forEach(item => {
+                        const qty = parseFloat(item.quantity || 0);
+                        const price = parseFloat(item.price || 0);
+                        const gstRate = parseFloat(item.gst_rate || 0);
+                        
+                        const taxableValue = qty * price; // Base amount without GST (Rate * Qty)
+                        const gstAmount = taxableValue * (gstRate / 100);
+                        
+                        totalTaxableValue += taxableValue;
+                        totalGstAmount += gstAmount;
+                    });
+                }
+                
+                const grandTotal = totalTaxableValue + totalGstAmount;
+                
+                // Determine if IGST should be used (when client state is NOT equal to customer state)
+                const useIgst = clientState && customerState && clientState !== customerState;
+                
+                let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+                
+                if (useIgst) {
+                    // Use IGST for interstate transactions
+                    igstAmount = totalGstAmount;
+                } else {
+                    // Split GST into CGST/SGST for intrastate transactions
+                    cgstAmount = totalGstAmount / 2;
+                    sgstAmount = totalGstAmount / 2;
+                }
+                
+                return {
+                    subtotal: parseFloat(totalTaxableValue).toFixed(2),
+                    gstAmount: parseFloat(totalGstAmount).toFixed(2),
+                    cgstAmount: parseFloat(cgstAmount).toFixed(2),
+                    sgstAmount: parseFloat(sgstAmount).toFixed(2),
+                    igstAmount: parseFloat(igstAmount).toFixed(2),
+                    grandTotal: parseFloat(grandTotal).toFixed(2),
+                    gstMethod: gstMethod
+                };
+            } catch (error) {
+                console.error('Error calculating GST-aware total:', error);
+                // Fallback to simple calculation
+                const simpleTotal = selectedProducts.reduce((sum, product) => {
+                    const price = parseFloat(product.price) || 0;
+                    const quantity = parseInt(product.quantity) || 0;
+                    return sum + (price * quantity);
+                }, 0);
+                
+                return {
+                    subtotal: parseFloat(simpleTotal).toFixed(2),
+                    gstAmount: "0.00",
+                    cgstAmount: "0.00",
+                    sgstAmount: "0.00",
+                    igstAmount: "0.00",
+                    grandTotal: parseFloat(simpleTotal).toFixed(2),
+                    gstMethod: "Inclusive GST"
+                };
+            }
+        };
+        
         // Calculate GST-aware totals for display
-        calculateGSTAwareTotal(selectedProducts).then(totals => {
+        calculateGSTAwareTotalWithIGST().then(totals => {
             setGstTotals(totals);
         }).catch(error => {
             console.error('Error calculating GST totals:', error);
@@ -628,11 +845,20 @@ const InvoiceDirect = () => {
             setGstTotals({
                 subtotal: parseFloat(simpleTotal).toFixed(2),
                 gstAmount: "0.00",
+                cgstAmount: "0.00",
+                sgstAmount: "0.00",
+                igstAmount: "0.00",
                 grandTotal: parseFloat(simpleTotal).toFixed(2),
                 gstMethod: "Inclusive GST"
             });
         });
-    }, [selectedProducts]);
+    }, [selectedProducts, clientState, customerState]);
+    
+    // Load all users and client status when component mounts
+    useEffect(() => {
+        loadAllUsers();
+        loadClientStatus();
+    }, [loadAllUsers, loadClientStatus]);
 
     // Generate invoice number using API
     const generateInvoiceNumberHandler = async () => {
@@ -742,7 +968,14 @@ const InvoiceDirect = () => {
                 customerPhone: customerData?.phone || 'N/A',
                 customerId: selectedUser?.customer_id || null,  // Add missing customer_id
                 customerRoute: customerData?.route || null,  // Add customer route
-                collections: collectionsData  // Add collections data
+                collections: collectionsData,  // Add collections data
+                placed_on: Math.floor(Date.now() / 1000), // Add placed_on timestamp
+                summary: generateInvoiceSummary(
+                    selectedProducts, 
+                    gstMethod, // Use the fetched GST method
+                    clientState || 'Karnataka', // Use the fetched client state or default to Karnataka
+                    customerState || customerData?.state || clientState || 'Karnataka' // Use customer state or fallback to client state or default to Karnataka
+                )
             };
 
             const result = await createDirectInvoice(invoiceData);
@@ -1102,11 +1335,6 @@ const InvoiceDirect = () => {
             />
         );
     };
-
-    useEffect(() => {
-        loadAllUsers();
-        loadGSTMethod();
-    }, [loadAllUsers, loadGSTMethod]);
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -1614,6 +1842,8 @@ const InvoiceDirect = () => {
                                      {/* GST-Aware Total Amount */}
                                      <GSTAwareTotalDisplay
                                          gstTotals={gstTotals}
+                                         clientState={clientState}
+                                         customerState={customerState}
                                          styles={styles}
                                          getScaledSize={getScaledSize}
                                      />

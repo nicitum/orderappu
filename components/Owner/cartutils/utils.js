@@ -135,12 +135,11 @@ export const addOrderToCart = (orderProducts, addToCart) => {
 };
 
 /**
- * Get order type
+ * Get order type based on current time
  */
 export const getOrderType = () => {
-  const now = new Date();
-  const hour = now.getHours();
-  return hour < 12 ? 'AM' : 'PM';
+  const currentHour = new Date().getHours();
+  return currentHour < 12 ? 'AM' : 'PM';
 };
 
 /**

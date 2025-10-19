@@ -25,7 +25,7 @@ import { ipAddress } from '../../services/urls';
 import { COLORS } from './cartutils/constants';
 import { formatCurrency, getOrderType, generateInitialDueDate, calculateMaxDate } from './cartutils/utils';
 import { CartManager } from './cartutils/cartHelpers';
-import { AdminCartAPI, ProductFilter } from './cartutils/apiHelpers';
+import { CartAPI, ProductFilter } from './cartutils/apiHelpers';
 import { adminCartStyles as styles } from './cartutils/styles';
 
 const AdminCartPage = () => {
@@ -114,12 +114,12 @@ const AdminCartPage = () => {
   }, [route.params]);
 
   const fetchUserPermissions = async () => {
-    const { allowProductEdit } = await AdminCartAPI.fetchUserPermissions(navigation);
+    const { allowProductEdit } = await CartAPI.fetchUserPermissions(navigation);
     setAllowProductEdit(allowProductEdit);
   };
 
   const fetchClientStatus = useCallback(async () => {
-    const { defaultDueOn: newDefaultDueOn, maxDueOn: newMaxDueOn } = await AdminCartAPI.fetchClientStatus();
+    const { defaultDueOn: newDefaultDueOn, maxDueOn: newMaxDueOn } = await CartAPI.fetchClientStatus();
     setDefaultDueOn(newDefaultDueOn);
     setMaxDueOn(newMaxDueOn);
     
@@ -204,7 +204,7 @@ const AdminCartPage = () => {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const { products: loadedProducts, brands: loadedBrands, categories: loadedCategories } = await AdminCartAPI.loadProducts(navigation);
+      const { products: loadedProducts, brands: loadedBrands, categories: loadedCategories } = await CartAPI.loadProducts(navigation);
       setProducts(loadedProducts);
       setFilteredProducts(loadedProducts);
       setBrands(loadedBrands);
@@ -254,7 +254,7 @@ const AdminCartPage = () => {
     
     setIsPlacingOrder(true);
     try {
-      await AdminCartAPI.placeOrder(cartItems, selectedCustomer, selectedDueDate, navigation);
+      await CartAPI.placeOrder(cartItems, selectedCustomer, selectedDueDate, navigation);
       Toast.show({ type: 'success', text1: 'Order Placed', text2: 'Admin custom order placed successfully!' });
       clearCart();
       navigation.goBack();

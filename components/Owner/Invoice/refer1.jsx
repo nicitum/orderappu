@@ -381,7 +381,7 @@ export const generateOrderPOSPDF = async (orderData, customerData = null, client
     };
 
     // ===== HEADER SECTION =====
-    yPosition = drawCenteredText(clientInfo?.client_name || "Order Appu", yPosition, 11, true);
+    yPosition = drawCenteredText(clientInfo?.client_name || "Appu OMS", yPosition, 11, true);
     yPosition = drawCenteredText(clientInfo?.client_address || "Bangalore - 560068", yPosition, 8);
     
     // Add state field for client data

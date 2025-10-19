@@ -1,4 +1,4 @@
-package com.orderappu
+package com.appuoms
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

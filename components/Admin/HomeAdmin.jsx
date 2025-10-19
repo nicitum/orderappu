@@ -15,7 +15,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { ipAddress } from "../../services/urls";
+import { ipAddress } from '../../services/urls';
+import { LICENSE_NO } from '../config';
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { jwtDecode } from "jwt-decode";
 import { useFontScale } from '../../App';
@@ -113,7 +114,7 @@ const HomeAdmin = () => {
   // Fetch adv_timer
   const fetchClientStatus = async () => {
     try {
-      const response = await fetch(`http://147.93.110.150:3001/api/client_status/APPU0009`, {
+      const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache',

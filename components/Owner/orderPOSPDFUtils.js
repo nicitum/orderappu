@@ -1,6 +1,9 @@
 // Generate POS PDF from order data (3-inch width receipt for POS printers)
+import { LICENSE_NO } from '../config';
+
 export const generateOrderPOSPDF = async (orderData, customerData = null, clientData = null) => {
   try {
+
 
     // Dynamically import pdf-lib only when needed
     const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
@@ -10,7 +13,7 @@ export const generateOrderPOSPDF = async (orderData, customerData = null, client
     let clientInfo = clientData; // Use passed clientData
     if (!clientInfo) {
       try {
-        const response = await fetch('http://147.93.110.150:3001/api/client_status/APPU0009');
+        const response = await fetch(`http://147.93.110.150:3001/api/client_status/${LICENSE_NO}`);
         const clientStatusResult = await response.json();
         if (clientStatusResult.success && clientStatusResult.data) {
           clientInfo = Array.isArray(clientStatusResult.data) ? clientStatusResult.data[0] : clientStatusResult.data;
@@ -378,7 +381,7 @@ export const generateOrderPOSPDF = async (orderData, customerData = null, client
     };
 
     // ===== HEADER SECTION =====
-    yPosition = drawCenteredText(clientInfo?.client_name || "Order Appu", yPosition, 11, true);
+    yPosition = drawCenteredText(clientInfo?.client_name || "Appu OMS", yPosition, 11, true);
     yPosition = drawCenteredText(clientInfo?.client_address || "Bangalore - 560068", yPosition, 8);
     
     // Add state field for client data

@@ -1,4 +1,62 @@
-import { fetchClientStatus } from './InvoiceDirectHelper';
+import { fetchClientStatus as fetchClientStatusHelper } from './InvoiceDirectHelper';
+import * as InvoiceDirectHelper from './InvoiceDirectHelper';
+import { LICENSE_NO } from '../../config';
+
+/**
+ * Convert number to words for Indian currency format
+ * @param {number} num - The number to convert
+ * @returns {string} - The number in words
+ */
+const numberToWords = (num) => {
+  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  if (num === 0) return "Zero Rupees Only";
+
+  const rupees = Math.floor(num);
+  const paise = Math.round((num - rupees) * 100);
+
+  const convertToWords = (n) => {
+    if (n === 0) return "";
+    if (n < 10) return units[n];
+    if (n < 20) return teens[n - 10];
+    if (n < 100) {
+      const ten = Math.floor(n / 10);
+      const unit = n % 10;
+      return tens[ten] + (unit > 0 ? " " + units[unit] : "");
+    }
+    if (n < 1000) {
+      const hundred = Math.floor(n / 100);
+      const remainder = n % 100;
+      return units[hundred] + " Hundred" + (remainder > 0 ? " " + convertToWords(remainder) : "");
+    }
+    
+    // Indian numbering system
+    if (n < 100000) {
+      const thousand = Math.floor(n / 1000);
+      const remainder = n % 1000;
+      return convertToWords(thousand) + " Thousand" + (remainder > 0 ? " " + convertToWords(remainder) : "");
+    }
+    if (n < 10000000) {
+      const lakh = Math.floor(n / 100000);
+      const remainder = n % 100000;
+      return convertToWords(lakh) + " Lakh" + (remainder > 0 ? " " + convertToWords(remainder) : "");
+    }
+    
+    const crore = Math.floor(n / 10000000);
+    const remainder = n % 10000000;
+    return convertToWords(crore) + " Crore" + (remainder > 0 ? " " + convertToWords(remainder) : "");
+  };
+
+  let result = convertToWords(rupees) + " Rupees";
+  if (paise > 0) {
+    result += " and " + convertToWords(paise) + " Paise";
+  }
+  result += " Only";
+
+  return result;
+};
 
 /**
  * Generate and print POS receipt for 2-inch thermal printer
@@ -80,7 +138,10 @@ export const printInvoicePOSPDF = async (invoiceData, customerData, deviceId, RN
     }
 
     // Fetch client status to get business information and GST method
-    const clientStatusResult = await fetchClientStatus();
+    console.log('About to call fetchClientStatus');
+    console.log('InvoiceDirectHelper:', InvoiceDirectHelper);
+    const clientStatusResult = await InvoiceDirectHelper.fetchClientStatus();
+    console.log('clientStatusResult:', clientStatusResult);
     let clientData = {};
     let gstMethod = "Inclusive GST"; // Default to inclusive
     if (clientStatusResult.success) {
@@ -185,7 +246,7 @@ export const printInvoicePOSPDF = async (invoiceData, customerData, deviceId, RN
     printCommands.push('\x1B\x61\x01'); // Center align
     printCommands.push('\x1B\x21\x10'); // Double height
     // Use client data instead of hardcoded values
-    printCommands.push((clientData.client_name || 'ORDER APPU').toUpperCase() + '\n');
+    printCommands.push((clientData.client_name || 'Appu OMS').toUpperCase() + '\n');
     printCommands.push('\x1B\x21\x00'); // Normal size
     printCommands.push((clientData.client_address || 'BANGALORE - 560068') + '\n');
     if (clientData.gst_no) {
@@ -414,60 +475,4 @@ export const printInvoicePOSPDF = async (invoiceData, customerData, deviceId, RN
     console.error('Error printing invoice:', error);
     return { success: false, error: error.message, details: error };
   }
-};
-
-/**
- * Convert number to words for Indian currency format
- * @param {number} num - The number to convert
- * @returns {string} - The number in words
- */
-const numberToWords = (num) => {
-  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-  if (num === 0) return "Zero Rupees Only";
-
-  const rupees = Math.floor(num);
-  const paise = Math.round((num - rupees) * 100);
-
-  const convertToWords = (n) => {
-    if (n === 0) return "";
-    if (n < 10) return units[n];
-    if (n < 20) return teens[n - 10];
-    if (n < 100) {
-      const ten = Math.floor(n / 10);
-      const unit = n % 10;
-      return tens[ten] + (unit > 0 ? " " + units[unit] : "");
-    }
-    if (n < 1000) {
-      const hundred = Math.floor(n / 100);
-      const remainder = n % 100;
-      return units[hundred] + " Hundred" + (remainder > 0 ? " " + convertToWords(remainder) : "");
-    }
-    
-    // Indian numbering system
-    if (n < 100000) {
-      const thousand = Math.floor(n / 1000);
-      const remainder = n % 1000;
-      return convertToWords(thousand) + " Thousand" + (remainder > 0 ? " " + convertToWords(remainder) : "");
-    }
-    if (n < 10000000) {
-      const lakh = Math.floor(n / 100000);
-      const remainder = n % 100000;
-      return convertToWords(lakh) + " Lakh" + (remainder > 0 ? " " + convertToWords(remainder) : "");
-    }
-    
-    const crore = Math.floor(n / 10000000);
-    const remainder = n % 10000000;
-    return convertToWords(crore) + " Crore" + (remainder > 0 ? " " + convertToWords(remainder) : "");
-  };
-
-  let result = convertToWords(rupees) + " Rupees";
-  if (paise > 0) {
-    result += " and " + convertToWords(paise) + " Paise";
-  }
-  result += " Only";
-
-  return result;
 };
